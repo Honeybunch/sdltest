@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "sdl.h": "c",
+        "algorithm": "c",
+        "chrono": "c",
+        "iterator": "c",
+        "xhash": "c",
+        "xtree": "c",
+        "xutility": "c",
+        "vert.h": "c",
+        "charconv": "c",
+        "limits": "c",
+        "sstream": "c",
+        "xiosbase": "c",
+        "xlocale": "c"
+    }
+}
