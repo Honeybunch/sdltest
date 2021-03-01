@@ -15,6 +15,26 @@
             "environment": []
         },
         {
+            "name": "x64 Windows RelWithDebInfo",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/x64/windows/RelWithDebInfo/sdltest.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/x64/windows/RelWithDebInfo/",
+            "environment": []
+        },
+        {
+            "name": "x64 Windows Release",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/x64/windows/Release/sdltest.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/x64/windows/Release/",
+            "environment": []
+        },
+        {
             "name": "x64 Windows Static Debug",
             "type": "cppvsdbg",
             "request": "launch",

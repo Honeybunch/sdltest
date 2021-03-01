@@ -877,7 +877,7 @@ static void demo_render_frame(demo *d) {
       submit_info.signalSemaphoreCount = 1;
       submit_info.pSignalSemaphores = &swapchain_sem;
       err = vkQueueSubmit(present_queue, 1, &submit_info, VK_NULL_HANDLE);
-      assert(!err);
+      assert(err == VK_SUCCESS);
 
       wait_sem = swapchain_sem;
     }
@@ -937,9 +937,13 @@ static void demo_destroy(demo *d) {
 }
 
 int32_t SDL_main(int32_t argc, char *argv[]) {
-  assert(volkInitialize() == VK_SUCCESS);
+  VkResult err = volkInitialize();
+  assert(err == VK_SUCCESS);
 
-  assert(SDL_Init(SDL_INIT_VIDEO) == 0);
+  {
+    int32_t res = SDL_Init(SDL_INIT_VIDEO);
+    assert(res == 0);
+  }
 
   SDL_Window *window = SDL_CreateWindow("SDL Test", SDL_WINDOWPOS_CENTERED,
                                         SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT,
@@ -955,8 +959,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     {
       uint32_t instance_layer_count = 0;
-      VkResult err =
-          vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL);
+      err = vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL);
       assert(err == VK_SUCCESS);
       if (instance_layer_count > 0) {
         VkLayerProperties *instance_layers =
@@ -1009,12 +1012,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     create_info.enabledExtensionCount = ext_count;
     create_info.ppEnabledExtensionNames = ext_names;
 
-    assert(vkCreateInstance(&create_info, NULL, &instance) == VK_SUCCESS);
+    err = vkCreateInstance(&create_info, NULL, &instance);
+    assert(err == VK_SUCCESS);
     volkLoadInstance(instance);
   }
 
   demo d = {0};
-  assert(demo_init(window, instance, &d));
+  bool success = demo_init(window, instance, &d);
+  assert(success);
 
   // Main loop
   bool running = true;
