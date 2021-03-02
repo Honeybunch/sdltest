@@ -9,8 +9,6 @@
 #include "simd.h"
 #include "vert.h"
 
-#define FINAL
-
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
 
