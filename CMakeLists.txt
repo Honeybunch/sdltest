@@ -38,7 +38,7 @@ add_custom_target(shaders ALL DEPENDS ${out_paths})
 # Setup Main Executable
 set(source "src/main.c")
 if(WIN32)
-  add_executable(sdltest WIN32 ${source})
+  add_executable(sdltest WIN32 ${source} "src/res/sdltest.rc")
   target_link_options(sdltest PRIVATE -Wl,/subsystem:windows)
 else()
 endif()
