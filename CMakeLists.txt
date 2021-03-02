@@ -16,6 +16,10 @@ find_package(volk CONFIG REQUIRED)
 find_program(DXC dxc CONFIG REQUIRED)
 
 # Compile Shaders
+set(shader_includes 
+    "${CMAKE_CURRENT_LIST_DIR}/src/common.hlsli"
+    "${CMAKE_CURRENT_LIST_DIR}/src/fractal.hlsli"
+    "${CMAKE_CURRENT_LIST_DIR}/src/healthbar.hlsli")
 set(shader "${CMAKE_CURRENT_LIST_DIR}/src/shader.hlsl")
 set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
 set(vert_out_path "${shader_out_path}/vert.h")
@@ -27,6 +31,7 @@ add_custom_command(
     COMMAND ${DXC} -T vs_6_0 -E vert -Vn vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-reflect -spirv ${shader} -Fh ${vert_out_path}
     COMMAND ${DXC} -T ps_6_0 -E frag -Vn frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-reflect -spirv ${shader} -Fh ${frag_out_path}
     MAIN_DEPENDENCY ${shader}
+    DEPENDS ${shader_includes}
 )
 add_custom_target(shaders ALL DEPENDS ${out_paths})
 

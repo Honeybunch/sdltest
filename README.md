@@ -5,10 +5,9 @@ SDL Test Application
 ## Building
 
 ### Vcpkg Dependencies
-* sdl2
 * sdl2[vulkan]
 * volk
-* vulkan-headers
+* vulkan
 
 ### Supported vcpkg triples 
 * x64-windows

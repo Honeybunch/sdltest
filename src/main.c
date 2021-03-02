@@ -9,10 +9,14 @@
 #include "simd.h"
 #include "vert.h"
 
+#define FINAL
+
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
 
+#ifndef FINAL
 #define VALIDATION
+#endif
 #define FRAME_LATENCY 3
 
 #define WIDTH 1920
@@ -22,6 +26,7 @@
 
 typedef struct PushConstants {
   float4 time;
+  float2 resolution;
 } PushConstants;
 static_assert(sizeof(PushConstants) <= PUSH_CONSTANT_BYTES,
               "Too Many Push Constants");
@@ -524,7 +529,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, 0, WIDTH, HEIGHT, 0, 1};
+    VkViewport viewport = {0, HEIGHT, WIDTH, -HEIGHT, 0, 1};
     VkRect2D scissor = {{0, 0}, {WIDTH, HEIGHT}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
@@ -539,7 +544,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_state.polygonMode = VK_POLYGON_MODE_FILL;
     raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
-    raster_state.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster_state.lineWidth = 1.0f;
     VkPipelineMultisampleStateCreateInfo multisample_state = {0};
     multisample_state.sType =
@@ -821,7 +826,7 @@ static void demo_render_frame(demo *d) {
         vkCmdBeginRenderPass(command_buffer, &pass_info,
                              VK_SUBPASS_CONTENTS_INLINE);
 
-        VkViewport viewport = {0, 0, WIDTH, HEIGHT, 0, 1};
+        VkViewport viewport = {0, HEIGHT, WIDTH, -HEIGHT, 0, 1};
         VkRect2D scissor = {{0, 0}, {WIDTH, HEIGHT}};
         vkCmdSetViewport(command_buffer, 0, 1, &viewport);
         vkCmdSetScissor(command_buffer, 0, 1, &scissor);
@@ -978,8 +983,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
             layer_names[layer_count++] = validation_layer_name;
           }
         }
-      }
 #endif
+      }
     }
 
     // Query SDL for required extensions
@@ -1002,7 +1007,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     app_info.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
     app_info.pEngineName = "SDL Test";
     app_info.engineVersion = VK_MAKE_VERSION(0, 0, 1);
-    app_info.apiVersion = VK_API_VERSION_1_0;
+    app_info.apiVersion = VK_API_VERSION_1_1;
 
     VkInstanceCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -1038,6 +1043,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       float time_ns = 0.0f;
       float time_us = 0.0f;
       d.push_constants.time = (float4){time_seconds, time_ms, time_ns, time_us};
+      d.push_constants.resolution = (float2){WIDTH, HEIGHT};
     }
 
     demo_render_frame(&d);
