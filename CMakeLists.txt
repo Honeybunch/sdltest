@@ -11,7 +11,7 @@ if(${VCPKG_TARGET_TRIPLET} MATCHES static)
   set(STATIC ON)
 endif()
 
-find_package(SDL2 CONFIG REQUIRED)
+find_package(SDL2 REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_program(DXC dxc CONFIG REQUIRED)
 
@@ -36,11 +36,12 @@ add_custom_command(
 add_custom_target(shaders ALL DEPENDS ${out_paths})
 
 # Setup Main Executable
-set(source "src/main.c")
+set(source "${CMAKE_CURRENT_LIST_DIR}/src/main.c")
 if(WIN32)
-  add_executable(sdltest WIN32 ${source} "src/res/sdltest.rc")
+  add_executable(sdltest WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.rc")
   target_link_options(sdltest PRIVATE -Wl,/subsystem:windows)
-else()
+elseif(ANDROID)
+  add_library(sdltest SHARED ${source})
 endif()
 
 add_dependencies(sdltest shaders)
@@ -66,4 +67,8 @@ install(TARGETS sdltest
 if(NOT STATIC)
   install(FILES $<TARGET_FILE_DIR:sdltest>/SDL2$<$<CONFIG:Debug>:d>.dll
         DESTINATION "$<CONFIG>")
+endif()
+
+if(ANDROID)
+add_subdirectory(android)
 endif()
