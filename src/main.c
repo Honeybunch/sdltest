@@ -17,8 +17,8 @@
 #endif
 #define FRAME_LATENCY 3
 
-#define WIDTH 1920
-#define HEIGHT 1080
+#define WIDTH 1600
+#define HEIGHT 900
 
 #define PUSH_CONSTANT_BYTES 128
 

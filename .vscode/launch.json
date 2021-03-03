@@ -43,6 +43,16 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/build/x64/windows-static/Debug/",
             "environment": []
+        },
+        {
+            "name": "x64 Windows Static Release",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/x64/windows-static/Release/sdltest.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}/build/x64/windows-static/Release/",
+            "environment": []
         }
     ]
 }
