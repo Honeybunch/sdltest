@@ -7,6 +7,12 @@ get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
 project(sdltest)
 
+# Clang only for now
+if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" AND
+   NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "AppleClang")
+  message(FATAL_ERROR "${CMAKE_CXX_COMPILER_ID} Unsupported - Clang only")
+endif()
+
 if(${VCPKG_TARGET_TRIPLET} MATCHES static)
   set(STATIC ON)
 endif()
