@@ -29,11 +29,14 @@ add_jar(SDLTest ${sdltest_java} INCLUDE_JARS ${android_path} SDL)
 # HACK - Copy SDL sos from vcpkg to our build directory manually
 set(sdl_build_path ${CMAKE_CURRENT_BINARY_DIR}/../$<CONFIG>)
 set(cfg_expr $<$<CONFIG:Debug>:$<LOWER_CASE:$<CONFIG>>>)
+# hidapi relies on c++ 
+set(libcppshared_path $ENV{ANDROID_NDK_HOME}/sources/cxx-stl/llvm-libc++/libs/${arch}/libc++_shared.so)
 add_custom_target(copy_so ALL
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libSDL2.so ${sdl_build_path}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libhidapi.so ${sdl_build_path})
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libhidapi.so ${sdl_build_path}
+    COMMAND ${CMAKE_COMMAND} -E copy ${libcppshared_path} ${sdl_build_path})
 
-install(FILES ${sdl_build_path}/libSDL2.so ${sdl_build_path}/libhidapi.so
+install(FILES ${sdl_build_path}/libSDL2.so ${sdl_build_path}/libhidapi.so ${sdl_build_path}/libc++_shared.so
         DESTINATION $<CONFIG>/lib/${arch})
 
 # Create signing keys
@@ -52,10 +55,11 @@ add_custom_command(
     OUTPUT "sdltest-unaligned.apk"
     WORKING_DIRECTORY ${packaging_working_dir}
     COMMAND ${CMAKE_COMMAND} -E make_directory bin
-    COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${dx_path} ARGS --dex --output=bin/classes.dex ${CMAKE_BINARY_DIR}/android/SDL.jar
+    COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${dx_path} ARGS --dex --output=bin/classes.dex ${CMAKE_BINARY_DIR}/android/SDL.jar ${CMAKE_BINARY_DIR}/android/SDLTest.jar
     COMMAND ${aapt_path} ARGS package -v -f -S ${resource_folder} -M ${manifest_path} -I ${android_path} -F ${unaligned_apk_path} bin
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libhidapi.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libSDL2.so
+    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libc++_shared.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libsdltest.so)
 
 # Zip align & sign
