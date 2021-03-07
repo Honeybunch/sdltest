@@ -7,6 +7,35 @@ get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
 project(sdltest)
 
+# Get target CPU architecture
+include(${CMAKE_CURRENT_LIST_DIR}/cmake/TargetArch.cmake)
+target_architecture(arch)
+
+# Platform detection
+if(WIN32)
+    set(platform "windows")
+elseif(APPLE)
+    if(IOS)
+        set(platform "ios")
+    else()
+        set(platform "macos")
+    endif()
+elseif(ANDROID)
+    set(platform "android")
+elseif(UNIX)
+    set(platform "linux")
+else()
+    message(FATAL_ERROR "Unknown platform")
+endif()
+
+# Set install prefix if not already overridden
+set(sdltest_install "${CMAKE_CURRENT_SOURCE_DIR}/install/${platform}")
+if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set (CMAKE_INSTALL_PREFIX ${sdltest_install} CACHE PATH "Default Install Path" FORCE )
+else()
+    set(sdltest_install ${CMAKE_INSTALL_PREFIX})
+endif()
+
 # Clang only for now
 if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" AND
    NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "AppleClang")
@@ -57,7 +86,7 @@ if(isMultiConfig)
 else()
     get_filename_component(CMAKE_CFG_INTDIR_ABS "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}" ABSOLUTE)
 endif()
-set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
+#set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 target_include_directories(sdltest PRIVATE "src/" "${CMAKE_CFG_INTDIR_ABS}/shaders")
 target_link_libraries(sdltest PRIVATE SDL2::SDL2main volk::volk volk::volk_headers)
 if(STATIC)
@@ -66,16 +95,22 @@ else()
   target_link_libraries(sdltest PRIVATE SDL2::SDL2)
 endif()
 
-install(TARGETS sdltest
-        RUNTIME DESTINATION "$<CONFIG>"
-        LIBRARY DESTINATION "$<CONFIG>")
+if(ANDROID)
+  install(TARGETS sdltest
+          RUNTIME DESTINATION "$<CONFIG>/lib/${arch}"
+          LIBRARY DESTINATION "$<CONFIG>/lib/${arch}")
+else()
+  install(TARGETS sdltest
+          RUNTIME DESTINATION "${arch}/bin/$<CONFIG>"
+          LIBRARY DESTINATION "${arch}/lib/$<CONFIG>")
+endif()
 
 # Install dlls on dynamic builds
-if(NOT STATIC)
+if(NOT STATIC AND WIN32)
   install(FILES $<TARGET_FILE_DIR:sdltest>/SDL2$<$<CONFIG:Debug>:d>.dll
         DESTINATION "$<CONFIG>")
 endif()
 
 if(ANDROID)
-add_subdirectory(android)
+  add_subdirectory(android)
 endif()

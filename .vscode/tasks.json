@@ -153,5 +153,59 @@
             "group": "build",
             "problemMatcher": "$gcc"
         },
+        {
+            "label": "Install arm64 Android Debug",
+            "type": "shell",
+            "command": "cmake --build build/arm64/android  --config Debug --target install",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build arm64 Android Debug"
+            ]
+        },
+        {
+            "label": "Install arm64 Android RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/arm64/android  --config RelWithDebInfo --target install",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build arm64 Android RelWithDebInfo"
+            ]
+        },
+        {
+            "label": "Install arm64 Android Release",
+            "type": "shell",
+            "command": "cmake --build build/arm64/android  --config Release --target install",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build arm64 Android Release"
+            ]
+        },
+        {
+            "label": "Package arm64 Android Debug",
+            "type": "shell",
+            "command": "cmake --build build/arm64/android  --config Debug --target apk",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Install arm64 Android Debug"
+            ]
+        },
+        {
+            "label": "Package arm64 Android RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/arm64/android  --config RelWithDebInfo --target apk",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Install arm64 Android RelWithDebInfo"
+            ]
+        },
+        {
+            "label": "Package arm64 Android Release",
+            "type": "shell",
+            "command": "cmake --build build/arm64/android  --config Release --target apk",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Install arm64 Android Release"
+            ]
+        },
     ]
 }
