@@ -35,6 +35,19 @@ add_custom_target(copy_so ALL
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libSDL2.so ${sdl_build_path}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libhidapi.so ${sdl_build_path}
     COMMAND ${CMAKE_COMMAND} -E copy ${libcppshared_path} ${sdl_build_path})
+# Bring along the validation layers
+if(NOT FINAL)
+    file(GLOB vk_validation_layers "$ENV{ANDROID_NDK_HOME}/sources/third_party/vulkan/src/build-android/jniLibs/${arch}/*.so")
+    foreach(layer ${vk_validation_layers})
+        get_filename_component(layer_name ${layer} NAME_WE)
+        list(APPEND layer_names ${layer_name})
+        add_custom_target(copy_${layer_name} ALL 
+            COMMAND ${CMAKE_COMMAND} -E copy ${layer} ${sdl_build_path})
+
+        install(FILES ${sdl_build_path}/${layer_name}.so
+                DESTINATION $<CONFIG>/lib/${arch})
+    endforeach()
+endif()
 
 install(FILES ${sdl_build_path}/libSDL2.so ${sdl_build_path}/libhidapi.so ${sdl_build_path}/libc++_shared.so
         DESTINATION $<CONFIG>/lib/${arch})
@@ -47,12 +60,13 @@ add_custom_command(
 endif()
 
 set(packaging_working_dir ${sdltest_install}/$<CONFIG>)
+set(unaligned_apk_name sdltest-unaligned.apk)
 set(unaligned_apk_path ${packaging_working_dir}/sdltest-unaligned.apk)
 set(apk_path ${packaging_working_dir}/sdltest.apk)
 
 # Package apk
 add_custom_command(
-    OUTPUT "sdltest-unaligned.apk"
+    OUTPUT ${unaligned_apk_name}
     WORKING_DIRECTORY ${packaging_working_dir}
     COMMAND ${CMAKE_COMMAND} -E make_directory bin
     COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${dx_path} ARGS --dex --output=bin/classes.dex ${CMAKE_BINARY_DIR}/android/SDL.jar ${CMAKE_BINARY_DIR}/android/SDLTest.jar
@@ -60,12 +74,32 @@ add_custom_command(
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libhidapi.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libSDL2.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libc++_shared.so
-    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libsdltest.so)
+    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libsdltest.so
+)
+
+if(NOT FINAL)
+    set(idx 0)
+    foreach(layer_name ${layer_names})
+        set(depends_name ${unaligned_apk_name})
+        set(unaligned_apk_name sdltest-unaligned-${idx}.apk)
+        set(unaligned_apk_path ${packaging_working_dir}/sdltest-unaligned-${idx}.apk)
+
+        add_custom_command(
+            OUTPUT ${unaligned_apk_name}
+            WORKING_DIRECTORY ${packaging_working_dir}
+            DEPENDS ${depends_name}
+            COMMAND ${CMAKE_COMMAND} -E copy ${depends_name} ${unaligned_apk_name}
+            COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/${layer_name}.so
+            COMMAND ${CMAKE_COMMAND} -E rm -rf ${depends_name})
+
+        math(EXPR idx "${idx}+1")
+    endforeach()
+endif()
 
 # Zip align & sign
 add_custom_command(
     OUTPUT "sdltest.apk"
-    DEPENDS ${debug_keystore_path} "sdltest-unaligned.apk"
+    DEPENDS ${debug_keystore_path} ${unaligned_apk_name}
     COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${zipalign_path} -f 4 ${unaligned_apk_path} ${apk_path}
     COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${apksigner_path} sign -v --ks ${debug_keystore_path} --ks-pass pass:android --key-pass pass:android --ks-key-alias androiddebugkey ${apk_path}
     COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${apksigner_path} verify -v ${apk_path}

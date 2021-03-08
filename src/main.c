@@ -372,8 +372,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
       }
     }
     if (swapchain_present_mode != present_mode) {
-      // Unsupported present mode
-      return false;
+      // The desired present mode was not found, just use the first one
+      present_mode = present_modes[0];
     }
 
     // Determine the number of VkImages to use in the swap chain.
@@ -635,7 +635,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   {
     err = vkGetSwapchainImagesKHR(device, swapchain, &swap_img_count,
                                   d->swapchain_images);
-    assert(err == VK_SUCCESS);
+    assert(err == VK_SUCCESS || err == VK_INCOMPLETE);
   }
 
   // Create Image Views
