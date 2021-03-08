@@ -50,6 +50,8 @@ typedef struct demo {
   VkFormat swapchain_image_format;
   VkSwapchainKHR swapchain;
   uint32_t swapchain_image_count;
+  uint32_t swap_width;
+  uint32_t swap_height;
 
   VkRenderPass render_pass;
   VkPipelineCache pipeline_cache;
@@ -297,7 +299,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   // Create Swapchain
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
   uint32_t width = WIDTH;
-  uint32_t height = WIDTH;
+  uint32_t height = HEIGHT;
   VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
   VkFormat swapchain_image_format = VK_FORMAT_UNDEFINED;
   VkColorSpaceKHR swapchain_color_space = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
@@ -527,8 +529,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
         VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
     input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
-    VkViewport viewport = {0, HEIGHT, WIDTH, -HEIGHT, 0, 1};
-    VkRect2D scissor = {{0, 0}, {WIDTH, HEIGHT}};
+    VkViewport viewport = {0, height, width, -(float)height, 0, 1};
+    VkRect2D scissor = {{0, 0}, {width, height}};
 
     VkPipelineViewportStateCreateInfo viewport_state = {0};
     viewport_state.sType =
@@ -612,6 +614,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->graphics_queue = graphics_queue;
   d->swapchain = swapchain;
   d->swapchain_image_count = swap_img_count;
+  d->swap_width = width;
+  d->swap_height = height;
   d->render_pass = render_pass;
   d->pipeline_cache = pipeline_cache;
   d->pipeline_layout = pipeline_layout;
@@ -813,19 +817,22 @@ static void demo_render_frame(demo *d) {
 
         VkClearValue clear_value = {.color = {.float32 = {0, 1, 1, 1}}};
 
+        const float width = d->swap_width;
+        const float height = d->swap_height;
+
         VkRenderPassBeginInfo pass_info = {0};
         pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         pass_info.renderPass = render_pass;
         pass_info.framebuffer = framebuffer;
-        pass_info.renderArea = (VkRect2D){{0, 0}, {WIDTH, HEIGHT}};
+        pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
         pass_info.clearValueCount = 1;
         pass_info.pClearValues = &clear_value;
 
         vkCmdBeginRenderPass(command_buffer, &pass_info,
                              VK_SUBPASS_CONTENTS_INLINE);
 
-        VkViewport viewport = {0, HEIGHT, WIDTH, -HEIGHT, 0, 1};
-        VkRect2D scissor = {{0, 0}, {WIDTH, HEIGHT}};
+        VkViewport viewport = {0, height, width, -height, 0, 1};
+        VkRect2D scissor = {{0, 0}, {width, height}};
         vkCmdSetViewport(command_buffer, 0, 1, &viewport);
         vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
@@ -1041,7 +1048,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       float time_ns = 0.0f;
       float time_us = 0.0f;
       d.push_constants.time = (float4){time_seconds, time_ms, time_ns, time_us};
-      d.push_constants.resolution = (float2){WIDTH, HEIGHT};
+      d.push_constants.resolution = (float2){d.swap_width, d.swap_height};
     }
 
     demo_render_frame(&d);
