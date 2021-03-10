@@ -12,6 +12,13 @@
         "limits": "c",
         "sstream": "c",
         "xiosbase": "c",
-        "xlocale": "c"
+        "xlocale": "c",
+        "vk_mem_alloc.h": "c",
+        "array": "c",
+        "initializer_list": "c",
+        "list": "c",
+        "type_traits": "c",
+        "vector": "c",
+        "xstring": "c"
     }
 }

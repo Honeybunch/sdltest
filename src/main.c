@@ -5,9 +5,14 @@
 #include <stdint.h>
 #include <volk.h>
 
+#include <vk_mem_alloc.h>
+
 #include "frag.h"
 #include "simd.h"
 #include "vert.h"
+
+#include "cube.h"
+#include "gpumesh.h"
 
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
@@ -47,6 +52,8 @@ typedef struct demo {
   VkQueue present_queue;
   VkQueue graphics_queue;
 
+  VmaAllocator allocator;
+
   VkFormat swapchain_image_format;
   VkSwapchainKHR swapchain;
   uint32_t swapchain_image_count;
@@ -72,6 +79,8 @@ typedef struct demo {
   uint32_t frame_idx;
   uint32_t swap_img_idx;
   VkFence fences[FRAME_LATENCY];
+
+  gpumesh cube_gpu;
 
   PushConstants push_constants;
 } demo;
@@ -200,6 +209,51 @@ pick_surface_format(VkSurfaceFormatKHR *surface_formats,
   return surface_formats[0];
 }
 
+static VkResult create_gpubuffer(VmaAllocator allocator, VkDeviceSize size,
+                                 VmaMemoryUsage mem_usage,
+                                 VkBufferUsageFlags buf_usage, gpubuffer *out) {
+  VkResult err = VK_SUCCESS;
+  VkBuffer buffer = {0};
+  VmaAllocation alloc = {0};
+  VmaAllocationInfo alloc_info = {0};
+  {
+    VkMemoryRequirements mem_reqs = {size, 16, 0};
+    VmaAllocationCreateInfo alloc_create_info = {0};
+    alloc_create_info.usage = mem_usage;
+    VkBufferCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    create_info.size = size;
+    create_info.usage = buf_usage;
+    err = vmaCreateBuffer(allocator, &create_info, &alloc_create_info, &buffer,
+                          &alloc, &alloc_info);
+    assert(err == VK_SUCCESS);
+  }
+  *out = (gpubuffer){buffer, alloc};
+
+  return err;
+}
+
+static VkResult create_mesh(VmaAllocator allocator, const cpumesh *src_mesh,
+                            gpumesh *dst_mesh) {
+  VkResult err = VK_SUCCESS;
+
+  gpubuffer host_buffer = {0};
+  err = create_gpubuffer(allocator, src_mesh->size, VMA_MEMORY_USAGE_CPU_TO_GPU,
+                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
+  assert(err == VK_SUCCESS);
+
+  gpubuffer device_buffer = {0};
+  err = create_gpubuffer(allocator, src_mesh->size, VMA_MEMORY_USAGE_GPU_ONLY,
+                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                         &device_buffer);
+  assert(err == VK_SUCCESS);
+
+  *dst_mesh = (gpumesh){host_buffer, device_buffer};
+
+  return err;
+}
+
 static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   VkResult err = VK_SUCCESS;
 
@@ -294,6 +348,42 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     present_queue = graphics_queue;
   } else {
     vkGetDeviceQueue(device, present_queue_family_index, 0, &present_queue);
+  }
+
+  // Create Allocator
+  VmaAllocator allocator = {0};
+  {
+    VmaVulkanFunctions volk_functions = {0};
+    volk_functions.vkGetPhysicalDeviceProperties =
+        vkGetPhysicalDeviceProperties;
+    volk_functions.vkGetPhysicalDeviceMemoryProperties =
+        vkGetPhysicalDeviceMemoryProperties;
+    volk_functions.vkAllocateMemory = vkAllocateMemory;
+    volk_functions.vkFreeMemory = vkFreeMemory;
+    volk_functions.vkMapMemory = vkMapMemory;
+    volk_functions.vkUnmapMemory = vkUnmapMemory;
+    volk_functions.vkFlushMappedMemoryRanges = vkFlushMappedMemoryRanges;
+    volk_functions.vkInvalidateMappedMemoryRanges =
+        vkInvalidateMappedMemoryRanges;
+    volk_functions.vkBindBufferMemory = vkBindBufferMemory;
+    volk_functions.vkBindImageMemory = vkBindImageMemory;
+    volk_functions.vkGetBufferMemoryRequirements =
+        vkGetBufferMemoryRequirements;
+    volk_functions.vkGetImageMemoryRequirements = vkGetImageMemoryRequirements;
+    volk_functions.vkCreateBuffer = vkCreateBuffer;
+    volk_functions.vkDestroyBuffer = vkDestroyBuffer;
+    volk_functions.vkCreateImage = vkCreateImage;
+    volk_functions.vkDestroyImage = vkDestroyImage;
+    volk_functions.vkCmdCopyBuffer = vkCmdCopyBuffer;
+
+    VmaAllocatorCreateInfo create_info = {0};
+    create_info.physicalDevice = gpu;
+    create_info.device = device;
+    create_info.pVulkanFunctions = &volk_functions;
+    create_info.instance = instance;
+    create_info.vulkanApiVersion = VK_API_VERSION_1_0;
+    err = vmaCreateAllocator(&create_info, &allocator);
+    assert(err == VK_SUCCESS);
   }
 
   // Create Swapchain
@@ -488,7 +578,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     assert(err == VK_SUCCESS);
   }
 
-  // Create Graphics Pipeline
+  // Create Fullscreen Graphics Pipeline
   VkPipeline pipeline = VK_NULL_HANDLE;
   {
     // Load Shaders
@@ -597,6 +687,13 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     vkDestroyShaderModule(device, frag_mod, NULL);
   }
 
+  // Create Cube Mesh
+  gpumesh cube = {0};
+  {
+    err = create_mesh(allocator, &cube_cpu, &cube);
+    assert(err == VK_SUCCESS);
+  }
+
   // Apply to output var
   d->instance = instance;
   d->gpu = gpu;
@@ -620,6 +717,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->pipeline_cache = pipeline_cache;
   d->pipeline_layout = pipeline_layout;
   d->pipeline = pipeline;
+  d->cube_gpu = cube;
   d->frame_idx = 0;
 
   // Create Semaphores
@@ -942,6 +1040,7 @@ static void demo_destroy(demo *d) {
   vkDestroyRenderPass(device, d->render_pass, NULL);
   vkDestroySwapchainKHR(device, d->swapchain, NULL);
   vkDestroySurfaceKHR(d->instance, d->surface, NULL);
+  vmaDestroyAllocator(d->allocator);
   vkDestroyDevice(d->device, NULL);
   *d = (demo){0};
 }

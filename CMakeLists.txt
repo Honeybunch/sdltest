@@ -48,6 +48,7 @@ endif()
 
 find_package(SDL2 REQUIRED)
 find_package(volk CONFIG REQUIRED)
+find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 find_program(DXC dxc CONFIG REQUIRED)
 
 # Compile Shaders
@@ -71,7 +72,8 @@ add_custom_command(
 add_custom_target(shaders ALL DEPENDS ${out_paths})
 
 # Setup Main Executable
-set(source "${CMAKE_CURRENT_LIST_DIR}/src/main.c")
+set(source "${CMAKE_CURRENT_LIST_DIR}/src/main.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp")
 if(WIN32)
   add_executable(sdltest WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.rc")
   target_link_options(sdltest PRIVATE -Wl,/subsystem:windows)
@@ -88,7 +90,11 @@ else()
 endif()
 #set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 target_include_directories(sdltest PRIVATE "src/" "${CMAKE_CFG_INTDIR_ABS}/shaders")
-target_link_libraries(sdltest PRIVATE SDL2::SDL2main volk::volk volk::volk_headers)
+target_link_libraries(sdltest PRIVATE
+  SDL2::SDL2main 
+  volk::volk 
+  volk::volk_headers 
+  unofficial::vulkan-memory-allocator::vulkan-memory-allocator)
 if(STATIC)
   target_link_libraries(sdltest PRIVATE SDL2::SDL2-static)
 else()
