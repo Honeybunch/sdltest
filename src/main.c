@@ -1000,11 +1000,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     assert(ext_count < MAX_EXT_COUNT);
     SDL_Vulkan_GetInstanceExtensions(window, &ext_count, ext_names);
 
-    // Add debug ext
+// Add debug ext
+#ifdef VALIDATION
     {
       assert(ext_count + 1 < MAX_EXT_COUNT);
-      ext_names[ext_count++] = VK_EXT_DEBUG_REPORT_EXTENSION_NAME;
+      ext_names[ext_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     }
+#endif
 
     VkApplicationInfo app_info = {0};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
