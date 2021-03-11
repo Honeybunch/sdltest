@@ -21,6 +21,7 @@
 #define VALIDATION
 #endif
 #define FRAME_LATENCY 3
+#define MESH_UPLOAD_QUEUE_SIZE 16
 
 #define WIDTH 1600
 #define HEIGHT 900
@@ -81,6 +82,11 @@ typedef struct demo {
   VkFence fences[FRAME_LATENCY];
 
   gpumesh cube_gpu;
+
+  VkSemaphore upload_sem;
+
+  uint32_t mesh_upload_count;
+  gpumesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
 
   PushConstants push_constants;
 } demo;
@@ -252,6 +258,22 @@ static VkResult create_mesh(VmaAllocator allocator, const cpumesh *src_mesh,
   *dst_mesh = (gpumesh){host_buffer, device_buffer};
 
   return err;
+}
+
+static void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer) {
+  vmaDestroyBuffer(allocator, buffer->buffer, buffer->alloc);
+}
+
+static void destroy_mesh(VmaAllocator allocator, const gpumesh *mesh) {
+  destroy_gpubuffer(allocator, &mesh->geom_host);
+  destroy_gpubuffer(allocator, &mesh->geom_gpu);
+}
+
+static void demo_upload_mesh(demo *d, const gpumesh *mesh) {
+  uint32_t mesh_idx = d->mesh_upload_count;
+  assert(d->mesh_upload_count + 1 < MESH_UPLOAD_QUEUE_SIZE);
+  d->mesh_upload_queue[mesh_idx] = *mesh;
+  d->mesh_upload_count++;
 }
 
 static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
@@ -697,6 +719,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   // Apply to output var
   d->instance = instance;
   d->gpu = gpu;
+  d->allocator = allocator;
   d->gpu_props = gpu_props;
   d->queue_family_count = queue_family_count;
   d->queue_props = queue_props;
@@ -720,17 +743,26 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->cube_gpu = cube;
   d->frame_idx = 0;
 
+  demo_upload_mesh(d, &d->cube_gpu);
+
   // Create Semaphores
   {
     VkSemaphoreCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      vkCreateSemaphore(device, &create_info, NULL, &d->img_acquired_sems[i]);
-      vkCreateSemaphore(device, &create_info, NULL,
-                        &d->swapchain_image_sems[i]);
-      vkCreateSemaphore(device, &create_info, NULL,
-                        &d->render_complete_sems[i]);
+      err = vkCreateSemaphore(device, &create_info, NULL,
+                              &d->img_acquired_sems[i]);
+      assert(err == VK_SUCCESS);
+      err = vkCreateSemaphore(device, &create_info, NULL,
+                              &d->swapchain_image_sems[i]);
+      assert(err == VK_SUCCESS);
+      err = vkCreateSemaphore(device, &create_info, NULL,
+                              &d->render_complete_sems[i]);
+      assert(err == VK_SUCCESS);
     }
+
+    err = vkCreateSemaphore(device, &create_info, NULL, &d->upload_sem);
+    assert(err == VK_SUCCESS);
   }
 
   // Get Swapchain Images
@@ -1033,7 +1065,10 @@ static void demo_destroy(demo *d) {
     vkDestroyCommandPool(device, d->command_pools[i], NULL);
   }
 
+  destroy_mesh(d->allocator, &d->cube_gpu);
+
   free(d->queue_props);
+  vkDestroySemaphore(device, d->upload_sem, NULL);
   vkDestroyPipelineLayout(device, d->pipeline_layout, NULL);
   vkDestroyPipeline(device, d->pipeline, NULL);
   vkDestroyPipelineCache(device, d->pipeline_cache, NULL);
