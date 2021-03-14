@@ -71,8 +71,12 @@ typedef struct demo {
   VkFramebuffer swapchain_framebuffers[FRAME_LATENCY];
 
   VkCommandPool command_pools[FRAME_LATENCY];
-  VkCommandBuffer command_buffers[FRAME_LATENCY];
+  VkCommandBuffer upload_buffers[FRAME_LATENCY];
+  VkCommandBuffer graphics_buffers[FRAME_LATENCY];
 
+  // For allowing the currently processed frame to access
+  // resources being uploaded this frame
+  VkSemaphore upload_complete_sems[FRAME_LATENCY];
   VkSemaphore img_acquired_sems[FRAME_LATENCY];
   VkSemaphore swapchain_image_sems[FRAME_LATENCY];
   VkSemaphore render_complete_sems[FRAME_LATENCY];
@@ -82,8 +86,6 @@ typedef struct demo {
   VkFence fences[FRAME_LATENCY];
 
   gpumesh cube_gpu;
-
-  VkSemaphore upload_sem;
 
   uint32_t mesh_upload_count;
   gpumesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
@@ -239,23 +241,33 @@ static VkResult create_gpubuffer(VmaAllocator allocator, VkDeviceSize size,
   return err;
 }
 
-static VkResult create_mesh(VmaAllocator allocator, const cpumesh *src_mesh,
-                            gpumesh *dst_mesh) {
+static VkResult create_mesh(VkDevice device, VmaAllocator allocator,
+                            const cpumesh *src_mesh, gpumesh *dst_mesh) {
   VkResult err = VK_SUCCESS;
 
+  size_t size = src_mesh->size;
+
   gpubuffer host_buffer = {0};
-  err = create_gpubuffer(allocator, src_mesh->size, VMA_MEMORY_USAGE_CPU_TO_GPU,
+  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
                          VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
   assert(err == VK_SUCCESS);
 
   gpubuffer device_buffer = {0};
-  err = create_gpubuffer(allocator, src_mesh->size, VMA_MEMORY_USAGE_GPU_ONLY,
+  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
                          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                          &device_buffer);
   assert(err == VK_SUCCESS);
 
-  *dst_mesh = (gpumesh){host_buffer, device_buffer};
+  VkFence fence = VK_NULL_HANDLE;
+  {
+    VkFenceCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    err = vkCreateFence(device, &create_info, NULL, &fence);
+    assert(err == VK_SUCCESS);
+  }
+
+  *dst_mesh = (gpumesh){fence, host_buffer, device_buffer, size};
 
   return err;
 }
@@ -264,9 +276,11 @@ static void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer) {
   vmaDestroyBuffer(allocator, buffer->buffer, buffer->alloc);
 }
 
-static void destroy_mesh(VmaAllocator allocator, const gpumesh *mesh) {
+static void destroy_mesh(VkDevice device, VmaAllocator allocator,
+                         const gpumesh *mesh) {
   destroy_gpubuffer(allocator, &mesh->geom_host);
   destroy_gpubuffer(allocator, &mesh->geom_gpu);
+  vkDestroyFence(device, mesh->uploaded, NULL);
 }
 
 static void demo_upload_mesh(demo *d, const gpumesh *mesh) {
@@ -712,7 +726,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   // Create Cube Mesh
   gpumesh cube = {0};
   {
-    err = create_mesh(allocator, &cube_cpu, &cube);
+    err = create_mesh(device, allocator, &cube_cpu, &cube);
     assert(err == VK_SUCCESS);
   }
 
@@ -751,6 +765,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       err = vkCreateSemaphore(device, &create_info, NULL,
+                              &d->upload_complete_sems[i]);
+      assert(err == VK_SUCCESS);
+      err = vkCreateSemaphore(device, &create_info, NULL,
                               &d->img_acquired_sems[i]);
       assert(err == VK_SUCCESS);
       err = vkCreateSemaphore(device, &create_info, NULL,
@@ -760,9 +777,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
                               &d->render_complete_sems[i]);
       assert(err == VK_SUCCESS);
     }
-
-    err = vkCreateSemaphore(device, &create_info, NULL, &d->upload_sem);
-    assert(err == VK_SUCCESS);
   }
 
   // Get Swapchain Images
@@ -836,8 +850,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       alloc_info.commandPool = d->command_pools[i];
+      err = vkAllocateCommandBuffers(device, &alloc_info,
+                                     &d->graphics_buffers[i]);
+      assert(err == VK_SUCCESS);
       err =
-          vkAllocateCommandBuffers(device, &alloc_info, &d->command_buffers[i]);
+          vkAllocateCommandBuffers(device, &alloc_info, &d->upload_buffers[i]);
       assert(err == VK_SUCCESS);
     }
   }
@@ -907,12 +924,53 @@ static void demo_render_frame(demo *d) {
     VkCommandPool command_pool = d->command_pools[frame_idx];
     vkResetCommandPool(device, command_pool, 0);
 
-    VkCommandBuffer command_buffer = d->command_buffers[frame_idx];
+    VkCommandBuffer upload_buffer = d->upload_buffers[frame_idx];
+    VkCommandBuffer graphics_buffer = d->graphics_buffers[frame_idx];
+
+    VkSemaphore upload_sem = VK_NULL_HANDLE;
+
     // Record
     {
+      // Upload
+      {
+        // If the fence has not been signaled, it's elligible for upload
+        VkResult status = vkGetFenceStatus(d->device, d->cube_gpu.uploaded);
+        if (status == VK_NOT_READY) {
+          VkCommandBufferBeginInfo begin_info = {0};
+          begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+          err = vkBeginCommandBuffer(upload_buffer, &begin_info);
+          assert(err == VK_SUCCESS);
+
+          const gpumesh *mesh = &d->cube_gpu;
+          VkBufferCopy region = {
+              0,
+              0,
+              d->cube_gpu.size,
+          };
+          vkCmdCopyBuffer(upload_buffer, mesh->geom_host.buffer,
+                          mesh->geom_gpu.buffer, 1, &region);
+
+          err = vkEndCommandBuffer(upload_buffer);
+
+          upload_sem = d->upload_complete_sems[frame_idx];
+          assert(err == VK_SUCCESS);
+
+          // Submit upload
+          VkSubmitInfo submit_info = {0};
+          submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+          submit_info.commandBufferCount = 1;
+          submit_info.pCommandBuffers = &upload_buffer;
+          submit_info.signalSemaphoreCount = 1;
+          submit_info.pSignalSemaphores = &upload_sem;
+          err = vkQueueSubmit(d->graphics_queue, 1, &submit_info,
+                              d->cube_gpu.uploaded);
+          assert(err == VK_SUCCESS);
+        }
+      }
+
       VkCommandBufferBeginInfo begin_info = {0};
       begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-      err = vkBeginCommandBuffer(command_buffer, &begin_info);
+      err = vkBeginCommandBuffer(graphics_buffer, &begin_info);
       assert(err == VK_SUCCESS);
 
       // Transition Swapchain Image
@@ -934,7 +992,7 @@ static void demo_render_frame(demo *d) {
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.levelCount = 1;
         barrier.subresourceRange.layerCount = 1;
-        vkCmdPipelineBarrier(command_buffer,
+        vkCmdPipelineBarrier(graphics_buffer,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
@@ -958,40 +1016,52 @@ static void demo_render_frame(demo *d) {
         pass_info.clearValueCount = 1;
         pass_info.pClearValues = &clear_value;
 
-        vkCmdBeginRenderPass(command_buffer, &pass_info,
+        vkCmdBeginRenderPass(graphics_buffer, &pass_info,
                              VK_SUBPASS_CONTENTS_INLINE);
 
         VkViewport viewport = {0, height, width, -height, 0, 1};
         VkRect2D scissor = {{0, 0}, {width, height}};
-        vkCmdSetViewport(command_buffer, 0, 1, &viewport);
-        vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+        vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
+        vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
         vkCmdPushConstants(
-            command_buffer, d->pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-            sizeof(PushConstants), (const void *)&d->push_constants);
+            graphics_buffer, d->pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS,
+            0, sizeof(PushConstants), (const void *)&d->push_constants);
 
-        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->pipeline);
-        vkCmdDraw(command_buffer, 3, 1, 0, 0);
+        vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
 
-        vkCmdEndRenderPass(command_buffer);
+        vkCmdEndRenderPass(graphics_buffer);
       }
 
-      err = vkEndCommandBuffer(command_buffer);
+      err = vkEndCommandBuffer(graphics_buffer);
       assert(err == VK_SUCCESS);
     }
 
     // Submit
     {
+      uint32_t wait_sem_count = 0;
+      VkSemaphore wait_sems[16] = {0};
+      VkPipelineStageFlags wait_stage_flags[16] = {0};
+
+      wait_sems[wait_sem_count] = img_acquired_sem;
+      wait_stage_flags[wait_sem_count++] =
+          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+      if (upload_sem != VK_NULL_HANDLE) {
+        wait_sems[wait_sem_count] = upload_sem;
+        wait_stage_flags[wait_sem_count++] = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      }
+
       VkPipelineStageFlags pipe_stage_flags =
           VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
       VkSubmitInfo submit_info = {0};
       submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-      submit_info.pWaitDstStageMask = &pipe_stage_flags;
-      submit_info.waitSemaphoreCount = 1;
-      submit_info.pWaitSemaphores = &img_acquired_sem;
+      submit_info.waitSemaphoreCount = wait_sem_count;
+      submit_info.pWaitSemaphores = wait_sems;
+      submit_info.pWaitDstStageMask = wait_stage_flags;
       submit_info.commandBufferCount = 1;
-      submit_info.pCommandBuffers = &command_buffer;
+      submit_info.pCommandBuffers = &graphics_buffer;
       submit_info.signalSemaphoreCount = 1;
       submit_info.pSignalSemaphores = &render_complete_sem;
       err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_idx]);
@@ -1057,6 +1127,7 @@ static void demo_destroy(demo *d) {
 
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
     vkDestroyFence(device, d->fences[i], NULL);
+    vkDestroySemaphore(device, d->upload_complete_sems[i], NULL);
     vkDestroySemaphore(device, d->render_complete_sems[i], NULL);
     vkDestroySemaphore(device, d->swapchain_image_sems[i], NULL);
     vkDestroySemaphore(device, d->img_acquired_sems[i], NULL);
@@ -1065,10 +1136,9 @@ static void demo_destroy(demo *d) {
     vkDestroyCommandPool(device, d->command_pools[i], NULL);
   }
 
-  destroy_mesh(d->allocator, &d->cube_gpu);
+  destroy_mesh(d->device, d->allocator, &d->cube_gpu);
 
   free(d->queue_props);
-  vkDestroySemaphore(device, d->upload_sem, NULL);
   vkDestroyPipelineLayout(device, d->pipeline_layout, NULL);
   vkDestroyPipeline(device, d->pipeline, NULL);
   vkDestroyPipelineCache(device, d->pipeline_cache, NULL);
