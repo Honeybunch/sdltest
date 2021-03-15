@@ -1,4 +1,4 @@
-#include "common.hlsli"
+#include "fullscreenvert.hlsli"
 
 float4 frag(Interpolators i) : SV_TARGET
 {

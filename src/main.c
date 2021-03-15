@@ -727,6 +727,28 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   gpumesh cube = {0};
   {
     err = create_mesh(device, allocator, &cube_cpu, &cube);
+
+    // Actually copy cube data to cpu local buffer
+    {
+      uint8_t *data = NULL;
+      vmaMapMemory(allocator, cube.geom_host.alloc, (void **)&data);
+
+      size_t offset = 0;
+      // Copy Positions
+      size_t size = sizeof(float3) * cube_cpu.vertex_count;
+      memcpy(data + offset, cube_cpu.positions, size);
+      offset += size;
+      // Copy Colors
+      memcpy(data + offset, cube_cpu.colors, size);
+      offset += size;
+      // Copy Normals
+      memcpy(data + offset, cube_cpu.normals, size);
+      offset += size;
+
+      vmaUnmapMemory(allocator, cube.geom_host.alloc);
+      data = NULL;
+    }
+
     assert(err == VK_SUCCESS);
   }
 
