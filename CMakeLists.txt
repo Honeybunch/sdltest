@@ -70,8 +70,8 @@ foreach(shader ${shaders})
   add_custom_command(
       OUTPUT ${out_paths}
       COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
-      COMMAND ${DXC} -T vs_6_0 -E vert -Vn vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-reflect -spirv ${shader} -Fh ${vert_out_path}
-      COMMAND ${DXC} -T ps_6_0 -E frag -Vn frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-reflect -spirv ${shader} -Fh ${frag_out_path}
+      COMMAND ${DXC} -T vs_6_0 -E vert -Vn ${filename}_vert $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-reflect -spirv ${shader} -Fh ${vert_out_path}
+      COMMAND ${DXC} -T ps_6_0 -E frag -Vn ${filename}_frag $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-reflect -spirv ${shader} -Fh ${frag_out_path}
       MAIN_DEPENDENCY ${shader}
       DEPENDS ${shader_includes}
   )
@@ -82,6 +82,7 @@ add_custom_target(shaders ALL DEPENDS ${shader_headers})
 # Setup Main Executable
 set(source "${CMAKE_CURRENT_LIST_DIR}/src/main.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/fractal.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/mesh.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp")
 if(WIN32)
   add_executable(sdltest WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.rc")

@@ -38,13 +38,13 @@ uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
     {
       VkShaderModuleCreateInfo create_info = {0};
       create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-      create_info.codeSize = sizeof(vert);
-      create_info.pCode = (const uint32_t *)vert;
+      create_info.codeSize = sizeof(fractal_vert);
+      create_info.pCode = (const uint32_t *)fractal_vert;
       err = vkCreateShaderModule(device, &create_info, NULL, &vert_mod);
       assert(err == VK_SUCCESS);
 
-      create_info.codeSize = sizeof(frag);
-      create_info.pCode = (const uint32_t *)frag;
+      create_info.codeSize = sizeof(fractal_frag);
+      create_info.pCode = (const uint32_t *)fractal_frag;
       err = vkCreateShaderModule(device, &create_info, NULL, &frag_mod);
       assert(err == VK_SUCCESS);
     }
@@ -141,5 +141,5 @@ uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
   *layout = pipeline_layout;
   *pipe = fractal_pipeline;
 
-  return (uint32_t)err;
+  return err;
 }
