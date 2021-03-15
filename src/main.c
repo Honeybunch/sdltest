@@ -7,9 +7,9 @@
 
 #include <vk_mem_alloc.h>
 
-#include "frag.h"
+#include "fractal.h"
+#include "shadercommon.h"
 #include "simd.h"
-#include "vert.h"
 
 #include "cube.h"
 #include "gpumesh.h"
@@ -25,15 +25,6 @@
 
 #define WIDTH 1600
 #define HEIGHT 900
-
-#define PUSH_CONSTANT_BYTES 128
-
-typedef struct PushConstants {
-  float4 time;
-  float2 resolution;
-} PushConstants;
-static_assert(sizeof(PushConstants) <= PUSH_CONSTANT_BYTES,
-              "Too Many Push Constants");
 
 typedef struct demo {
   VkInstance instance;
@@ -63,8 +54,9 @@ typedef struct demo {
 
   VkRenderPass render_pass;
   VkPipelineCache pipeline_cache;
-  VkPipelineLayout pipeline_layout;
-  VkPipeline pipeline;
+
+  VkPipelineLayout fractal_pipeline_layout;
+  VkPipeline fractal_pipeline;
 
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
@@ -598,130 +590,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     assert(err == VK_SUCCESS);
   }
 
-  // Create Graphics Pipeline Layout
-  VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-  {
-    VkPushConstantRange const_range = {
-        VK_SHADER_STAGE_ALL_GRAPHICS,
-        0,
-        PUSH_CONSTANT_BYTES,
-    };
-    VkPipelineLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.pushConstantRangeCount = 1;
-    create_info.pPushConstantRanges = &const_range;
-    err = vkCreatePipelineLayout(device, &create_info, NULL, &pipeline_layout);
-    assert(err == VK_SUCCESS);
-  }
-
-  // Create Fullscreen Graphics Pipeline
-  VkPipeline pipeline = VK_NULL_HANDLE;
-  {
-    // Load Shaders
-    VkShaderModule vert_mod = VK_NULL_HANDLE;
-    VkShaderModule frag_mod = VK_NULL_HANDLE;
-    {
-      VkShaderModuleCreateInfo create_info = {0};
-      create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-      create_info.codeSize = sizeof(vert);
-      create_info.pCode = (const uint32_t *)vert;
-      err = vkCreateShaderModule(device, &create_info, NULL, &vert_mod);
-      assert(err == VK_SUCCESS);
-
-      create_info.codeSize = sizeof(frag);
-      create_info.pCode = (const uint32_t *)frag;
-      err = vkCreateShaderModule(device, &create_info, NULL, &frag_mod);
-      assert(err == VK_SUCCESS);
-    }
-
-    VkPipelineShaderStageCreateInfo vert_stage = {0};
-    vert_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vert_stage.module = vert_mod;
-    vert_stage.pName = "vert";
-    VkPipelineShaderStageCreateInfo frag_stage = {0};
-    frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    frag_stage.module = frag_mod;
-    frag_stage.pName = "frag";
-
-    VkPipelineShaderStageCreateInfo shader_stages[] = {vert_stage, frag_stage};
-
-    VkPipelineVertexInputStateCreateInfo vert_input_state = {0};
-    vert_input_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {0};
-    input_assembly_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    input_assembly_state.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
-    VkViewport viewport = {0, height, width, -(float)height, 0, 1};
-    VkRect2D scissor = {{0, 0}, {width, height}};
-
-    VkPipelineViewportStateCreateInfo viewport_state = {0};
-    viewport_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewport_state.viewportCount = 1;
-    viewport_state.pViewports = &viewport;
-    viewport_state.scissorCount = 1;
-    viewport_state.pScissors = &scissor;
-    VkPipelineRasterizationStateCreateInfo raster_state = {0};
-    raster_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    raster_state.polygonMode = VK_POLYGON_MODE_FILL;
-    raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
-    raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    raster_state.lineWidth = 1.0f;
-    VkPipelineMultisampleStateCreateInfo multisample_state = {0};
-    multisample_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-    VkPipelineDepthStencilStateCreateInfo depth_state = {0};
-    depth_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_state.maxDepthBounds = 1.0f;
-
-    VkPipelineColorBlendAttachmentState attachment_state = {0};
-    attachment_state.colorWriteMask =
-        VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-        VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    VkPipelineColorBlendStateCreateInfo color_blend_state = {0};
-    color_blend_state.sType =
-        VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    color_blend_state.attachmentCount = 1;
-    color_blend_state.pAttachments = &attachment_state;
-
-    VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
-                                   VK_DYNAMIC_STATE_SCISSOR};
-    VkPipelineDynamicStateCreateInfo dynamic_state = {0};
-    dynamic_state.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state.dynamicStateCount =
-        sizeof(dyn_states) / sizeof(VkDynamicState);
-    dynamic_state.pDynamicStates = dyn_states;
-
-    VkGraphicsPipelineCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    create_info.stageCount =
-        sizeof(shader_stages) / sizeof(VkPipelineShaderStageCreateInfo);
-    create_info.pStages = shader_stages;
-    create_info.pVertexInputState = &vert_input_state;
-    create_info.pInputAssemblyState = &input_assembly_state;
-    create_info.pViewportState = &viewport_state;
-    create_info.pRasterizationState = &raster_state;
-    create_info.pMultisampleState = &multisample_state;
-    create_info.pDepthStencilState = &depth_state;
-    create_info.pColorBlendState = &color_blend_state;
-    create_info.pDynamicState = &dynamic_state;
-    create_info.layout = pipeline_layout;
-    create_info.renderPass = render_pass;
-    err = vkCreateGraphicsPipelines(device, pipeline_cache, 1, &create_info,
-                                    NULL, &pipeline);
-    assert(err == VK_SUCCESS);
-
-    // Can destroy shaders
-    vkDestroyShaderModule(device, vert_mod, NULL);
-    vkDestroyShaderModule(device, frag_mod, NULL);
-  }
+  VkPipelineLayout fractal_pipe_layout = VK_NULL_HANDLE;
+  VkPipeline fractal_pipe = VK_NULL_HANDLE;
+  err = create_fractal_pipeline(device, pipeline_cache, render_pass, width,
+                                height, &fractal_pipe_layout, &fractal_pipe);
+  assert(err == VK_SUCCESS);
 
   // Create Cube Mesh
   gpumesh cube = {0};
@@ -774,8 +647,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->swap_height = height;
   d->render_pass = render_pass;
   d->pipeline_cache = pipeline_cache;
-  d->pipeline_layout = pipeline_layout;
-  d->pipeline = pipeline;
+  d->fractal_pipeline_layout = fractal_pipe_layout;
+  d->fractal_pipeline = fractal_pipe;
   d->cube_gpu = cube;
   d->frame_idx = 0;
 
@@ -1046,12 +919,13 @@ static void demo_render_frame(demo *d) {
         vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
         vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
-        vkCmdPushConstants(
-            graphics_buffer, d->pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS,
-            0, sizeof(PushConstants), (const void *)&d->push_constants);
+        vkCmdPushConstants(graphics_buffer, d->fractal_pipeline_layout,
+                           VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                           sizeof(PushConstants),
+                           (const void *)&d->push_constants);
 
         vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          d->pipeline);
+                          d->fractal_pipeline);
         vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
 
         vkCmdEndRenderPass(graphics_buffer);
@@ -1161,8 +1035,8 @@ static void demo_destroy(demo *d) {
   destroy_mesh(d->device, d->allocator, &d->cube_gpu);
 
   free(d->queue_props);
-  vkDestroyPipelineLayout(device, d->pipeline_layout, NULL);
-  vkDestroyPipeline(device, d->pipeline, NULL);
+  vkDestroyPipelineLayout(device, d->fractal_pipeline_layout, NULL);
+  vkDestroyPipeline(device, d->fractal_pipeline, NULL);
   vkDestroyPipelineCache(device, d->pipeline_cache, NULL);
   vkDestroyRenderPass(device, d->render_pass, NULL);
   vkDestroySwapchainKHR(device, d->swapchain, NULL);
