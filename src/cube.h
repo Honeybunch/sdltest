@@ -1,6 +1,15 @@
 #pragma once
 #include "cpumesh.h"
 
+static const uint16_t cube_indices[] = {
+    0,  1,  2,  2,  3,  1,  // Front
+    4,  5,  6,  6,  7,  5,  // Back
+    8,  9,  10, 10, 11, 9,  // Right
+    12, 13, 14, 14, 15, 13, // Left
+    16, 17, 18, 18, 19, 17, // Top
+    20, 21, 22, 22, 23, 21, // Bottom
+};
+
 static const float3 cube_positions[] = {
     // front
     {-1.0f, -1.0f, +1.0f}, // point blue
@@ -101,8 +110,12 @@ static const float3 cube_normals[] = {
 };
 
 static cpumesh cube_cpu = {
-    .size = sizeof(cube_positions) + sizeof(cube_colors) + sizeof(cube_normals),
+    .index_size = sizeof(cube_indices),
+    .geom_size =
+        sizeof(cube_positions) + sizeof(cube_colors) + sizeof(cube_normals),
+    .index_count = sizeof(cube_indices) / sizeof(uint16_t),
     .vertex_count = sizeof(cube_positions) / sizeof(float3),
+    .indices = cube_indices,
     .positions = cube_positions,
     .colors = cube_colors,
     .normals = cube_normals,

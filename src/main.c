@@ -239,7 +239,10 @@ static VkResult create_mesh(VkDevice device, VmaAllocator allocator,
                             const cpumesh *src_mesh, gpumesh *dst_mesh) {
   VkResult err = VK_SUCCESS;
 
-  size_t size = src_mesh->size;
+  size_t idx_size = src_mesh->index_size;
+  size_t geom_size = src_mesh->geom_size;
+
+  size_t size = idx_size + geom_size;
 
   gpubuffer host_buffer = {0};
   err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -249,6 +252,7 @@ static VkResult create_mesh(VkDevice device, VmaAllocator allocator,
   gpubuffer device_buffer = {0};
   err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
                          VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                             VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                          &device_buffer);
   assert(err == VK_SUCCESS);
@@ -261,7 +265,8 @@ static VkResult create_mesh(VkDevice device, VmaAllocator allocator,
     assert(err == VK_SUCCESS);
   }
 
-  *dst_mesh = (gpumesh){fence, host_buffer, device_buffer, size};
+  *dst_mesh = (gpumesh){fence, src_mesh->index_count, VK_INDEX_TYPE_UINT16,
+                        size,  host_buffer,           device_buffer};
 
   return err;
 }
@@ -272,8 +277,8 @@ static void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer) {
 
 static void destroy_mesh(VkDevice device, VmaAllocator allocator,
                          const gpumesh *mesh) {
-  destroy_gpubuffer(allocator, &mesh->geom_host);
-  destroy_gpubuffer(allocator, &mesh->geom_gpu);
+  destroy_gpubuffer(allocator, &mesh->host);
+  destroy_gpubuffer(allocator, &mesh->gpu);
   vkDestroyFence(device, mesh->uploaded, NULL);
 }
 
@@ -626,11 +631,15 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     // Actually copy cube data to cpu local buffer
     {
       uint8_t *data = NULL;
-      vmaMapMemory(allocator, cube.geom_host.alloc, (void **)&data);
+      vmaMapMemory(allocator, cube.host.alloc, (void **)&data);
 
       size_t offset = 0;
+      // Copy Indices
+      size_t size = cube.idx_count * sizeof(uint16_t) >> cube.idx_type;
+      memcpy(data + offset, cube_cpu.indices, size);
+      offset += size;
       // Copy Positions
-      size_t size = sizeof(float3) * cube_cpu.vertex_count;
+      size = sizeof(float3) * cube_cpu.vertex_count;
       memcpy(data + offset, cube_cpu.positions, size);
       offset += size;
       // Copy Colors
@@ -640,7 +649,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
       memcpy(data + offset, cube_cpu.normals, size);
       offset += size;
 
-      vmaUnmapMemory(allocator, cube.geom_host.alloc);
+      vmaUnmapMemory(allocator, cube.host.alloc);
       data = NULL;
     }
 
@@ -860,13 +869,9 @@ static void demo_render_frame(demo *d) {
           assert(err == VK_SUCCESS);
 
           const gpumesh *mesh = &d->cube_gpu;
-          VkBufferCopy region = {
-              0,
-              0,
-              d->cube_gpu.size,
-          };
-          vkCmdCopyBuffer(upload_buffer, mesh->geom_host.buffer,
-                          mesh->geom_gpu.buffer, 1, &region);
+          VkBufferCopy region = {0, 0, mesh->size};
+          vkCmdCopyBuffer(upload_buffer, mesh->host.buffer, mesh->gpu.buffer, 1,
+                          &region);
 
           err = vkEndCommandBuffer(upload_buffer);
 
@@ -946,9 +951,38 @@ static void demo_render_frame(demo *d) {
             graphics_buffer, d->pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS,
             0, sizeof(PushConstants), (const void *)&d->push_constants);
 
+        // Draw Fullscreen Fractal
         vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->fractal_pipeline);
         vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
+
+        uint32_t idx_count = cube_cpu.index_count;
+        uint32_t vert_count = cube_cpu.vertex_count;
+
+        // Draw Cube
+        vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                          d->mesh_pipeline);
+
+        {
+          VkBuffer b = d->cube_gpu.gpu.buffer;
+
+          vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+
+          size_t idx_size =
+              idx_count * sizeof(uint16_t) >> d->cube_gpu.idx_type;
+          size_t pos_size = sizeof(float3) * vert_count;
+          size_t colors_size = sizeof(float3) * vert_count;
+
+#define BINDING_COUNT 3
+          VkBuffer buffers[BINDING_COUNT] = {b, b, b};
+          VkDeviceSize offsets[BINDING_COUNT] = {
+              idx_size, idx_size + pos_size, idx_size + pos_size + colors_size};
+
+          vkCmdBindVertexBuffers(graphics_buffer, 0, BINDING_COUNT, buffers,
+                                 offsets);
+#undef BINDING_COUNT
+        }
+        vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(graphics_buffer);
       }

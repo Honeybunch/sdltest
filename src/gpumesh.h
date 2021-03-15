@@ -13,7 +13,9 @@ typedef struct gpubuffer {
 
 typedef struct gpumesh {
   VkFence uploaded;
-  gpubuffer geom_host;
-  gpubuffer geom_gpu;
+  size_t idx_count;
+  VkIndexType idx_type;
   size_t size;
+  gpubuffer host;
+  gpubuffer gpu;
 } gpumesh;
