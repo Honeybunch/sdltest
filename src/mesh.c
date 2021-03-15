@@ -10,7 +10,7 @@
 
 uint32_t create_mesh_pipeline(VkDevice device, VkPipelineCache cache,
                               VkRenderPass pass, uint32_t w, uint32_t h,
-                              VkPipelineLayout *layout, VkPipeline *pipe) {
+                              VkPipelineLayout layout, VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
   return err;
 }

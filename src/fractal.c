@@ -10,24 +10,8 @@
 
 uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
                                  VkRenderPass pass, uint32_t w, uint32_t h,
-                                 VkPipelineLayout *layout, VkPipeline *pipe) {
+                                 VkPipelineLayout layout, VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
-
-  // Create Graphics Pipeline Layout
-  VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-  {
-    VkPushConstantRange const_range = {
-        VK_SHADER_STAGE_ALL_GRAPHICS,
-        0,
-        PUSH_CONSTANT_BYTES,
-    };
-    VkPipelineLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.pushConstantRangeCount = 1;
-    create_info.pPushConstantRanges = &const_range;
-    err = vkCreatePipelineLayout(device, &create_info, NULL, &pipeline_layout);
-    assert(err == VK_SUCCESS);
-  }
 
   // Create Fullscreen Graphics Pipeline
   VkPipeline fractal_pipeline = VK_NULL_HANDLE;
@@ -127,7 +111,7 @@ uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
     create_info.pDepthStencilState = &depth_state;
     create_info.pColorBlendState = &color_blend_state;
     create_info.pDynamicState = &dynamic_state;
-    create_info.layout = pipeline_layout;
+    create_info.layout = layout;
     create_info.renderPass = pass;
     err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, NULL,
                                     &fractal_pipeline);
@@ -138,7 +122,6 @@ uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
     vkDestroyShaderModule(device, frag_mod, NULL);
   }
 
-  *layout = pipeline_layout;
   *pipe = fractal_pipeline;
 
   return err;

@@ -8,6 +8,7 @@
 #include <vk_mem_alloc.h>
 
 #include "fractal.h"
+#include "mesh.h"
 #include "shadercommon.h"
 #include "simd.h"
 
@@ -55,8 +56,9 @@ typedef struct demo {
   VkRenderPass render_pass;
   VkPipelineCache pipeline_cache;
 
-  VkPipelineLayout fractal_pipeline_layout;
+  VkPipelineLayout pipeline_layout;
   VkPipeline fractal_pipeline;
+  VkPipeline mesh_pipeline;
 
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
@@ -590,10 +592,30 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     assert(err == VK_SUCCESS);
   }
 
-  VkPipelineLayout fractal_pipe_layout = VK_NULL_HANDLE;
-  VkPipeline fractal_pipe = VK_NULL_HANDLE;
+  // Create Graphics Pipeline Layout
+  VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+  {
+    VkPushConstantRange const_range = {
+        VK_SHADER_STAGE_ALL_GRAPHICS,
+        0,
+        PUSH_CONSTANT_BYTES,
+    };
+    VkPipelineLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    create_info.pushConstantRangeCount = 1;
+    create_info.pPushConstantRanges = &const_range;
+    err = vkCreatePipelineLayout(device, &create_info, NULL, &pipeline_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  VkPipeline fractal_pipeline = VK_NULL_HANDLE;
   err = create_fractal_pipeline(device, pipeline_cache, render_pass, width,
-                                height, &fractal_pipe_layout, &fractal_pipe);
+                                height, pipeline_layout, &fractal_pipeline);
+  assert(err == VK_SUCCESS);
+
+  VkPipeline mesh_pipeline = VK_NULL_HANDLE;
+  err = create_mesh_pipeline(device, pipeline_cache, render_pass, width, height,
+                             pipeline_layout, &mesh_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create Cube Mesh
@@ -647,8 +669,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->swap_height = height;
   d->render_pass = render_pass;
   d->pipeline_cache = pipeline_cache;
-  d->fractal_pipeline_layout = fractal_pipe_layout;
-  d->fractal_pipeline = fractal_pipe;
+  d->pipeline_layout = pipeline_layout;
+  d->fractal_pipeline = fractal_pipeline;
+  d->mesh_pipeline = mesh_pipeline;
   d->cube_gpu = cube;
   d->frame_idx = 0;
 
@@ -919,10 +942,9 @@ static void demo_render_frame(demo *d) {
         vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
         vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
-        vkCmdPushConstants(graphics_buffer, d->fractal_pipeline_layout,
-                           VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                           sizeof(PushConstants),
-                           (const void *)&d->push_constants);
+        vkCmdPushConstants(
+            graphics_buffer, d->pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS,
+            0, sizeof(PushConstants), (const void *)&d->push_constants);
 
         vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                           d->fractal_pipeline);
@@ -1035,7 +1057,7 @@ static void demo_destroy(demo *d) {
   destroy_mesh(d->device, d->allocator, &d->cube_gpu);
 
   free(d->queue_props);
-  vkDestroyPipelineLayout(device, d->fractal_pipeline_layout, NULL);
+  vkDestroyPipelineLayout(device, d->pipeline_layout, NULL);
   vkDestroyPipeline(device, d->fractal_pipeline, NULL);
   vkDestroyPipelineCache(device, d->pipeline_cache, NULL);
   vkDestroyRenderPass(device, d->render_pass, NULL);
