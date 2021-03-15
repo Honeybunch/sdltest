@@ -1058,6 +1058,7 @@ static void demo_destroy(demo *d) {
 
   free(d->queue_props);
   vkDestroyPipelineLayout(device, d->pipeline_layout, NULL);
+  vkDestroyPipeline(device, d->mesh_pipeline, NULL);
   vkDestroyPipeline(device, d->fractal_pipeline, NULL);
   vkDestroyPipelineCache(device, d->pipeline_cache, NULL);
   vkDestroyRenderPass(device, d->render_pass, NULL);
