@@ -49,9 +49,24 @@ typedef struct float3x3 {
   float3 rows[3];
 } float3x3;
 
+typedef struct transform {
+  float3 position;
+  float3 scale;
+  float3 rotation;
+} transform;
+
 float dotf3(float3 x, float3 y);
 float dotf4(float4 x, float4 y);
 float3 crossf3(float3 x, float3 y);
 
-float3x3 mulf33(float3x3 x, float3x3 y);
-float4x4 mulf44(float4x4 x, float4x4 y);
+void mulf33(float3x3 *m, float3 v);
+void mulf34(float3x4 *m, float4 v);
+void mulf44(float4x4 *m, float4 v);
+
+void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o);
+
+void translate(transform *t, float3 p);
+void scale(transform *t, float3 s);
+void rotate(transform *t, float3 r);
+
+void transform_to_matrix(float3x4 *m, const transform *t);
