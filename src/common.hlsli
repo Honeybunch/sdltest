@@ -2,8 +2,8 @@ struct PushConstants
 {
     float4 time;
     float2 resolution;
-    float3x4 wvp;
-    float3x4 w;
+    float3x4 mvp;
+    float3x4 m;
 };
 
 #define TAU 6.283185307179586
