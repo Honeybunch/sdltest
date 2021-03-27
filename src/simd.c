@@ -1,5 +1,7 @@
 #include "simd.h"
 
+#define _USE_MATH_DEFINES
+#include <assert.h>
 #include <math.h>
 
 float dotf3(float3 x, float3 y) {
@@ -18,7 +20,57 @@ float3 crossf3(float3 x, float3 y) {
   };
 }
 
+float magf3(float3 v) {
+  return sqrtf((v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]));
+}
+
+float magf4(float4 v) {
+  return sqrtf((v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]) + (v[3] * v[3]));
+}
+
+float magsqf3(float3 v) {
+  return (v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]);
+}
+
+float magsqf4(float3 v) {
+  return (v[0] * v[0]) + (v[1] * v[1]) + (v[2] * v[2]) + (v[3] * v[3]);
+}
+
+float3 normf3(float3 v) {
+  float invSum = 1 / magf3(v);
+  return (float3){v[0] * invSum, v[1] * invSum, v[2] * invSum};
+}
+
+void mf33_identity(float3x3 *m) {
+  assert(m);
+  *m = (float3x3){
+      (float3){1, 0, 0},
+      (float3){0, 1, 0},
+      (float3){0, 0, 1},
+  };
+}
+
+void mf34_identity(float3x4 *m) {
+  assert(m);
+  *m = (float3x4){
+      (float4){1, 0, 0, 0},
+      (float4){0, 1, 0, 0},
+      (float4){0, 0, 1, 0},
+  };
+}
+
+void mf44_identity(float4x4 *m) {
+  assert(m);
+  *m = (float4x4){
+      (float4){1, 0, 0, 0},
+      (float4){0, 1, 0, 0},
+      (float4){0, 0, 1, 0},
+      (float4){0, 0, 0, 1},
+  };
+}
+
 void mulf33(float3x3 *m, float3 v) {
+  assert(m);
 #pragma clang loop unroll_count(3)
   for (uint32_t i = 0; i < 3; ++i) {
     float s = v[i];
@@ -29,6 +81,7 @@ void mulf33(float3x3 *m, float3 v) {
 }
 
 void mulf34(float3x4 *m, float4 v) {
+  assert(m);
 #pragma clang loop unroll_count(4)
   for (uint32_t i = 0; i < 4; ++i) {
     float s = v[i];
@@ -39,6 +92,7 @@ void mulf34(float3x4 *m, float4 v) {
 }
 
 void mulf44(float4x4 *m, float4 v) {
+  assert(m);
 #pragma clang loop unroll_count(4)
   for (uint32_t i = 0; i < 4; ++i) {
     float s = v[i];
@@ -50,6 +104,9 @@ void mulf44(float4x4 *m, float4 v) {
 }
 
 void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
+  assert(x);
+  assert(y);
+  assert(o);
 #pragma clang loop unroll_count(3)
   for (uint32_t i = 0; i < 3; ++i) {
 #pragma clang loop unroll_count(4)
@@ -64,11 +121,22 @@ void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
   }
 }
 
-void translate(transform *t, float3 p) { t->position += p; }
-void scale(transform *t, float3 s) { t->scale += s; }
-void rotate(transform *t, float3 r) { t->rotation += r; }
+void translate(transform *t, float3 p) {
+  assert(t);
+  t->position += p;
+}
+void scale(transform *t, float3 s) {
+  assert(t);
+  t->scale += s;
+}
+void rotate(transform *t, float3 r) {
+  assert(t);
+  t->rotation += r;
+}
 
 void transform_to_matrix(float3x4 *m, const transform *t) {
+  assert(m);
+  assert(t);
   // Position matrix
   float3x4 p = {
       (float4){1, 0, 0, t->position[0]},
@@ -115,4 +183,34 @@ void transform_to_matrix(float3x4 *m, const transform *t) {
   float3x4 temp = {0};
   mulmf34(&r, &p, &temp);
   mulmf34(&temp, &s, m);
+}
+
+void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
+  assert(m);
+
+  float3 forward = normf3(pos - target);
+  float3 right = crossf3(normf3(up), forward);
+  up = crossf3(forward, right);
+
+  *m = (float4x4){
+      (float4){right[0], right[1], right[2], 0},
+      (float4){up[0], up[1], up[2], 0},
+      (float4){forward[0], forward[1], forward[2], 0},
+      (float4){pos[0], pos[1], pos[2], 1},
+  };
+}
+
+void perspective(float4x4 *m, float near, float far, float fov) {
+  assert(m);
+  float scale = 1 / tanf(fov * 0.5f * M_PI / 180.0f);
+
+  float m33 = -far / (far - near);
+  float m43 = -far * near / (far - near);
+
+  *m = (float4x4){
+      (float4){scale, 0, 0, 0},
+      (float4){0, scale, 0, 0},
+      (float4){0, 0, m33, m43},
+      (float4){0, 0, -1, 1},
+  };
 }

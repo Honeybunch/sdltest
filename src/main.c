@@ -1104,6 +1104,18 @@ static void demo_destroy(demo *d) {
 }
 
 int32_t SDL_main(int32_t argc, char *argv[]) {
+
+  float4x4 persp_mat, view_mat;
+  mf44_identity(&persp_mat);
+  mf44_identity(&view_mat);
+
+  float3 camera_pos = {1, 1, 1};
+  float3 camera_target = {0, 0, 0};
+  float3 up = {0, 1, 0};
+
+  perspective(&persp_mat, 0.1f, 100.0f, 90.0f);
+  look_at(&view_mat, camera_pos, camera_target, up);
+
   VkResult err = volkInitialize();
   assert(err == VK_SUCCESS);
 
