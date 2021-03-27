@@ -114,7 +114,25 @@ void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
       float s = 0.0f;
 #pragma clang loop unroll_count(3)
       for (uint32_t iii = 0; iii < 3; ++iii) {
-        s += x->rows[i][iii] * x->rows[iii][ii];
+        s += x->rows[i][iii] * y->rows[iii][ii];
+      }
+      o->rows[i][ii] = s;
+    }
+  }
+}
+
+void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
+  assert(x);
+  assert(y);
+  assert(o);
+#pragma clang loop unroll_count(4)
+  for (uint32_t i = 0; i < 4; ++i) {
+#pragma clang loop unroll_count(4)
+    for (uint32_t ii = 0; ii < 4; ++ii) {
+      float s = 0.0f;
+#pragma clang loop unroll_count(4)
+      for (uint32_t iii = 0; iii < 4; ++iii) {
+        s += x->rows[i][iii] * y->rows[iii][ii];
       }
       o->rows[i][ii] = s;
     }
@@ -185,32 +203,30 @@ void transform_to_matrix(float3x4 *m, const transform *t) {
   mulmf34(&temp, &s, m);
 }
 
-void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
+void look_at(float3x4 *m, float3 pos, float3 target, float3 up) {
   assert(m);
 
   float3 forward = normf3(pos - target);
   float3 right = crossf3(normf3(up), forward);
   up = crossf3(forward, right);
 
-  *m = (float4x4){
-      (float4){right[0], right[1], right[2], 0},
-      (float4){up[0], up[1], up[2], 0},
-      (float4){forward[0], forward[1], forward[2], 0},
-      (float4){pos[0], pos[1], pos[2], 1},
+  *m = (float3x4){
+      (float4){right[0], up[0], forward[0], pos[0]},
+      (float4){right[1], up[1], forward[1], pos[1]},
+      (float4){right[2], up[2], forward[2], pos[2]},
   };
 }
 
-void perspective(float4x4 *m, float near, float far, float fov) {
+void perspective(float3x4 *m, float near, float far, float fov) {
   assert(m);
   float scale = 1 / tanf(fov * 0.5f * M_PI / 180.0f);
 
   float m33 = -far / (far - near);
   float m43 = -far * near / (far - near);
 
-  *m = (float4x4){
+  *m = (float3x4){
       (float4){scale, 0, 0, 0},
       (float4){0, scale, 0, 0},
       (float4){0, 0, m33, m43},
-      (float4){0, 0, -1, 1},
   };
 }

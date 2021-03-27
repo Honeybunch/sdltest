@@ -75,6 +75,7 @@ void mulf34(float3x4 *m, float4 v);
 void mulf44(float4x4 *m, float4 v);
 
 void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o);
+void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o);
 
 void translate(transform *t, float3 p);
 void scale(transform *t, float3 s);
@@ -82,5 +83,5 @@ void rotate(transform *t, float3 r);
 
 void transform_to_matrix(float3x4 *m, const transform *t);
 
-void look_at(float4x4 *m, float3 pos, float3 target, float3 up);
-void perspective(float4x4 *m, float near, float far, float fov);
+void look_at(float3x4 *m, float3 pos, float3 target, float3 up);
+void perspective(float3x4 *m, float near, float far, float fov);

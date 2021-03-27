@@ -19,6 +19,7 @@
         "list": "c",
         "type_traits": "c",
         "vector": "c",
-        "xstring": "c"
+        "xstring": "c",
+        "ios": "c"
     }
 }
