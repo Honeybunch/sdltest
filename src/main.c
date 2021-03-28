@@ -1219,12 +1219,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     }
 
     // Spin cube
-    // cube_transform.rotation[1] += 0.001f;
+    cube_transform.rotation[1] += 0.001f;
     transform_to_matrix(&cube_obj_mat, &cube_transform);
 
-    float4x4 proj_view_mat = {0};
-    mulmf44(&view_mat, &persp_mat, &proj_view_mat);
-    mulmf44(&cube_obj_mat, &proj_view_mat, &cube_mvp);
+    float4x4 mv = {0};
+    mulmf44(&view_mat, &cube_obj_mat, &mv);
+    mulmf44(&persp_mat, &mv, &cube_mvp);
 
     // Pass time to shader
     {

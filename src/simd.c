@@ -211,7 +211,7 @@ void transform_to_matrix(float4x4 *m, const transform *t) {
   mulmf44(&s, &temp, m);
 }
 
-void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
+void look_at_lh(float4x4 *m, float3 pos, float3 target, float3 up) {
   assert(m);
 
   float3 forward = normf3(pos - target);
@@ -226,20 +226,58 @@ void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
   };
 }
 
-void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
+// Right handed
+void look_at_rh(float4x4 *m, float3 pos, float3 target, float3 up) {
+  assert(m);
+
+  float3 forward = normf3(pos - target);
+  float3 right = normf3(crossf3(up, forward));
+  up = crossf3(forward, right);
+
+  *m = (float4x4){
+      (float4){right[0], up[0], forward[0], 0},
+      (float4){right[1], up[1], forward[1], 0},
+      (float4){right[2], up[2], forward[2], 0},
+      (float4){-dotf3(right, pos), -dotf3(up, pos), -dotf3(forward, pos), 1},
+  };
+}
+
+void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
+  look_at_lh(m, pos, target, up);
+}
+
+void perspective_rh(float4x4 *m, float fovy, float aspect, float zn, float zf) {
   assert(m);
   float m11 = 1.0f / tanf(fovy * 0.5f);
   float m00 = m11 / aspect;
 
-  float inv_fn = 1.0f / (zf - zn);
+  float inv_fn = 1.0f / (zn - zf);
 
   float m22 = zf * inv_fn;
-  float m23 = zn * zf * inv_fn;
+  float m32 = zn * zf * inv_fn;
+
+  *m = (float4x4){
+      (float4){m00, 0, 0, 0},
+      (float4){0, m11, 0, 0},
+      (float4){0, 0, m22, -1},
+      (float4){0, 0, m32, 0},
+  };
+}
+
+// Left Handed
+void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
+  assert(m);
+  float focal_length = 1.0f / tanf(fovy * 0.5f);
+
+  float m00 = focal_length / aspect;
+  float m11 = -focal_length;
+  float m22 = zn / (zf - zn);
+  float m23 = zf * m22;
 
   *m = (float4x4){
       (float4){m00, 0, 0, 0},
       (float4){0, m11, 0, 0},
       (float4){0, 0, m22, m23},
-      (float4){0, 0, 1.0f, 0},
+      (float4){0, 0, -1, 0},
   };
 }

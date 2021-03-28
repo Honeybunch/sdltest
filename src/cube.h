@@ -2,45 +2,45 @@
 #include "cpumesh.h"
 
 static const uint16_t cube_indices[] = {
-    0,  1,  2,  2,  3,  1,  // Front
-    4,  5,  6,  6,  7,  5,  // Back
-    8,  9,  10, 10, 11, 9,  // Right
-    12, 13, 14, 14, 15, 13, // Left
-    16, 17, 18, 18, 19, 17, // Top
-    20, 21, 22, 22, 23, 21, // Bottom
+    0,  1,  2,  2,  1,  3,  // Front
+    4,  5,  6,  6,  5,  7,  // Back
+    8,  9,  10, 10, 9,  11, // Right
+    12, 13, 14, 14, 13, 15, // Left
+    16, 17, 18, 18, 17, 19, // Top
+    20, 21, 22, 22, 21, 23, // Bottom
 };
 
 static const float3 cube_positions[] = {
     // front
-    {-1.0f, -1.0f, +1.0f}, // point blue
-    {+1.0f, -1.0f, +1.0f}, // point magenta
-    {-1.0f, +1.0f, +1.0f}, // point cyan
-    {+1.0f, +1.0f, +1.0f}, // point white
+    {-1.0f, -1.0f, -1.0f}, // point blue
+    {+1.0f, -1.0f, -1.0f}, // point magenta
+    {-1.0f, +1.0f, -1.0f}, // point cyan
+    {+1.0f, +1.0f, -1.0f}, // point white
     // back
-    {+1.0f, -1.0f, -1.0f}, // point red
-    {-1.0f, -1.0f, -1.0f}, // point black
-    {+1.0f, +1.0f, -1.0f}, // point yellow
-    {-1.0f, +1.0f, -1.0f}, // point green
+    {+1.0f, -1.0f, +1.0f}, // point red
+    {-1.0f, -1.0f, +1.0f}, // point black
+    {+1.0f, +1.0f, +1.0f}, // point yellow
+    {-1.0f, +1.0f, +1.0f}, // point green
     // right
-    {+1.0f, -1.0f, +1.0f}, // point magenta
-    {+1.0f, -1.0f, -1.0f}, // point red
-    {+1.0f, +1.0f, +1.0f}, // point white
-    {+1.0f, +1.0f, -1.0f}, // point yellow
+    {+1.0f, -1.0f, -1.0f}, // point magenta
+    {+1.0f, -1.0f, +1.0f}, // point red
+    {+1.0f, +1.0f, -1.0f}, // point white
+    {+1.0f, +1.0f, +1.0f}, // point yellow
     // left
-    {-1.0f, -1.0f, -1.0f}, // point black
-    {-1.0f, -1.0f, +1.0f}, // point blue
-    {-1.0f, +1.0f, -1.0f}, // point green
-    {-1.0f, +1.0f, +1.0f}, // point cyan
+    {-1.0f, -1.0f, +1.0f}, // point black
+    {-1.0f, -1.0f, -1.0f}, // point blue
+    {-1.0f, +1.0f, +1.0f}, // point green
+    {-1.0f, +1.0f, -1.0f}, // point cyan
     // top
-    {-1.0f, +1.0f, +1.0f}, // point cyan
-    {+1.0f, +1.0f, +1.0f}, // point white
-    {-1.0f, +1.0f, -1.0f}, // point green
-    {+1.0f, +1.0f, -1.0f}, // point yellow
+    {-1.0f, +1.0f, -1.0f}, // point cyan
+    {+1.0f, +1.0f, -1.0f}, // point white
+    {-1.0f, +1.0f, +1.0f}, // point green
+    {+1.0f, +1.0f, +1.0f}, // point yellow
     // bottom
-    {-1.0f, -1.0f, -1.0f}, // point black
-    {+1.0f, -1.0f, -1.0f}, // point red
-    {-1.0f, -1.0f, +1.0f}, // point blue
-    {+1.0f, -1.0f, +1.0f}  // point magenta
+    {-1.0f, -1.0f, +1.0f}, // point black
+    {+1.0f, -1.0f, +1.0f}, // point red
+    {-1.0f, -1.0f, -1.0f}, // point blue
+    {+1.0f, -1.0f, -1.0f}  // point magenta
 };
 
 static const float3 cube_colors[] = {
