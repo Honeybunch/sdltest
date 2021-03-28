@@ -116,6 +116,9 @@ void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
       for (uint32_t iii = 0; iii < 3; ++iii) {
         s += x->rows[i][iii] * y->rows[iii][ii];
       }
+      if (ii == 3) {
+        s += x->rows[i][3];
+      }
       o->rows[i][ii] = s;
     }
   }
@@ -152,81 +155,91 @@ void rotate(transform *t, float3 r) {
   t->rotation += r;
 }
 
-void transform_to_matrix(float3x4 *m, const transform *t) {
+void transform_to_matrix(float4x4 *m, const transform *t) {
   assert(m);
   assert(t);
   // Position matrix
-  float3x4 p = {
+  float4x4 p = {
       (float4){1, 0, 0, t->position[0]},
       (float4){0, 1, 0, t->position[1]},
       (float4){0, 0, 1, t->position[2]},
+      (float4){0, 0, 0, 1},
   };
 
   // Rotation matrix from euler angles
-  float3x4 r = {0};
+  float4x4 r = {0};
   {
     float x_angle = t->rotation[0];
     float y_angle = t->rotation[1];
     float z_angle = t->rotation[2];
 
-    float3x4 rx = {
+    float4x4 rx = {
         (float4){1, 0, 0, 0},
         (float4){0, cosf(x_angle), -sinf(x_angle), 0},
         (float4){0, sinf(x_angle), cosf(x_angle), 0},
+        (float4){0, 0, 0, 1},
     };
-    float3x4 ry = {
+    float4x4 ry = {
         (float4){cosf(y_angle), 0, sinf(y_angle), 0},
         (float4){0, 1, 0, 0},
         (float4){-sinf(y_angle), 0, cosf(y_angle), 0},
+        (float4){0, 0, 0, 1},
 
     };
-    float3x4 rz = {
+    float4x4 rz = {
         (float4){cosf(z_angle), -sinf(z_angle), 0, 0},
         (float4){sinf(z_angle), cosf(z_angle), 0, 0},
         (float4){0, 0, 1, 0},
+        (float4){0, 0, 0, 1},
     };
-    float3x4 temp = {0};
-    mulmf34(&rx, &ry, &temp);
-    mulmf34(&temp, &rz, &r);
+    float4x4 temp = {0};
+    mulmf44(&rx, &ry, &temp);
+    mulmf44(&temp, &rz, &r);
   }
 
   // Scale matrix
-  float3x4 s = {
+  float4x4 s = {
       (float4){t->scale[0], 0, 0, 0},
       (float4){0, t->scale[1], 0, 0},
       (float4){0, 0, t->scale[2], 0},
+      (float4){0, 0, 0, 1},
   };
 
   // Transformation matrix = r * p * s;
-  float3x4 temp = {0};
-  mulmf34(&r, &p, &temp);
-  mulmf34(&temp, &s, m);
+  float4x4 temp = {0};
+  mulmf44(&p, &r, &temp);
+  mulmf44(&s, &temp, m);
 }
 
-void look_at(float3x4 *m, float3 pos, float3 target, float3 up) {
+void look_at(float4x4 *m, float3 pos, float3 target, float3 up) {
   assert(m);
 
   float3 forward = normf3(pos - target);
   float3 right = crossf3(normf3(up), forward);
   up = crossf3(forward, right);
 
-  *m = (float3x4){
-      (float4){right[0], up[0], forward[0], pos[0]},
-      (float4){right[1], up[1], forward[1], pos[1]},
-      (float4){right[2], up[2], forward[2], pos[2]},
+  *m = (float4x4){
+      (float4){right[0], right[1], right[2], -dotf3(right, pos)},
+      (float4){up[0], up[1], up[2], -dotf3(up, pos)},
+      (float4){forward[0], forward[1], forward[2], -dotf3(forward, pos)},
+      (float4){0, 0, 0, 1},
   };
 }
 
-void perspective(float3x4 *m, float near, float far, float fov) {
+void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
   assert(m);
-  float scale = 1 / tanf(fov * 0.5f * M_PI / 180.0f);
+  float m11 = 1.0f / tanf(fovy * 0.5f);
+  float m00 = m11 / aspect;
 
-  float m33 = -far / (far - near);
-  float m43 = -far * near / (far - near);
+  float inv_fn = 1.0f / (zf - zn);
 
-  *m = (float3x4){
-      (float4){scale, 0, 0, 0},
-      (float4){0, scale, 0, 0},
-      (float4){0, 0, m33, m43},
+  float m22 = zf * inv_fn;
+  float m23 = zn * zf * inv_fn;
+
+  *m = (float4x4){
+      (float4){m00, 0, 0, 0},
+      (float4){0, m11, 0, 0},
+      (float4){0, 0, m22, m23},
+      (float4){0, 0, 1.0f, 0},
   };
 }

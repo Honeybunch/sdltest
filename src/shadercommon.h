@@ -7,8 +7,8 @@
 typedef struct PushConstants {
   float4 time;
   float2 resolution;
-  float3x4 mvp;
-  float3x4 m;
+  float4x4 mvp;
+  float4x4 m;
 } PushConstants;
 static_assert(sizeof(PushConstants) <= PUSH_CONSTANT_BYTES,
               "Too Many Push Constants");

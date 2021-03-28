@@ -1105,12 +1105,14 @@ static void demo_destroy(demo *d) {
 
 int32_t SDL_main(int32_t argc, char *argv[]) {
 
-  float3 camera_pos = {1, 1, 1};
+  static const float qtr_pi = 0.7853981625f;
+
+  float3 camera_pos = {0, 0, 10};
   float3 camera_target = {0, 0, 0};
   float3 up = {0, 1, 0};
-  float3x4 view_mat, persp_mat;
+  float4x4 view_mat, persp_mat;
   look_at(&view_mat, camera_pos, camera_target, up);
-  perspective(&persp_mat, 0.1f, 100.0f, 90.0f);
+  perspective(&persp_mat, qtr_pi, (float)WIDTH / (float)HEIGHT, 0.01f, 100.0f);
 
   VkResult err = volkInitialize();
   assert(err == VK_SUCCESS);
@@ -1203,8 +1205,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   cube_transform.scale = (float3){1, 1, 1};
   cube_transform.rotation = (float3){0, 0, 0};
 
-  float3x4 cube_obj_mat = {0};
-  float3x4 cube_mvp = {0};
+  float4x4 cube_obj_mat = {0};
+  float4x4 cube_mvp = {0};
 
   // Main loop
   bool running = true;
@@ -1216,14 +1218,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       }
     }
 
-    float3x4 proj_view_mat = {0};
-    mulmf34(&view_mat, &persp_mat, &proj_view_mat);
-
     // Spin cube
-    cube_transform.rotation[1] += 0.0001f;
+    // cube_transform.rotation[1] += 0.001f;
     transform_to_matrix(&cube_obj_mat, &cube_transform);
 
-    mulmf34(&proj_view_mat, &cube_obj_mat, &cube_mvp);
+    float4x4 proj_view_mat = {0};
+    mulmf44(&view_mat, &persp_mat, &proj_view_mat);
+    mulmf44(&cube_obj_mat, &proj_view_mat, &cube_mvp);
 
     // Pass time to shader
     {
