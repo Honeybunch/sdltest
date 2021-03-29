@@ -7,6 +7,7 @@
 
 #include <vk_mem_alloc.h>
 
+#include "camera.h"
 #include "fractal.h"
 #include "mesh.h"
 #include "shadercommon.h"
@@ -1107,12 +1108,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   static const float qtr_pi = 0.7853981625f;
 
-  float3 camera_pos = {0, 0, 10};
-  float3 camera_target = {0, 0, 0};
-  float3 up = {0, 1, 0};
-  float4x4 view_mat, persp_mat;
-  look_at(&view_mat, camera_pos, camera_target, up);
-  perspective(&persp_mat, qtr_pi, (float)WIDTH / (float)HEIGHT, 0.01f, 100.0f);
+  camera main_cam = {0};
+  main_cam.transform.position = (float3){0, 0, 10};
+  main_cam.transform.scale = (float3){1, 1, 1};
+  main_cam.aspect = (float)WIDTH / (float)HEIGHT;
+  main_cam.fov = qtr_pi;
+  main_cam.near = 0.01f;
+  main_cam.far = 100.0f;
 
   VkResult err = volkInitialize();
   assert(err == VK_SUCCESS);
@@ -1222,9 +1224,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     cube_transform.rotation[1] += 0.001f;
     transform_to_matrix(&cube_obj_mat, &cube_transform);
 
-    float4x4 mv = {0};
-    mulmf44(&view_mat, &cube_obj_mat, &mv);
-    mulmf44(&persp_mat, &mv, &cube_mvp);
+    float4x4 vp = {0};
+    camera_view_projection(&main_cam, &vp);
+    mulmf44(&vp, &cube_obj_mat, &cube_mvp);
 
     // Pass time to shader
     {
