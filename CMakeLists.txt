@@ -122,6 +122,7 @@ else()
           RUNTIME DESTINATION "${arch}/bin/$<CONFIG>"
           LIBRARY DESTINATION "${arch}/lib/$<CONFIG>")
 endif()
+target_compile_features(sdltest PRIVATE c_std_11)
 
 # Install dlls on dynamic builds
 if(NOT STATIC AND WIN32)
