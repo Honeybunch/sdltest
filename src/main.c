@@ -1108,6 +1108,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   static const float qtr_pi = 0.7853981625f;
 
+  editor_camera_controller controller = {0};
+  controller.speed = 10.0f;
+
   camera main_cam = {0};
   main_cam.transform.position = (float3){0, 0, 10};
   main_cam.transform.scale = (float3){1, 1, 1};
@@ -1213,22 +1216,35 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Main loop
   bool running = true;
   float time_ms = 0;
-  float last_time = 0;
-  float delta_time = 0;
+  float time_seconds = 0;
+  float time_ns = 0.0f; // Uncalculated and unused for now
+  float time_us = 0.0f; // Uncalculated and unused for now
+
+  float last_time_ms = 0;
+  float delta_time_ms = 0;
+  float delta_time_seconds = 0;
   while (running) {
+    // Crunch some numbers
+    last_time_ms = time_ms;
+    time_ms = (float)SDL_GetTicks();
+    delta_time_ms = time_ms - last_time_ms;
+    delta_time_seconds = delta_time_ms / 1000.0f;
+    time_seconds = time_ms / 1000.0f;
+
+    // TODO: Handle events more gracefully
+    // Mutliple events (or none) could happen in one frame but we only process
+    // the latest one
     SDL_Event e = {0};
-    while (SDL_PollEvent(&e)) {
-      if (e.type == SDL_QUIT) {
-        running = false;
-      }
+    SDL_PollEvent(&e);
+    if (e.type == SDL_QUIT) {
+      running = false;
+      break;
     }
 
-    last_time = time_ms;
-    time_ms = (float)SDL_GetTicks();
-    delta_time = time_ms - last_time;
+    editor_camera_control(delta_time_seconds, &e, &controller, &main_cam);
 
     // Spin cube
-    cube_transform.rotation[1] += 0.001f * delta_time;
+    cube_transform.rotation[1] += 1.0f * delta_time_seconds;
     transform_to_matrix(&cube_obj_mat, &cube_transform);
 
     float4x4 vp = {0};
@@ -1236,13 +1252,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     mulmf44(&vp, &cube_obj_mat, &cube_mvp);
 
     // Pass time to shader
-    {
-      float time_seconds = time_ms / 1000.0f;
-      float time_ns = 0.0f;
-      float time_us = 0.0f;
-      d.push_constants.time = (float4){time_seconds, time_ms, time_ns, time_us};
-      d.push_constants.resolution = (float2){d.swap_width, d.swap_height};
-    }
+    d.push_constants.time = (float4){time_seconds, time_ms, time_ns, time_us};
+    d.push_constants.resolution = (float2){d.swap_width, d.swap_height};
 
     // Pass MVP to shader
     d.push_constants.mvp = cube_mvp;

@@ -4,6 +4,9 @@
 #include <assert.h>
 #include <math.h>
 
+float3 f4tof3(float4 f) { return (float3){f[0], f[1], f[2]}; }
+float4 f3tof4(float3 f, float w) { return (float4){f[0], f[1], f[2], w}; }
+
 float dotf3(float3 x, float3 y) {
   return (x[0] * y[0]) + (x[1] * y[1]) + (x[2] * y[2]);
 }

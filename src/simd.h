@@ -58,6 +58,9 @@ typedef struct transform {
   float3 rotation;
 } transform;
 
+float3 f4tof3(float4 f);
+float4 f3tof4(float3 f, float w);
+
 float dotf3(float3 x, float3 y);
 float dotf4(float4 x, float4 y);
 float3 crossf3(float3 x, float3 y);
