@@ -1212,6 +1212,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   // Main loop
   bool running = true;
+  float time_ms = 0;
+  float last_time = 0;
+  float delta_time = 0;
   while (running) {
     SDL_Event e = {0};
     while (SDL_PollEvent(&e)) {
@@ -1220,8 +1223,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       }
     }
 
+    last_time = time_ms;
+    time_ms = (float)SDL_GetTicks();
+    delta_time = time_ms - last_time;
+
     // Spin cube
-    cube_transform.rotation[1] += 0.001f;
+    cube_transform.rotation[1] += 0.001f * delta_time;
     transform_to_matrix(&cube_obj_mat, &cube_transform);
 
     float4x4 vp = {0};
@@ -1230,7 +1237,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Pass time to shader
     {
-      float time_ms = (float)SDL_GetTicks();
       float time_seconds = time_ms / 1000.0f;
       float time_ns = 0.0f;
       float time_us = 0.0f;
