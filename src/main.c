@@ -1214,6 +1214,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float4x4 cube_obj_mat = {0};
   float4x4 cube_mvp = {0};
 
+  // Load cube geometry
+  size_t cube_size = cube_alloc_size();
+  cpumesh_buffer *cube_test = malloc(cube_size);
+  assert(cube_test);
+  memset(cube_test, 0, cube_size);
+  create_cube(cube_test);
+
   // Main loop
   bool running = true;
   float time_ms = 0;
@@ -1264,6 +1271,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Cleanup
+  free(cube_test);
+
   SDL_DestroyWindow(window);
   window = NULL;
 

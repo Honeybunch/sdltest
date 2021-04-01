@@ -109,14 +109,23 @@ static const float3 cube_normals[] = {
     {+0.0f, -1.0f, +0.0f}  // down
 };
 
+static const size_t cube_index_size = sizeof(cube_indices);
+static const size_t cube_geom_size =
+    sizeof(cube_positions) + sizeof(cube_colors) + sizeof(cube_normals);
+static const size_t cube_index_count = sizeof(cube_indices) / sizeof(uint16_t);
+static const size_t cube_vertex_count = sizeof(cube_positions) / sizeof(float3);
+
 static cpumesh cube_cpu = {
-    .index_size = sizeof(cube_indices),
-    .geom_size =
-        sizeof(cube_positions) + sizeof(cube_colors) + sizeof(cube_normals),
-    .index_count = sizeof(cube_indices) / sizeof(uint16_t),
-    .vertex_count = sizeof(cube_positions) / sizeof(float3),
+    .index_size = cube_index_size,
+    .geom_size = cube_geom_size,
+    .index_count = cube_index_count,
+    .vertex_count = cube_vertex_count,
     .indices = cube_indices,
     .positions = cube_positions,
     .colors = cube_colors,
     .normals = cube_normals,
 };
+
+// Assumes space for entire cube has been allocated
+size_t cube_alloc_size();
+void create_cube(cpumesh_buffer *cube);
