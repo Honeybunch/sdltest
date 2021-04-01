@@ -1109,7 +1109,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   static const float qtr_pi = 0.7853981625f;
 
   editor_camera_controller controller = {0};
-  controller.speed = 10.0f;
+  controller.move_speed = 10.0f;
+  controller.look_speed = 1.0f;
 
   camera main_cam = {0};
   main_cam.transform.position = (float3){0, 0, 10};
