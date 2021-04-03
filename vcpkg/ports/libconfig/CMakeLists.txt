@@ -37,10 +37,7 @@ else()
   target_compile_definitions(libconfig++ PUBLIC -DLIBCONFIGXX_STATIC)
 endif()
 
-if (WIN32)
-  # Linux doesn't have shlwapi
-  target_link_libraries(libconfig shlwapi)
-endif()
+target_link_libraries(libconfig shlwapi)
 target_link_libraries(libconfig++ PRIVATE libconfig)
 
 install(

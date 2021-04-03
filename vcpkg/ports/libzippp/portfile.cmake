@@ -4,7 +4,6 @@ vcpkg_from_github(
     REF 791bdc43eb18b87e3bdfa087493e3e32217e672c #v4.0-1.7.3 with CXX std version c++11
     SHA512 c6a90ecec21bb2d9e3af681c35d7eec0bee7b356fc1438004dc84be32ee7b94d047c35817d46b222237d54699ea54afa4fd3ae5deeba40dfce4fd2035a38b0e5
     HEAD_REF libzippp-v4.0-1.7.3
-    PATCHES fix-find-lzma.patch
 )
 
 vcpkg_check_features(
@@ -23,7 +22,6 @@ vcpkg_configure_cmake(
 )
 
 vcpkg_install_cmake()
-vcpkg_copy_pdbs()
 
 if(VCPKG_TARGET_IS_WINDOWS)
     vcpkg_fixup_cmake_targets(CONFIG_PATH "cmake/libzippp")

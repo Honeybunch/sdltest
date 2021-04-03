@@ -1,10 +1,11 @@
 vcpkg_fail_port_install(ON_TARGET "uwp")
 vcpkg_from_git(
     OUT_SOURCE_PATH SOURCE_PATH
-    URL https://github.com/PortAudio/portaudio.git
-    REF 0ac93f8634d113cf90aa5801c204e1e8adbc14e8
+    URL https://git.assembla.com/portaudio.git
+    REF c5d2c51bd6fe354d0ee1119ba932bfebd3ebfacc
     PATCHES
         fix-library-can-not-be-found.patch
+        fix-include.patch
 )
 
 string(COMPARE EQUAL ${VCPKG_LIBRARY_LINKAGE} dynamic PA_BUILD_SHARED)

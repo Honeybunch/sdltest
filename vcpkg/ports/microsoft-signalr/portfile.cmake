@@ -4,7 +4,6 @@ vcpkg_from_github(
     REF v0.1.0-alpha1
     SHA512 d37eea194b0352a08dd89ac7622bdd6224312ad48a31d8ab36627a8aaff5e795e3513ad010eed516703f6da842a95119c1a4a290b145a43e91ff80a37fff8676
     HEAD_REF master
-    PATCHES remove-fno-rtti-compile-option.patch
 )
 
 vcpkg_check_features(
@@ -31,6 +30,6 @@ vcpkg_install_cmake()
 file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
 
 file(INSTALL ${SOURCE_PATH}/LICENSE.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT} RENAME copyright)
-file(COPY ${SOURCE_PATH}/third-party-notices.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT})
+file(COPY ${SOURCE_PATH}/third-party-notices.txt DESTINATION ${CURRENT_PACKAGES_DIR}/share/microsoft-signalr)
 
 vcpkg_copy_pdbs()

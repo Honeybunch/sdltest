@@ -30,16 +30,18 @@ jobs:
       exit 0
     displayName: 'Create ${{ variables.VCPKG_DOWNLOADS }}'
   - task: Bash@3
-    displayName: 'Bootstrap vcpkg'
+    displayName: 'Build vcpkg'
     inputs:
       filePath: bootstrap-vcpkg.sh
+      arguments: '-buildTests'
+  - bash: toolsrc/build.rel/vcpkg-test
+    displayName: 'Run vcpkg tests'
   - task: PowerShell@2
     displayName: '*** Test Modified Ports and Prepare Test Logs ***'
     inputs:
       failOnStderr: true
       filePath: 'scripts/azure-pipelines/test-modified-ports.ps1'
-      arguments: '-Triplet x64-linux -BuildReason $(Build.Reason) -UseEnvironmentSasToken -WorkingRoot ${{ variables.WORKING_ROOT }} -ArtifactStagingDirectory $(Build.ArtifactStagingDirectory)'
-      pwsh: true
+      arguments: '-Triplet x64-linux -BuildReason $(Build.Reason) -ArchivesRoot /archives -WorkingRoot ${{ variables.WORKING_ROOT }} -ArtifactStagingDirectory $(Build.ArtifactStagingDirectory)'
   - bash: |
       df -h
     displayName: 'Report on Disk Space After Build'

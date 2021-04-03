@@ -1,6 +1,3 @@
-#Note: glslang and spir tools doesn't export symbol and need to be build as static lib for cmake to work
-vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
-
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO google/shaderc
@@ -8,9 +5,8 @@ vcpkg_from_github(
     SHA512 329697e8e23d619313440d57ef740a94c49d13533e1b8734fc8ff72fd5092c2addabb306f64cb69160fa5fee373a05ba39a5ee6d92d95e5e2e9c7ec96a51aadc
     HEAD_REF master
     PATCHES 
-        disable-update-version.patch
-        fix-install.patch
-        fix-build-type.patch
+    	"disable-update-version.patch"
+        "fix-install.patch"
 )
 
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH}/third_party/glslang)
@@ -20,6 +16,8 @@ file(RENAME ${SOURCE_PATH}/third_party/spirv-tools/CMakeLists_spirv.txt ${SOURCE
 
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/build-version.inc DESTINATION ${SOURCE_PATH}/glslc/src)
 
+#Note: glslang and spir tools doesn't export symbol and need to be build as static lib for cmake to work
+set(VCPKG_LIBRARY_LINKAGE "static")
 set(OPTIONS)
 if(VCPKG_CRT_LINKAGE STREQUAL "dynamic")
     list(APPEND OPTIONS -DSHADERC_ENABLE_SHARED_CRT=ON)
@@ -33,23 +31,21 @@ vcpkg_add_to_path(PREPEND "${PYTHON3_EXE_PATH}")
 vcpkg_configure_cmake(
     SOURCE_PATH ${SOURCE_PATH}
     PREFER_NINJA
-    OPTIONS
-        ${OPTIONS}
-        -DSHADERC_SKIP_TESTS=true 
-        -Dglslang_SOURCE_DIR=${CURRENT_INSTALLED_DIR}/include
-        -Dspirv-tools_SOURCE_DIR=${CURRENT_INSTALLED_DIR}/include 
-    OPTIONS_DEBUG
-        -DSUFFIX_D=true
-    OPTIONS_RELEASE
-        -DSUFFIX_D=false
+    OPTIONS -DSHADERC_SKIP_TESTS=true ${OPTIONS} -Dglslang_SOURCE_DIR=${CURRENT_INSTALLED_DIR}/include -Dspirv-tools_SOURCE_DIR=${CURRENT_INSTALLED_DIR}/include 
+    OPTIONS_DEBUG -DSUFFIX_D=true
+    OPTIONS_RELEASE -DSUFFIX_D=false
 )
 
 vcpkg_install_cmake()
 
-vcpkg_fixup_pkgconfig()
+file(GLOB EXES "${CURRENT_PACKAGES_DIR}/bin/*${CMAKE_EXECUTABLE_SUFFIX}")
+file(COPY ${EXES} DESTINATION ${CURRENT_PACKAGES_DIR}/tools)
 
-vcpkg_copy_tools(TOOL_NAMES glslc AUTO_CLEAN)
-
+#Safe to remove as libs are static
+file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/bin)
+file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/bin)
 file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
 
-file(INSTALL "${SOURCE_PATH}/LICENSE" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}" RENAME copyright)
+# Handle copyright
+file(COPY ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/shaderc)
+file(RENAME ${CURRENT_PACKAGES_DIR}/share/shaderc/LICENSE ${CURRENT_PACKAGES_DIR}/share/shaderc/copyright)

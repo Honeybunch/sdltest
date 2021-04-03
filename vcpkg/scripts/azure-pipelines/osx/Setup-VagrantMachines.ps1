@@ -28,6 +28,16 @@ The agent pool to add the machine to. If -Date is passed, uses "PrOsx-$Date" as 
 .PARAMETER DevopsUrl
 The URL of the ADO instance; defaults to vcpkg's, which is https://dev.azure.com/vcpkg.
 
+.PARAMETER ArchivesMachine
+The machine where the archives are located; a URN.
+
+.PARAMETER ArchivesPath
+The path to where the archives are located on the machine. If -Date is passed,
+uses "/Users/${ArchivesUsername}/share/archives/${Date}".
+
+.PARAMETER ArchivesUsername
+The user to log in to on the archives machine. Defaults to 'fileshare'.
+
 .PARAMETER BaseName
 The base name for the vagrant VM; the machine name is $BaseName-$MachineId.
 Defaults to 'vcpkg-eg-mac'.
@@ -68,6 +78,15 @@ Param(
     [Parameter(Mandatory=$False)]
     [String]$DevopsUrl = 'https://dev.azure.com/vcpkg',
 
+    [Parameter(Mandatory=$True)]
+    [String]$ArchivesMachine,
+
+    [Parameter(Mandatory=$True, ParameterSetName='DefineVersionAndAgentPool')]
+    [String]$ArchivesPath,
+
+    [Parameter(Mandatory=$False)]
+    [String]$ArchivesUsername = 'archivesshare',
+
     [Parameter()]
     [String]$BaseName = 'vcpkg-eg-mac',
 
@@ -75,7 +94,7 @@ Param(
     [String]$BoxName = 'vcpkg/macos-ci',
 
     [Parameter()]
-    [Int]$DiskSize = 250,
+    [Int]$DiskSize = 350,
 
     [Parameter()]
     [Switch]$Force
@@ -90,6 +109,7 @@ if (-not $IsMacOS) {
 if (-not [String]::IsNullOrEmpty($Date)) {
     $BoxVersion = $Date
     $AgentPool = "PrOsx-$Date"
+    $ArchivesPath = "/Users/${ArchivesUsername}/share/archives/${Date}"
 }
 
 if (Test-Path '~/vagrant/vcpkg-eg-mac') {
@@ -119,6 +139,11 @@ $configuration = @{
     box_name = $BoxName;
     box_version = $BoxVersion;
     disk_size = $DiskSize;
+    archives = @{
+        username = $ArchivesUsername;
+        urn = $ArchivesMachine;
+        path = $ArchivesPath;
+    };
 }
 ConvertTo-Json -InputObject $configuration -Depth 5 `
     | Set-Content -Path '~/vagrant/vcpkg-eg-mac/vagrant-configuration.json'

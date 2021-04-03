@@ -1,3 +1,4 @@
+vcpkg_fail_port_install(ON_ARCH "arm64")
 set(PHYSFS_VERSION 3.0.2)
 
 vcpkg_download_distfile(ARCHIVE
@@ -11,8 +12,6 @@ vcpkg_extract_source_archive_ex(
     OUT_SOURCE_PATH SOURCE_PATH
     ARCHIVE ${ARCHIVE}
     REF ${PHYSFS_VERSION}
-    PATCHES
-        "fix-lzmasdk-arm64-windows.patch"
 )
 
 string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" PHYSFS_STATIC)

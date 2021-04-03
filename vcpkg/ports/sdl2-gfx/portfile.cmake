@@ -12,7 +12,6 @@ vcpkg_extract_source_archive_ex(
     REF ${VERSION}
     PATCHES
         001-lrint-arm64.patch
-        002-use-the-lrintf-intrinsic.patch
 )
 
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})

@@ -1,9 +1,10 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO baylej/tmx
-    REF tmx_1.1.0
+    REF tmx_1.0.0
     HEAD_REF master
-    SHA512 4f57cea30cf01518812cb7279e4d09fd3524e02a29950c2a40aed07ed0f5bd44601517d8a6216a3ca878e1d6bfa15651e92b9e8024e0325baae1dadc7a79acd1
+    SHA512 d045c45efd03f91a81dae471cb9ddc80d222b3ac52e13b729deeaf3e07d0a03b8e0956b30336ef410c72ddbbf33bea6811da5454b88d44b1db75683ef2a9383a
+    PATCHES fix-build-error.patch
 )
 
 vcpkg_configure_cmake(
@@ -24,4 +25,4 @@ file(REMOVE_RECURSE
 )
 
 # Handle copyright
-configure_file(${SOURCE_PATH}/COPYING ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
+configure_file(${SOURCE_PATH}/COPYING ${CURRENT_PACKAGES_DIR}/share/tmx/copyright COPYONLY)

@@ -1,7 +1,4 @@
-vcpkg_fail_port_install(ON_TARGET UWP)
-if(VCPKG_TARGET_IS_WINDOWS)
-    vcpkg_fail_port_install(ON_ARCH arm arm64)
-endif()
+vcpkg_fail_port_install(ON_TARGET "UWP")
 
 vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 

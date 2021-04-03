@@ -14,6 +14,8 @@ vcpkg_from_github(
 
 vcpkg_configure_meson(
     SOURCE_PATH ${SOURCE_PATH}
+    OPTIONS
+        --backend=ninja
 )
 
 vcpkg_install_meson()

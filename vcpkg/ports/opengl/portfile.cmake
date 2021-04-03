@@ -2,13 +2,13 @@ if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore
     vcpkg_get_windows_sdk(WINDOWS_SDK)
 
     if (WINDOWS_SDK MATCHES "10.")
-        file(TO_NATIVE_PATH "$ENV{WindowsSdkDir}Lib/${WINDOWS_SDK}/um/${TRIPLET_SYSTEM_ARCH}/OpenGL32.Lib" LIBGLFILEPATH)
-        file(TO_NATIVE_PATH "$ENV{WindowsSdkDir}Lib/${WINDOWS_SDK}/um/${TRIPLET_SYSTEM_ARCH}/GlU32.Lib" LIBGLUFILEPATH)
-        file(TO_NATIVE_PATH "$ENV{WindowsSdkDir}Include/${WINDOWS_SDK}/um" HEADERSPATH)
+        set(LIBGLFILEPATH  "$ENV{WindowsSdkDir}Lib\\${WINDOWS_SDK}\\um\\${TRIPLET_SYSTEM_ARCH}\\OpenGL32.Lib")
+        set(LIBGLUFILEPATH "$ENV{WindowsSdkDir}Lib\\${WINDOWS_SDK}\\um\\${TRIPLET_SYSTEM_ARCH}\\GlU32.Lib")
+        set(HEADERSPATH    "$ENV{WindowsSdkDir}Include\\${WINDOWS_SDK}\\um")
     elseif(WINDOWS_SDK MATCHES "8.")
-        file(TO_NATIVE_PATH "$ENV{WindowsSdkDir}Lib/winv6.3/um/${TRIPLET_SYSTEM_ARCH}/OpenGL32.Lib" LIBGLFILEPATH)
-        file(TO_NATIVE_PATH "$ENV{WindowsSdkDir}Lib/winv6.3/um/${TRIPLET_SYSTEM_ARCH}/GlU32.Lib" LIBGLUFILEPATH)
-        file(TO_NATIVE_PATH "$ENV{WindowsSdkDir}Include/um" HEADERSPATH)
+        set(LIBGLFILEPATH  "$ENV{WindowsSdkDir}Lib\\winv6.3\\um\\${TRIPLET_SYSTEM_ARCH}\\OpenGL32.Lib")
+        set(LIBGLUFILEPATH "$ENV{WindowsSdkDir}Lib\\winv6.3\\um\\${TRIPLET_SYSTEM_ARCH}\\GlU32.Lib")
+        set(HEADERSPATH    "$ENV{WindowsSdkDir}Include\\um")
     else()
         message(FATAL_ERROR "Portfile not yet configured for Windows SDK with version: ${WINDOWS_SDK}")
     endif()
@@ -21,40 +21,33 @@ if(NOT VCPKG_CMAKE_SYSTEM_NAME OR VCPKG_CMAKE_SYSTEM_NAME STREQUAL "WindowsStore
         message(FATAL_ERROR "Cannot find Windows ${WINDOWS_SDK} SDK. File does not exist: ${LIBGLUFILEPATH}")
     endif()
 
-    file(TO_NATIVE_PATH "${CURRENT_PACKAGES_DIR}/include/gl"   INCLUDEGLPATH)   
-    file(TO_NATIVE_PATH "${CURRENT_PACKAGES_DIR}/share/opengl" SHAREOPENGLPATH)   
-    file(TO_NATIVE_PATH "${CURRENT_PACKAGES_DIR}/lib"          RELEASELIBPATH)
-    file(TO_NATIVE_PATH "${CURRENT_PACKAGES_DIR}/debug/lib"    DEBUGLIBPATH)
-    file(TO_NATIVE_PATH "${HEADERSPATH}/gl/GL.h"               GLGLHPATH)
-    file(TO_NATIVE_PATH "${HEADERSPATH}/gl/GLU.h"              GLGLUHPATH)
-
     file(MAKE_DIRECTORY
-        "${INCLUDEGLPATH}"
-        "${SHAREOPENGLPATH}"
+        ${CURRENT_PACKAGES_DIR}/include/gl
+        ${CURRENT_PACKAGES_DIR}/share/opengl
     )
     if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
         file(MAKE_DIRECTORY
-            "${RELEASELIBPATH}"
+            ${CURRENT_PACKAGES_DIR}/lib
         )
     endif()
     if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "debug")
         file(MAKE_DIRECTORY
-            "${DEBUGLIBPATH}"
+            ${CURRENT_PACKAGES_DIR}/debug/lib
         )
     endif()
 
     file(COPY
-       "${GLGLHPATH}"
-       "${GLGLUHPATH}"
-        DESTINATION "${INCLUDEGLPATH}"
+        "${HEADERSPATH}\\gl\\GL.h"
+        "${HEADERSPATH}\\gl\\GLU.h"
+        DESTINATION ${CURRENT_PACKAGES_DIR}/include/gl
     )
     if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
-        file(COPY ${LIBGLFILEPATH}  DESTINATION "${RELEASELIBPATH}")
-        file(COPY ${LIBGLUFILEPATH} DESTINATION "${RELEASELIBPATH}")
+        file(COPY ${LIBGLFILEPATH}  DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
+        file(COPY ${LIBGLUFILEPATH} DESTINATION ${CURRENT_PACKAGES_DIR}/lib)
     endif()
     if (NOT VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "debug")
-        file(COPY ${LIBGLFILEPATH}  DESTINATION "${DEBUGLIBPATH}")
-        file(COPY ${LIBGLUFILEPATH} DESTINATION "${DEBUGLIBPATH}")
+        file(COPY ${LIBGLFILEPATH}  DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib)
+        file(COPY ${LIBGLUFILEPATH} DESTINATION ${CURRENT_PACKAGES_DIR}/debug/lib)
     endif()
 
     if (WINDOWS_SDK MATCHES "10.")

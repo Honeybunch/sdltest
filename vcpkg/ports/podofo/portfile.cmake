@@ -15,7 +15,6 @@ vcpkg_from_sourceforge(
         0002-HAVE_UNISTD_H.patch
         freetype.patch
         ${ADDITIONAL_PATCH}
-        0005-fix-crypto.patch
 )
 
 set(PODOFO_NO_FONTMANAGER ON)

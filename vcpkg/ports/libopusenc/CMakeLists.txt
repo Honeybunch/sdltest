@@ -1,9 +1,7 @@
 cmake_minimum_required(VERSION 3.4)
 project(libopusenc C)
 
-if(MSVC)
- set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4267 /wd4244 /wd4996 /wd4101 /wd4018")
-endif()
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /wd4267 /wd4244 /wd4996 /wd4101 /wd4018")
 
 find_path(OPUS_INCLUDE_DIR opus.h PATH_SUFFIXES opus)
 find_library(OPUS_LIBRARY opus)

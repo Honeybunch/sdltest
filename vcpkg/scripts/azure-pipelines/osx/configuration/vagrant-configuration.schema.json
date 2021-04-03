@@ -7,7 +7,8 @@
     "pat",
     "base_name",
     "disk_size",
-    "machine_identifiers"
+    "machine_identifiers",
+    "archives"
   ],
 
   "properties": {
@@ -31,6 +32,19 @@
     },
     "disk_size": {
       "type": "integer"
+    },
+    "archives": {
+      "type": "object",
+      "required": [
+        "username",
+        "urn",
+        "path"
+      ],
+      "properties": {
+        "username": { "type": "string" },
+        "urn": { "type": "string" },
+        "path": { "type": "string" }
+      }
     }
   }
 }

@@ -9,12 +9,10 @@ vcpkg_from_github(
     SHA512 3e154f5dc4b5051607c7ebc0691a50c0699d60e4414660cf8f65689081ff78ef6b135667761ba8ac4163b469a3b55158c6b48c6fc0a0cc09381452aad157e4ad
     HEAD_REF 3.1
     PATCHES
-        arm64.patch
         md.patch
         disable-test-build.patch
         fix-InstallPath.patch
         fix-iconv.patch
-        export-cmake-targets.patch
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
@@ -39,8 +37,6 @@ vcpkg_configure_cmake(
 )
 
 vcpkg_install_cmake()
-
-vcpkg_fixup_cmake_targets(CONFIG_PATH share/unofficial-libmariadb TARGET_PATH share/unofficial-libmariadb)
 
 if(NOT DEFINED VCPKG_BUILD_TYPE OR VCPKG_BUILD_TYPE STREQUAL "release")
     # remove debug header

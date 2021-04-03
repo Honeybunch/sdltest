@@ -23,18 +23,16 @@ function deployPluginsIfMagnum([string]$targetBinaryDir, [string]$MagnumPluginsD
         }
     }
 
-    # We detect Magnum modules in use via the DLLs that contain their
-    # plugin interfaces.
+    # We detect Magnum modules in use via the DLLs themselves.
+    # Rather than checking for Magnum*.dll, we check for Magnum.dll and
+    # Magnum-d.dll to avoid falsly matching MagnumTextureTools.dll for example.
     if ($targetBinaryName -like "MagnumAudio.dll" -or $targetBinaryName -like "MagnumAudio-d.dll") {
         deployPlugins "audioimporters"
     } elseif ($targetBinaryName -like "MagnumText.dll" -or $targetBinaryName -like "MagnumText-d.dll") {
         deployPlugins "fonts"
         deployPlugins "fontconverters"
-    } elseif ($targetBinaryName -like "MagnumTrade.dll" -or $targetBinaryName -like "MagnumTrade-d.dll") {
+    } elseif ($targetBinaryName -like "Magnum.dll" -or $targetBinaryName -like "Magnum-d.dll") {
         deployPlugins "importers"
         deployPlugins "imageconverters"
-        deployPlugins "sceneconverters"
-    } elseif ($targetBinaryName -like "MagnumShaderTools.dll" -or $targetBinaryName -like "MagnumShaderTools-d.dll") {
-        deployPlugins "shaderconverters"
     }
 }

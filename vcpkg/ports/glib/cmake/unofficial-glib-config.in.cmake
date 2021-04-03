@@ -1,5 +1,5 @@
 include(CMakeFindDependencyMacro)
-find_dependency(Iconv)
+find_dependency(unofficial-iconv)
 if(NOT WIN32)
     find_dependency(Threads)
 endif()
