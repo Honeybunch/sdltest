@@ -1,29 +1,26 @@
-vcpkg_fail_port_install(ON_ARCH "arm" ON_TARGET "uwp")
+vcpkg_fail_port_install(ON_TARGET "uwp")
+
 vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
 
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO odygrd/quill
-    REF 94cecd870236410016db692a68114e547be6578c # v1.4.1
-    SHA512 de13d62fa4fe1d68b5475df4d2e97ffb0c5028bedc6cd652fbe280ee4bf665ab01002928c55342f671997265a71018c88fd5150f97084d338b5d7adaa60a0361
+    REF v1.6.2
+    SHA512 c1db04c96c70b6bced38ecc83b4bba9e60b02cf13ff48ab92132ceb828414fcf046cb2c41337a4ae321b0bad8598eb280a7edcc30e0720d7609898e15d514380
     HEAD_REF master
 )
-
-# remove bundled fmt
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/quill/quill/include/quill/bundled/fmt)
-file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/quill/quill/src/bundled/fmt)
 
 vcpkg_configure_cmake(
     SOURCE_PATH ${SOURCE_PATH}
     PREFER_NINJA
     OPTIONS
-      -DQUILL_FMT_EXTERNAL=ON
+        -DQUILL_FMT_EXTERNAL=ON
 )
 
 vcpkg_install_cmake()
-
 vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/quill)
 
+vcpkg_replace_string(${CURRENT_PACKAGES_DIR}/include/quill/TweakMe.h "// #define QUILL_FMT_EXTERNAL" "#define QUILL_FMT_EXTERNAL")
 file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
 
 file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT} RENAME copyright)
