@@ -3,8 +3,10 @@
 #include <assert.h>
 #include <math.h>
 
+uint32_t aligned(uint32_t size) { return ((size - 1) | 15) + 1; }
+
 // float3 pos, float3 normal, float2 uv
-#define PLANE_VERTEX_STRIDE (3 + 3 + 2) * sizeof(float);
+#define PLANE_VERTEX_STRIDE (8 * sizeof(float))
 
 void calc_subdiv(uint32_t subdiv, uint32_t *out_index_count,
                  uint32_t *out_vertex_count) {
@@ -28,8 +30,8 @@ size_t plane_alloc_size(uint32_t subdiv) {
   uint32_t vertex_count = 0;
   calc_subdiv(subdiv, &index_count, &vertex_count);
 
-  size_t index_size = index_count * sizeof(uint16_t);
-  size_t vertex_size = vertex_count * PLANE_VERTEX_STRIDE;
+  size_t index_size = aligned(index_count * sizeof(uint16_t));
+  size_t vertex_size = aligned(vertex_count * PLANE_VERTEX_STRIDE);
 
   return sizeof(cpumesh_buffer) + index_size + vertex_size;
 }
@@ -40,8 +42,8 @@ void create_plane(uint32_t subdiv, cpumesh_buffer *plane) {
   uint32_t dimension = subdiv + 1;
   uint32_t width = dimension + 1;
 
-  size_t index_size = index_count * sizeof(uint16_t);
-  size_t geom_size = vertex_count * PLANE_VERTEX_STRIDE;
+  size_t index_size = aligned(index_count * sizeof(uint16_t));
+  size_t geom_size = aligned(vertex_count * PLANE_VERTEX_STRIDE);
 
   size_t offset = sizeof(cpumesh_buffer);
   plane->indices = (uint16_t *)(((uint8_t *)plane) + offset);
@@ -49,12 +51,7 @@ void create_plane(uint32_t subdiv, cpumesh_buffer *plane) {
   plane->vertices = (((uint8_t *)plane) + offset);
 
   uint16_t *indices = (uint16_t *)plane->indices;
-
-  float *pos = (float *)plane->vertices;
-  offset += sizeof(float) * 3 * vertex_count;
-  float *norm = (float *)(((uint8_t *)plane) + offset);
-  offset += sizeof(float) * 3 * vertex_count;
-  float *uv = (float *)(((uint8_t *)plane) + offset);
+  float *verts = (float *)plane->vertices;
 
   plane->index_size = index_size;
   plane->geom_size = geom_size;
@@ -68,30 +65,32 @@ void create_plane(uint32_t subdiv, cpumesh_buffer *plane) {
     assert(index_count % dimension == 0);
     uint32_t triangle_count = index_count / 3;
 
-    uint32_t i = 0;
+    uint32_t idx = 0;
     uint32_t row = 0;
     uint32_t col = 0;
     uint32_t tl, tr, bl, br;
     tl = tr = bl = br = 0;
 
-    for (uint32_t j = 1; j <= width; ++j) {
-      for (; i < (index_count / dimension) * j; i += 6) {
+    for (uint32_t j = 1; j <= dimension; ++j) {
+      for (uint32_t i = 1; i <= dimension; ++i) {
         tl = row + (col * width);
-        tr = row + ((col + 1) * width);
-        bl = (row + 1) + (col * width);
+        bl = row + ((col + 1) * width);
+        tr = (row + 1) + (col * width);
         br = (row + 1) + ((col + 1) * width);
 
-        indices[i + 0] = tl;
-        indices[i + 1] = bl;
-        indices[i + 2] = tr;
-        indices[i + 3] = tr;
-        indices[i + 4] = bl;
-        indices[i + 5] = br;
+        indices[idx + 0] = tl;
+        indices[idx + 1] = bl;
+        indices[idx + 2] = tr;
+        indices[idx + 3] = tr;
+        indices[idx + 4] = bl;
+        indices[idx + 5] = br;
+        idx += 6;
         col++;
       }
       row++;
       col = 0;
     }
+    assert(idx == index_count);
   }
 
   // Generate vertices
@@ -102,7 +101,6 @@ void create_plane(uint32_t subdiv, cpumesh_buffer *plane) {
     const float uv_start = 0.0f;
 
     uint32_t i = 0;
-    uint32_t j = 0;
 
     float x_step = 0;
     float z_step = 0;
@@ -112,16 +110,18 @@ void create_plane(uint32_t subdiv, cpumesh_buffer *plane) {
         x_step = x * step;
         z_step = z * step;
 
-        pos[i + 0] = pos_start + x_step;
-        pos[i + 2] = pos_start + z_step;
+        // Positions
+        verts[i + 0] = pos_start + x_step;
+        verts[i + 2] = pos_start + z_step;
 
-        norm[i + 1] = 1.0f;
+        // normals
+        verts[i + 4] = 1.0f;
 
-        uv[j + 0] = uv_start + x_step;
-        uv[j + 1] = uv_start + z_step;
+        // uvs
+        verts[i + 6] = uv_start + x_step;
+        verts[i + 7] = uv_start + z_step;
 
-        i += 3;
-        j += 2;
+        i += 8;
       }
     }
   }

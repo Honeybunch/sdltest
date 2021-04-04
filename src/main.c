@@ -60,7 +60,8 @@ typedef struct demo {
 
   VkPipelineLayout pipeline_layout;
   VkPipeline fractal_pipeline;
-  VkPipeline mesh_pipeline;
+  VkPipeline color_mesh_pipeline;
+  VkPipeline uv_mesh_pipeline;
 
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
@@ -82,6 +83,7 @@ typedef struct demo {
   VkFence fences[FRAME_LATENCY];
 
   gpumesh cube_gpu;
+  gpumesh plane_gpu;
 
   uint32_t mesh_upload_count;
   gpumesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
@@ -267,8 +269,59 @@ static VkResult create_mesh(VkDevice device, VmaAllocator allocator,
     assert(err == VK_SUCCESS);
   }
 
-  *dst_mesh = (gpumesh){fence, src_mesh->index_count, VK_INDEX_TYPE_UINT16,
-                        size,  host_buffer,           device_buffer};
+  *dst_mesh = (gpumesh){fence,
+                        src_mesh->index_count,
+                        src_mesh->vertex_count,
+                        VK_INDEX_TYPE_UINT16,
+                        size,
+                        src_mesh->index_size,
+                        src_mesh->geom_size,
+                        host_buffer,
+                        device_buffer};
+
+  return err;
+}
+
+static VkResult create_mesh_buffer(VkDevice device, VmaAllocator allocator,
+                                   const cpumesh_buffer *src_mesh,
+                                   gpumesh *dst_mesh) {
+  VkResult err = VK_SUCCESS;
+
+  size_t idx_size = src_mesh->index_size;
+  size_t geom_size = src_mesh->geom_size;
+
+  size_t size = idx_size + geom_size;
+
+  gpubuffer host_buffer = {0};
+  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
+                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
+  assert(err == VK_SUCCESS);
+
+  gpubuffer device_buffer = {0};
+  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
+                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                             VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                         &device_buffer);
+  assert(err == VK_SUCCESS);
+
+  VkFence fence = VK_NULL_HANDLE;
+  {
+    VkFenceCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    err = vkCreateFence(device, &create_info, NULL, &fence);
+    assert(err == VK_SUCCESS);
+  }
+
+  *dst_mesh = (gpumesh){fence,
+                        src_mesh->index_count,
+                        src_mesh->vertex_count,
+                        VK_INDEX_TYPE_UINT16,
+                        size,
+                        src_mesh->index_size,
+                        src_mesh->geom_size,
+                        host_buffer,
+                        device_buffer};
 
   return err;
 }
@@ -620,15 +673,22 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
                                 height, pipeline_layout, &fractal_pipeline);
   assert(err == VK_SUCCESS);
 
-  VkPipeline mesh_pipeline = VK_NULL_HANDLE;
-  err = create_mesh_pipeline(device, pipeline_cache, render_pass, width, height,
-                             pipeline_layout, &mesh_pipeline);
+  VkPipeline color_mesh_pipeline = VK_NULL_HANDLE;
+  err =
+      create_color_mesh_pipeline(device, pipeline_cache, render_pass, width,
+                                 height, pipeline_layout, &color_mesh_pipeline);
+  assert(err == VK_SUCCESS);
+
+  VkPipeline uv_mesh_pipeline = VK_NULL_HANDLE;
+  err = create_uv_mesh_pipeline(device, pipeline_cache, render_pass, width,
+                                height, pipeline_layout, &uv_mesh_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create Cube Mesh
   gpumesh cube = {0};
   {
     err = create_mesh(device, allocator, &cube_cpu, &cube);
+    assert(err == VK_SUCCESS);
 
     // Actually copy cube data to cpu local buffer
     {
@@ -654,8 +714,35 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
       vmaUnmapMemory(allocator, cube.host.alloc);
       data = NULL;
     }
+  }
 
+  // Create Plane Mesh
+  gpumesh plane = {0};
+  {
+    uint32_t plane_subdiv = 3;
+    size_t plane_size = plane_alloc_size(plane_subdiv);
+    cpumesh_buffer *plane_cpu = malloc(plane_size);
+    assert(plane_cpu);
+    memset(plane_cpu, 0, plane_size);
+    create_plane(plane_subdiv, plane_cpu);
+
+    err = create_mesh_buffer(device, allocator, plane_cpu, &plane);
     assert(err == VK_SUCCESS);
+
+    // Actually copy plane data to cpu local buffer
+    {
+      uint8_t *data = NULL;
+      vmaMapMemory(allocator, plane.host.alloc, (void **)&data);
+
+      // Copy Data
+      size_t size = plane_cpu->index_size + plane_cpu->geom_size;
+      memcpy(data, plane_cpu->indices, size);
+
+      vmaUnmapMemory(allocator, plane.host.alloc);
+      data = NULL;
+    }
+
+    free(plane_cpu);
   }
 
   // Apply to output var
@@ -682,11 +769,14 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->pipeline_cache = pipeline_cache;
   d->pipeline_layout = pipeline_layout;
   d->fractal_pipeline = fractal_pipeline;
-  d->mesh_pipeline = mesh_pipeline;
+  d->color_mesh_pipeline = color_mesh_pipeline;
+  d->uv_mesh_pipeline = uv_mesh_pipeline;
   d->cube_gpu = cube;
+  d->plane_gpu = plane;
   d->frame_idx = 0;
 
   demo_upload_mesh(d, &d->cube_gpu);
+  demo_upload_mesh(d, &d->plane_gpu);
 
   // Create Semaphores
   {
@@ -806,7 +896,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   return true;
 }
 
-static void demo_render_frame(demo *d) {
+static void demo_render_frame(demo *d, const float4x4 *vp) {
   VkResult err = VK_SUCCESS;
 
   VkDevice device = d->device;
@@ -870,10 +960,15 @@ static void demo_render_frame(demo *d) {
           err = vkBeginCommandBuffer(upload_buffer, &begin_info);
           assert(err == VK_SUCCESS);
 
-          const gpumesh *mesh = &d->cube_gpu;
-          VkBufferCopy region = {0, 0, mesh->size};
-          vkCmdCopyBuffer(upload_buffer, mesh->host.buffer, mesh->gpu.buffer, 1,
-                          &region);
+          VkBufferCopy region = {0};
+          for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
+
+            const gpumesh *mesh = &d->mesh_upload_queue[i];
+            region = (VkBufferCopy){0, 0, mesh->size};
+            vkCmdCopyBuffer(upload_buffer, mesh->host.buffer, mesh->gpu.buffer,
+                            1, &region);
+          }
+          d->mesh_upload_count = 0;
 
           err = vkEndCommandBuffer(upload_buffer);
 
@@ -958,14 +1053,14 @@ static void demo_render_frame(demo *d) {
                           d->fractal_pipeline);
         vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
 
-        uint32_t idx_count = cube_cpu.index_count;
-        uint32_t vert_count = cube_cpu.vertex_count;
-
         // Draw Cube
-        vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          d->mesh_pipeline);
-
         {
+          uint32_t idx_count = d->cube_gpu.idx_count;
+          uint32_t vert_count = d->cube_gpu.vtx_count;
+
+          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            d->color_mesh_pipeline);
+
           VkBuffer b = d->cube_gpu.gpu.buffer;
 
           vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
@@ -975,16 +1070,36 @@ static void demo_render_frame(demo *d) {
           size_t pos_size = sizeof(float3) * vert_count;
           size_t colors_size = sizeof(float3) * vert_count;
 
-#define BINDING_COUNT 3
-          VkBuffer buffers[BINDING_COUNT] = {b, b, b};
-          VkDeviceSize offsets[BINDING_COUNT] = {
-              idx_size, idx_size + pos_size, idx_size + pos_size + colors_size};
+          VkBuffer buffers[3] = {b, b, b};
+          VkDeviceSize offsets[3] = {idx_size, idx_size + pos_size,
+                                     idx_size + pos_size + colors_size};
 
-          vkCmdBindVertexBuffers(graphics_buffer, 0, BINDING_COUNT, buffers,
-                                 offsets);
-#undef BINDING_COUNT
+          vkCmdBindVertexBuffers(graphics_buffer, 0, 3, buffers, offsets);
+          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
         }
-        vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+
+        // Draw Plane
+        {
+          // Hack to change the plane's transform
+          d->push_constants.mvp = *vp;
+          vkCmdPushConstants(
+              graphics_buffer, d->pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS,
+              0, sizeof(PushConstants), (const void *)&d->push_constants);
+
+          uint32_t idx_count = d->plane_gpu.idx_count;
+          uint32_t vert_count = d->plane_gpu.vtx_count;
+
+          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            d->uv_mesh_pipeline);
+
+          VkBuffer buffer = d->plane_gpu.gpu.buffer;
+          VkDeviceSize offset = d->plane_gpu.idx_size;
+
+          vkCmdBindIndexBuffer(graphics_buffer, buffer, 0,
+                               VK_INDEX_TYPE_UINT16);
+          vkCmdBindVertexBuffers(graphics_buffer, 0, 1, &buffer, &offset);
+          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+        }
 
         vkCmdEndRenderPass(graphics_buffer);
       }
@@ -1090,11 +1205,13 @@ static void demo_destroy(demo *d) {
     vkDestroyCommandPool(device, d->command_pools[i], NULL);
   }
 
+  destroy_mesh(d->device, d->allocator, &d->plane_gpu);
   destroy_mesh(d->device, d->allocator, &d->cube_gpu);
 
   free(d->queue_props);
   vkDestroyPipelineLayout(device, d->pipeline_layout, NULL);
-  vkDestroyPipeline(device, d->mesh_pipeline, NULL);
+  vkDestroyPipeline(device, d->uv_mesh_pipeline, NULL);
+  vkDestroyPipeline(device, d->color_mesh_pipeline, NULL);
   vkDestroyPipeline(device, d->fractal_pipeline, NULL);
   vkDestroyPipelineCache(device, d->pipeline_cache, NULL);
   vkDestroyRenderPass(device, d->render_pass, NULL);
@@ -1208,7 +1325,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   assert(success);
 
   transform cube_transform = {0};
-  cube_transform.position = (float3){0, 0, 0};
+  cube_transform.position = (float3){0, 2, 0};
   cube_transform.scale = (float3){1, 1, 1};
   cube_transform.rotation = (float3){0, 0, 0};
 
@@ -1221,14 +1338,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   assert(cube_test);
   memset(cube_test, 0, cube_size);
   create_cube(cube_test);
-
-  // Load plane geometry
-  uint32_t plane_subdiv = 3;
-  size_t plane_size = plane_alloc_size(plane_subdiv);
-  cpumesh_buffer *plane_test = malloc(plane_size);
-  assert(plane_test);
-  memset(plane_test, 0, plane_size);
-  create_plane(plane_subdiv, plane_test);
 
   // Main loop
   bool running = true;
@@ -1276,7 +1385,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     d.push_constants.mvp = cube_mvp;
     d.push_constants.m = cube_obj_mat;
 
-    demo_render_frame(&d);
+    demo_render_frame(&d, &vp);
   }
 
   // Cleanup
