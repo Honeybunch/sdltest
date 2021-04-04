@@ -21,6 +21,7 @@
         "vector": "c",
         "xstring": "c",
         "ios": "c",
-        "sdl_events.h": "c"
+        "sdl_events.h": "c",
+        "atomic": "c"
     }
 }

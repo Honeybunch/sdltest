@@ -85,6 +85,7 @@ set(source "${CMAKE_CURRENT_LIST_DIR}/src/camera.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/fractal.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/main.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/mesh.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/plane.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/simd.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp")
 if(WIN32)

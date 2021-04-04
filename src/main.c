@@ -15,6 +15,7 @@
 
 #include "cube.h"
 #include "gpumesh.h"
+#include "plane.h"
 
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
@@ -1220,6 +1221,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   assert(cube_test);
   memset(cube_test, 0, cube_size);
   create_cube(cube_test);
+
+  // Load plane geometry
+  uint32_t plane_subdiv = 3;
+  size_t plane_size = plane_alloc_size(plane_subdiv);
+  cpumesh_buffer *plane_test = malloc(plane_size);
+  assert(plane_test);
+  memset(plane_test, 0, plane_size);
+  create_plane(plane_subdiv, plane_test);
 
   // Main loop
   bool running = true;
