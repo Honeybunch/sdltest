@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 #include <SDL2/SDL_vulkan.h>
 #include <assert.h>
 #include <stdbool.h>
@@ -15,6 +16,7 @@
 
 #include "cube.h"
 #include "gpumesh.h"
+#include "gputexture.h"
 #include "plane.h"
 
 #define MAX_LAYER_COUNT 16
@@ -25,6 +27,7 @@
 #endif
 #define FRAME_LATENCY 3
 #define MESH_UPLOAD_QUEUE_SIZE 16
+#define TEXTURE_UPLOAD_QUEUE_SIZE 16
 
 #define WIDTH 1600
 #define HEIGHT 900
@@ -85,8 +88,13 @@ typedef struct demo {
   gpumesh cube_gpu;
   gpumesh plane_gpu;
 
+  gputexture albedo;
+
   uint32_t mesh_upload_count;
   gpumesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
+
+  uint32_t texture_upload_count;
+  gputexture texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE];
 
   PushConstants push_constants;
 } demo;
@@ -342,6 +350,13 @@ static void demo_upload_mesh(demo *d, const gpumesh *mesh) {
   assert(d->mesh_upload_count + 1 < MESH_UPLOAD_QUEUE_SIZE);
   d->mesh_upload_queue[mesh_idx] = *mesh;
   d->mesh_upload_count++;
+}
+
+static void demo_upload_texture(demo *d, const gputexture *tex) {
+  uint32_t tex_idx = d->texture_upload_count;
+  assert(d->texture_upload_count + 1 < TEXTURE_UPLOAD_QUEUE_SIZE);
+  d->texture_upload_queue[tex_idx] = *tex;
+  d->texture_upload_count++;
 }
 
 static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
@@ -745,6 +760,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     free(plane_cpu);
   }
 
+  // Load Textures
+  gputexture albedo = {0};
+  load_texture(device, allocator, "./assets/textures/shfsaida_8K_Albedo.png",
+               &albedo);
+
   // Apply to output var
   d->instance = instance;
   d->gpu = gpu;
@@ -773,10 +793,12 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->uv_mesh_pipeline = uv_mesh_pipeline;
   d->cube_gpu = cube;
   d->plane_gpu = plane;
+  d->albedo = albedo;
   d->frame_idx = 0;
 
   demo_upload_mesh(d, &d->cube_gpu);
   demo_upload_mesh(d, &d->plane_gpu);
+  demo_upload_texture(d, &d->albedo);
 
   // Create Semaphores
   {
@@ -960,15 +982,76 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
           err = vkBeginCommandBuffer(upload_buffer, &begin_info);
           assert(err == VK_SUCCESS);
 
-          VkBufferCopy region = {0};
-          for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
+          // Issue mesh uploads
+          {
+            VkBufferCopy region = {0};
+            for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
 
-            const gpumesh *mesh = &d->mesh_upload_queue[i];
-            region = (VkBufferCopy){0, 0, mesh->size};
-            vkCmdCopyBuffer(upload_buffer, mesh->host.buffer, mesh->gpu.buffer,
-                            1, &region);
+              const gpumesh *mesh = &d->mesh_upload_queue[i];
+              region = (VkBufferCopy){0, 0, mesh->size};
+              vkCmdCopyBuffer(upload_buffer, mesh->host.buffer,
+                              mesh->gpu.buffer, 1, &region);
+            }
+            d->mesh_upload_count = 0;
           }
-          d->mesh_upload_count = 0;
+
+          // Issue texture uploads
+          {
+            VkBufferImageCopy region = {0};
+            VkImageMemoryBarrier barrier = {0};
+            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            barrier.subresourceRange.baseMipLevel = 0;
+            barrier.subresourceRange.levelCount = 1;
+            barrier.subresourceRange.baseArrayLayer = 0;
+            barrier.subresourceRange.layerCount = 1;
+
+            for (uint32_t i = 0; i < d->texture_upload_count; ++i) {
+              const gputexture *tex = &d->texture_upload_queue[i];
+
+              VkImage image = tex->device.image;
+
+              // Transition to transfer dst
+              {
+                barrier.srcAccessMask = 0;
+                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+                barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                barrier.image = image;
+                vkCmdPipelineBarrier(upload_buffer,
+                                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                     VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL,
+                                     0, NULL, 1, &barrier);
+              }
+
+              region.bufferRowLength = tex->width;
+              region.bufferImageHeight = tex->height;
+              region.imageSubresource = (VkImageSubresourceLayers){
+                  VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+              region.imageExtent = (VkExtent3D){tex->width, tex->height, 1};
+              vkCmdCopyBufferToImage(upload_buffer, tex->host.buffer, image,
+                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                     &region);
+
+              // Transition to shader read
+              {
+                {
+                  barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                  barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                  barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                  barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                  barrier.image = image;
+                  vkCmdPipelineBarrier(upload_buffer,
+                                       VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                       VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                                       0, NULL, 0, NULL, 1, &barrier);
+                }
+              }
+            }
+            d->texture_upload_count = 0;
+          }
 
           err = vkEndCommandBuffer(upload_buffer);
 
@@ -1205,6 +1288,7 @@ static void demo_destroy(demo *d) {
     vkDestroyCommandPool(device, d->command_pools[i], NULL);
   }
 
+  destroy_texture(d->device, d->allocator, &d->albedo);
   destroy_mesh(d->device, d->allocator, &d->plane_gpu);
   destroy_mesh(d->device, d->allocator, &d->cube_gpu);
 
@@ -1223,7 +1307,6 @@ static void demo_destroy(demo *d) {
 }
 
 int32_t SDL_main(int32_t argc, char *argv[]) {
-
   static const float qtr_pi = 0.7853981625f;
 
   editor_camera_controller controller = {0};
@@ -1244,6 +1327,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   {
     int32_t res = SDL_Init(SDL_INIT_VIDEO);
     assert(res == 0);
+
+    int32_t flags = IMG_INIT_PNG;
+    res = IMG_Init(flags);
+    assert(res & IMG_INIT_PNG);
   }
 
   SDL_Window *window = SDL_CreateWindow("SDL Test", SDL_WINDOWPOS_CENTERED,
@@ -1384,6 +1471,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   SDL_DestroyWindow(window);
   window = NULL;
 
+  IMG_Quit();
   SDL_Quit();
 
   demo_destroy(&d);

@@ -23,6 +23,7 @@
         "ios": "c",
         "sdl_events.h": "c",
         "atomic": "c",
-        "color_mesh_frag.h": "c"
+        "color_mesh_frag.h": "c",
+        "xmemory": "c"
     }
 }

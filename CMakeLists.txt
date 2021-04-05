@@ -47,6 +47,7 @@ if(${VCPKG_TARGET_TRIPLET} MATCHES static)
 endif()
 
 find_package(SDL2 REQUIRED)
+find_package(sdl2-image CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 find_program(DXC dxc CONFIG REQUIRED)
@@ -87,6 +88,7 @@ set(source "${CMAKE_CURRENT_LIST_DIR}/src/camera.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/mesh.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/plane.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/simd.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/texture.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp")
 if(WIN32)
   add_executable(sdltest WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.rc")
@@ -106,6 +108,7 @@ endif()
 target_include_directories(sdltest PRIVATE "src/" "${CMAKE_CFG_INTDIR_ABS}/shaders")
 target_link_libraries(sdltest PRIVATE
   SDL2::SDL2main 
+  SDL2::SDL2_image
   volk::volk 
   volk::volk_headers 
   unofficial::vulkan-memory-allocator::vulkan-memory-allocator)
@@ -114,6 +117,7 @@ if(STATIC)
 else()
   target_link_libraries(sdltest PRIVATE SDL2::SDL2)
 endif()
+target_compile_features(sdltest PRIVATE c_std_11)
 
 if(ANDROID)
   install(TARGETS sdltest
@@ -124,7 +128,13 @@ else()
           RUNTIME DESTINATION "${arch}/bin/$<CONFIG>"
           LIBRARY DESTINATION "${arch}/lib/$<CONFIG>")
 endif()
-target_compile_features(sdltest PRIVATE c_std_11)
+
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/assets
+        DESTINATION .)
+
+# Copy assets to build output dir
+add_custom_command(TARGET sdltest POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/assets ${CMAKE_CFG_INTDIR}/assets)
 
 # Install dlls on dynamic builds
 if(NOT STATIC AND WIN32)

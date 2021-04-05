@@ -1,5 +1,10 @@
 #include "common.hlsli"
 
+Texture2D albedo_map : register(t0, space0);
+Texture2D displacement_map : register(t1, space0);
+Texture2D normal_map : register(t2, space0);
+Texture2D roughness_map : register(t3, space0);
+
 struct VertexIn
 {
     float3 local_pos : SV_POSITION;
