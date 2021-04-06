@@ -24,9 +24,15 @@ struct Interpolators
 
 Interpolators vert(VertexIn i)
 {
-    
+    float displacement_strength = 0.1;
+    float3 pos = i.local_pos;
+
+    // Apply displacement map
+    float height = displacement_map.SampleLevel(static_sampler, i.uv, 0).x * 2 - 1;
+    pos += i.normal * (height * displacement_strength);
+
     Interpolators o;
-    o.clip_pos = mul(float4(i.local_pos, 1.0), consts.mvp);
+    o.clip_pos = mul(float4(pos, 1.0), consts.mvp);
     o.normal = i.normal;
     o.uv = i.uv;
     return o;

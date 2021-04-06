@@ -804,7 +804,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   // Create Plane Mesh
   gpumesh plane = {0};
   {
-    uint32_t plane_subdiv = 3;
+    uint32_t plane_subdiv = 16;
     size_t plane_size = plane_alloc_size(plane_subdiv);
     cpumesh_buffer *plane_cpu = malloc(plane_size);
     assert(plane_cpu);
