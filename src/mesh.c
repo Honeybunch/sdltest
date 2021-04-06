@@ -150,7 +150,7 @@ uint32_t create_uv_mesh_pipeline(VkDevice device, VkPipelineCache cache,
                                  VkPipelineLayout layout, VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
 
-  // Create Color Mesh Pipeline
+  // Create UV Mesh Pipeline
   VkPipeline uv_mesh_pipeline = VK_NULL_HANDLE;
   {
     // Load Shaders

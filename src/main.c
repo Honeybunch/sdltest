@@ -61,9 +61,13 @@ typedef struct demo {
   VkRenderPass render_pass;
   VkPipelineCache pipeline_cache;
 
-  VkPipelineLayout pipeline_layout;
+  VkPipelineLayout simple_pipe_layout;
   VkPipeline fractal_pipeline;
   VkPipeline color_mesh_pipeline;
+
+  VkSampler sampler;
+  VkDescriptorSetLayout material_layout;
+  VkPipelineLayout material_pipe_layout;
   VkPipeline uv_mesh_pipeline;
 
   VkImage swapchain_images[FRAME_LATENCY];
@@ -89,6 +93,12 @@ typedef struct demo {
   gpumesh plane_gpu;
 
   gputexture albedo;
+  gputexture displacement;
+  gputexture normal;
+  gputexture roughness;
+
+  VkDescriptorPool descriptor_pools[FRAME_LATENCY];
+  VkDescriptorSet descriptor_sets[FRAME_LATENCY];
 
   uint32_t mesh_upload_count;
   gpumesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
@@ -667,36 +677,96 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     assert(err == VK_SUCCESS);
   }
 
-  // Create Graphics Pipeline Layout
-  VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+  VkPushConstantRange const_range = {
+      VK_SHADER_STAGE_ALL_GRAPHICS,
+      0,
+      PUSH_CONSTANT_BYTES,
+  };
+
+  // Create Simple Pipeline Layout
+  VkPipelineLayout simple_pipe_layout = VK_NULL_HANDLE;
   {
-    VkPushConstantRange const_range = {
-        VK_SHADER_STAGE_ALL_GRAPHICS,
-        0,
-        PUSH_CONSTANT_BYTES,
-    };
     VkPipelineLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &const_range;
-    err = vkCreatePipelineLayout(device, &create_info, NULL, &pipeline_layout);
+    err =
+        vkCreatePipelineLayout(device, &create_info, NULL, &simple_pipe_layout);
     assert(err == VK_SUCCESS);
   }
 
   VkPipeline fractal_pipeline = VK_NULL_HANDLE;
   err = create_fractal_pipeline(device, pipeline_cache, render_pass, width,
-                                height, pipeline_layout, &fractal_pipeline);
+                                height, simple_pipe_layout, &fractal_pipeline);
   assert(err == VK_SUCCESS);
 
   VkPipeline color_mesh_pipeline = VK_NULL_HANDLE;
-  err =
-      create_color_mesh_pipeline(device, pipeline_cache, render_pass, width,
-                                 height, pipeline_layout, &color_mesh_pipeline);
+  err = create_color_mesh_pipeline(device, pipeline_cache, render_pass, width,
+                                   height, simple_pipe_layout,
+                                   &color_mesh_pipeline);
   assert(err == VK_SUCCESS);
 
+  // Create Immutable Sampler
+  VkSampler sampler = VK_NULL_HANDLE;
+  {
+    VkSamplerCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    create_info.magFilter = VK_FILTER_LINEAR;
+    create_info.minFilter = VK_FILTER_LINEAR;
+    create_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    create_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    create_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    create_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    create_info.anisotropyEnable = VK_FALSE;
+    create_info.maxAnisotropy = 1.0f;
+    create_info.maxLod = 14.0f; // Hack; known number of mips for 8k textures
+    create_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
+    err = vkCreateSampler(device, &create_info, NULL, &sampler);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Material Descriptor Set Layout
+  VkDescriptorSetLayout material_layout = VK_NULL_HANDLE;
+  {
+    // Note: binding 1 is for the displacement map, which is useful only in the
+    // vertex stage
+    VkDescriptorSetLayoutBinding bindings[5] = {
+        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_VERTEX_BIT},
+        {2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {3, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {4, VK_DESCRIPTOR_TYPE_SAMPLER, 1,
+         VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, &sampler},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = 5;
+    create_info.pBindings = bindings;
+    err = vkCreateDescriptorSetLayout(device, &create_info, NULL,
+                                      &material_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Material Pipeline Layout
+  VkPipelineLayout material_pipe_layout = VK_NULL_HANDLE;
+  {
+    VkPipelineLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    create_info.setLayoutCount = 1;
+    create_info.pSetLayouts = &material_layout;
+    create_info.pushConstantRangeCount = 1;
+    create_info.pPushConstantRanges = &const_range;
+
+    err = vkCreatePipelineLayout(device, &create_info, NULL,
+                                 &material_pipe_layout);
+    assert(err == VK_SUCCESS);
+  }
+
   VkPipeline uv_mesh_pipeline = VK_NULL_HANDLE;
-  err = create_uv_mesh_pipeline(device, pipeline_cache, render_pass, width,
-                                height, pipeline_layout, &uv_mesh_pipeline);
+  err =
+      create_uv_mesh_pipeline(device, pipeline_cache, render_pass, width,
+                              height, material_pipe_layout, &uv_mesh_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create Cube Mesh
@@ -765,6 +835,18 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   load_texture(device, allocator, "./assets/textures/shfsaida_8K_Albedo.png",
                &albedo);
 
+  gputexture displacement = {0};
+  load_texture(device, allocator,
+               "./assets/textures/shfsaida_8K_Displacement.png", &displacement);
+
+  gputexture normal = {0};
+  load_texture(device, allocator, "./assets/textures/shfsaida_8K_Normal.png",
+               &normal);
+
+  gputexture roughness = {0};
+  load_texture(device, allocator, "./assets/textures/shfsaida_8K_Roughness.png",
+               &roughness);
+
   // Apply to output var
   d->instance = instance;
   d->gpu = gpu;
@@ -787,18 +869,27 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->swap_height = height;
   d->render_pass = render_pass;
   d->pipeline_cache = pipeline_cache;
-  d->pipeline_layout = pipeline_layout;
+  d->simple_pipe_layout = simple_pipe_layout;
   d->fractal_pipeline = fractal_pipeline;
   d->color_mesh_pipeline = color_mesh_pipeline;
+  d->sampler = sampler;
+  d->material_layout = material_layout;
+  d->material_pipe_layout = material_pipe_layout;
   d->uv_mesh_pipeline = uv_mesh_pipeline;
   d->cube_gpu = cube;
   d->plane_gpu = plane;
   d->albedo = albedo;
+  d->displacement = displacement;
+  d->normal = normal;
+  d->roughness = roughness;
   d->frame_idx = 0;
 
   demo_upload_mesh(d, &d->cube_gpu);
   demo_upload_mesh(d, &d->plane_gpu);
   demo_upload_texture(d, &d->albedo);
+  demo_upload_texture(d, &d->displacement);
+  demo_upload_texture(d, &d->normal);
+  demo_upload_texture(d, &d->roughness);
 
   // Create Semaphores
   {
@@ -901,7 +992,107 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   }
 
   // Create Descriptor Set Pools
+  {
+    VkDescriptorPoolSize pool_size = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4};
+    VkDescriptorPoolCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    create_info.maxSets = 1;
+    create_info.poolSizeCount = 1;
+    create_info.pPoolSizes = &pool_size;
+
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      err = vkCreateDescriptorPool(device, &create_info, NULL,
+                                   &d->descriptor_pools[i]);
+      assert(err == VK_SUCCESS);
+    }
+  }
+
   // Create Descriptor Sets
+  {
+    VkDescriptorSetAllocateInfo alloc_info = {0};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorSetCount = 1;
+    alloc_info.pSetLayouts = &material_layout;
+
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      alloc_info.descriptorPool = d->descriptor_pools[i];
+      err =
+          vkAllocateDescriptorSets(device, &alloc_info, &d->descriptor_sets[i]);
+      assert(err == VK_SUCCESS);
+    }
+  }
+
+  // Write textures to descriptor set
+  {
+    VkDescriptorImageInfo albedo_info = {
+        NULL, albedo.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkDescriptorImageInfo displacement_info = {
+        NULL, displacement.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkDescriptorImageInfo normal_info = {
+        NULL, normal.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkDescriptorImageInfo roughness_info = {
+        NULL, roughness.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkWriteDescriptorSet writes[4] = {
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            &albedo_info,
+            NULL,
+            NULL,
+        },
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            NULL,
+            0,
+            1,
+            0,
+            1,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            &displacement_info,
+            NULL,
+            NULL,
+        },
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            NULL,
+            0,
+            2,
+            0,
+            1,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            &normal_info,
+            NULL,
+            NULL,
+        },
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            NULL,
+            0,
+            3,
+            0,
+            1,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            &roughness_info,
+            NULL,
+            NULL,
+        },
+    };
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      VkDescriptorSet set = d->descriptor_sets[i];
+
+      writes[0].dstSet = set;
+      writes[1].dstSet = set;
+      writes[2].dstSet = set;
+      writes[3].dstSet = set;
+
+      vkUpdateDescriptorSets(device, 4, writes, 0, NULL);
+    }
+  }
 
   // Create Fences
   {
@@ -973,102 +1164,165 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
     // Record
     {
       // Upload
-      {
-        // If the fence has not been signaled, it's elligible for upload
-        VkResult status = vkGetFenceStatus(d->device, d->cube_gpu.uploaded);
-        if (status == VK_NOT_READY) {
-          VkCommandBufferBeginInfo begin_info = {0};
-          begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-          err = vkBeginCommandBuffer(upload_buffer, &begin_info);
-          assert(err == VK_SUCCESS);
+      if (d->mesh_upload_count > 0 && d->texture_upload_count > 0) {
+        VkCommandBufferBeginInfo begin_info = {0};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        err = vkBeginCommandBuffer(upload_buffer, &begin_info);
+        assert(err == VK_SUCCESS);
 
-          // Issue mesh uploads
-          {
-            VkBufferCopy region = {0};
-            for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
-
-              const gpumesh *mesh = &d->mesh_upload_queue[i];
-              region = (VkBufferCopy){0, 0, mesh->size};
-              vkCmdCopyBuffer(upload_buffer, mesh->host.buffer,
-                              mesh->gpu.buffer, 1, &region);
-            }
-            d->mesh_upload_count = 0;
+        // Issue mesh uploads
+        {
+          VkBufferCopy region = {0};
+          for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
+            const gpumesh *mesh = &d->mesh_upload_queue[i];
+            region = (VkBufferCopy){0, 0, mesh->size};
+            vkCmdCopyBuffer(upload_buffer, mesh->host.buffer, mesh->gpu.buffer,
+                            1, &region);
           }
+          d->mesh_upload_count = 0;
+        }
 
-          // Issue texture uploads
-          {
-            VkBufferImageCopy region = {0};
-            VkImageMemoryBarrier barrier = {0};
-            barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            barrier.subresourceRange.baseMipLevel = 0;
-            barrier.subresourceRange.levelCount = 1;
-            barrier.subresourceRange.baseArrayLayer = 0;
-            barrier.subresourceRange.layerCount = 1;
+        // Issue texture uploads
+        {
+          VkBufferImageCopy region = {0};
+          VkImageMemoryBarrier barrier = {0};
+          barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+          barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+          barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+          barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+          barrier.subresourceRange.baseArrayLayer = 0;
+          barrier.subresourceRange.layerCount = 1;
 
-            for (uint32_t i = 0; i < d->texture_upload_count; ++i) {
-              const gputexture *tex = &d->texture_upload_queue[i];
+          for (uint32_t i = 0; i < d->texture_upload_count; ++i) {
+            const gputexture *tex = &d->texture_upload_queue[i];
 
-              VkImage image = tex->device.image;
+            VkImage image = tex->device.image;
+            uint32_t img_width = tex->width;
+            uint32_t img_height = tex->height;
+            uint32_t mip_levels = tex->mip_levels;
 
-              // Transition to transfer dst
-              {
-                barrier.srcAccessMask = 0;
-                barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-                barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-                barrier.image = image;
-                vkCmdPipelineBarrier(upload_buffer,
-                                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                                     VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL,
-                                     0, NULL, 1, &barrier);
-              }
+            // Transition all mips to transfer dst
+            {
+              barrier.subresourceRange.baseMipLevel = 0;
+              barrier.subresourceRange.levelCount = mip_levels;
+              barrier.srcAccessMask = 0;
+              barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+              barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+              barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+              barrier.image = image;
+              vkCmdPipelineBarrier(upload_buffer,
+                                   VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                                   VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL,
+                                   0, NULL, 1, &barrier);
 
-              region.bufferRowLength = tex->width;
-              region.bufferImageHeight = tex->height;
-              region.imageSubresource = (VkImageSubresourceLayers){
-                  VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-              region.imageExtent = (VkExtent3D){tex->width, tex->height, 1};
-              vkCmdCopyBufferToImage(upload_buffer, tex->host.buffer, image,
-                                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                                     &region);
+              // Afterwards, we're operating on single mips at a time no matter
+              // what
+              barrier.subresourceRange.levelCount = 1;
+            }
 
-              // Transition to shader read
-              {
+            region.bufferRowLength = img_width;
+            region.bufferImageHeight = img_height;
+            region.imageSubresource =
+                (VkImageSubresourceLayers){VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.imageExtent = (VkExtent3D){img_width, img_height, 1};
+            vkCmdCopyBufferToImage(upload_buffer, tex->host.buffer, image,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                   &region);
+
+            // Generate mipmaps
+            if (mip_levels > 1) {
+              uint32_t mip_width = img_width;
+              uint32_t mip_height = img_height;
+
+              for (uint32_t i = 1; i < mip_levels; ++i) {
+                // Transition previous mip level to be transfer src
                 {
-                  barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-                  barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+                  barrier.subresourceRange.baseMipLevel = i - 1;
                   barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+                  barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+                  barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+                  barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+                  vkCmdPipelineBarrier(upload_buffer,
+                                       VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                       VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0,
+                                       NULL, 0, NULL, 1, &barrier);
+                }
+
+                // Copy to next mip
+                VkImageBlit blit = {0};
+                blit.srcOffsets[0] = (VkOffset3D){0, 0, 0};
+                blit.srcOffsets[1] = (VkOffset3D){mip_width, mip_height, 1};
+                blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                blit.srcSubresource.mipLevel = i - 1;
+                blit.srcSubresource.baseArrayLayer = 0;
+                blit.srcSubresource.layerCount = 1;
+                blit.dstOffsets[0] = (VkOffset3D){0, 0, 0};
+                blit.dstOffsets[1] =
+                    (VkOffset3D){mip_width > 1 ? mip_width / 2 : 1,
+                                 mip_height > 1 ? mip_height / 2 : 1, 1};
+                blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                blit.dstSubresource.mipLevel = i;
+                blit.dstSubresource.baseArrayLayer = 0;
+                blit.dstSubresource.layerCount = 1;
+
+                vkCmdBlitImage(upload_buffer, image,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+                               VK_FILTER_LINEAR);
+
+                // Transition input mip to shader read only
+                {
+                  barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
                   barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-                  barrier.image = image;
+                  barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+                  barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
                   vkCmdPipelineBarrier(upload_buffer,
                                        VK_PIPELINE_STAGE_TRANSFER_BIT,
                                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
                                        0, NULL, 0, NULL, 1, &barrier);
                 }
+
+                if (mip_width > 1) {
+                  mip_width /= 2;
+                }
+                if (mip_height > 1) {
+                  mip_height /= 2;
+                }
               }
             }
-            d->texture_upload_count = 0;
+            // Transition last subresource to shader read
+            {
+              barrier.subresourceRange.baseMipLevel = mip_levels - 1;
+              barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+              barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+              barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+              barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+              barrier.image = image;
+              vkCmdPipelineBarrier(upload_buffer,
+                                   VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0,
+                                   NULL, 0, NULL, 1, &barrier);
+            }
           }
-
-          err = vkEndCommandBuffer(upload_buffer);
-
-          upload_sem = d->upload_complete_sems[frame_idx];
-          assert(err == VK_SUCCESS);
-
-          // Submit upload
-          VkSubmitInfo submit_info = {0};
-          submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-          submit_info.commandBufferCount = 1;
-          submit_info.pCommandBuffers = &upload_buffer;
-          submit_info.signalSemaphoreCount = 1;
-          submit_info.pSignalSemaphores = &upload_sem;
-          err = vkQueueSubmit(d->graphics_queue, 1, &submit_info,
-                              d->cube_gpu.uploaded);
-          assert(err == VK_SUCCESS);
+          d->texture_upload_count = 0;
         }
+
+        err = vkEndCommandBuffer(upload_buffer);
+
+        upload_sem = d->upload_complete_sems[frame_idx];
+        assert(err == VK_SUCCESS);
+
+        // Submit upload
+        VkSubmitInfo submit_info = {0};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &upload_buffer;
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &upload_sem;
+        err = vkQueueSubmit(d->graphics_queue, 1, &submit_info, NULL);
+        assert(err == VK_SUCCESS);
       }
 
       VkCommandBufferBeginInfo begin_info = {0};
@@ -1127,9 +1381,10 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
         vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
         vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
-        vkCmdPushConstants(
-            graphics_buffer, d->pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS,
-            0, sizeof(PushConstants), (const void *)&d->push_constants);
+        vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+                           VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                           sizeof(PushConstants),
+                           (const void *)&d->push_constants);
 
         // Draw Fullscreen Fractal
         vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1165,15 +1420,21 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
         {
           // Hack to change the plane's transform
           d->push_constants.mvp = *vp;
-          vkCmdPushConstants(
-              graphics_buffer, d->pipeline_layout, VK_SHADER_STAGE_ALL_GRAPHICS,
-              0, sizeof(PushConstants), (const void *)&d->push_constants);
+          vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+                             VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                             sizeof(PushConstants),
+                             (const void *)&d->push_constants);
 
           uint32_t idx_count = d->plane_gpu.idx_count;
           uint32_t vert_count = d->plane_gpu.vtx_count;
 
           vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             d->uv_mesh_pipeline);
+
+          vkCmdBindDescriptorSets(graphics_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  d->material_pipe_layout, 0, 1,
+                                  &d->descriptor_sets[frame_idx], 0, NULL);
 
           VkBuffer buffer = d->plane_gpu.gpu.buffer;
           VkDeviceSize offset = d->plane_gpu.idx_size;
@@ -1278,6 +1539,7 @@ static void demo_destroy(demo *d) {
   vkDeviceWaitIdle(device);
 
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+    vkDestroyDescriptorPool(device, d->descriptor_pools[i], NULL);
     vkDestroyFence(device, d->fences[i], NULL);
     vkDestroySemaphore(device, d->upload_complete_sems[i], NULL);
     vkDestroySemaphore(device, d->render_complete_sems[i], NULL);
@@ -1288,12 +1550,18 @@ static void demo_destroy(demo *d) {
     vkDestroyCommandPool(device, d->command_pools[i], NULL);
   }
 
+  destroy_texture(d->device, d->allocator, &d->roughness);
+  destroy_texture(d->device, d->allocator, &d->normal);
+  destroy_texture(d->device, d->allocator, &d->displacement);
   destroy_texture(d->device, d->allocator, &d->albedo);
   destroy_mesh(d->device, d->allocator, &d->plane_gpu);
   destroy_mesh(d->device, d->allocator, &d->cube_gpu);
 
   free(d->queue_props);
-  vkDestroyPipelineLayout(device, d->pipeline_layout, NULL);
+  vkDestroySampler(device, d->sampler, NULL);
+  vkDestroyDescriptorSetLayout(device, d->material_layout, NULL);
+  vkDestroyPipelineLayout(device, d->material_pipe_layout, NULL);
+  vkDestroyPipelineLayout(device, d->simple_pipe_layout, NULL);
   vkDestroyPipeline(device, d->uv_mesh_pipeline, NULL);
   vkDestroyPipeline(device, d->color_mesh_pipeline, NULL);
   vkDestroyPipeline(device, d->fractal_pipeline, NULL);

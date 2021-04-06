@@ -23,6 +23,7 @@ typedef struct gputexture {
   VkImageView view;
   uint32_t width;
   uint32_t height;
+  uint32_t mip_levels;
   uint32_t format;
 } gputexture;
 

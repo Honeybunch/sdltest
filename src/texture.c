@@ -54,7 +54,10 @@ void load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     assert(err == VK_SUCCESS);
   }
 
-  size_t host_buffer_size = opt_img->w * opt_img->h * (sizeof(uint8_t) * 4);
+  uint32_t img_width = opt_img->w;
+  uint32_t img_height = opt_img->h;
+
+  size_t host_buffer_size = img_width * img_height * (sizeof(uint8_t) * 4);
 
   gpubuffer host_buffer = {0};
   {
@@ -70,19 +73,29 @@ void load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     assert(err == VK_SUCCESS);
   }
 
+  uint32_t mip_levels = floor(log2(max(img_width, img_height))) + 1;
+
   gpuimage device_image = {0};
   {
+    VkImageUsageFlags usage =
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    // If we need to generate mips we'll need to mark the image as being able to
+    // be copied from
+    if (mip_levels > 1) {
+      usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+
     VkImageCreateInfo img_info = {0};
     img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     img_info.imageType = VK_IMAGE_TYPE_2D; // Assuming for now
     img_info.format = VK_FORMAT_R8G8B8A8_SRGB;
-    img_info.extent = (VkExtent3D){opt_img->w, opt_img->h, 1};
-    img_info.mipLevels = 1;
+    img_info.extent = (VkExtent3D){img_width, img_height, 1};
+    img_info.mipLevels = mip_levels;
     img_info.arrayLayers = 1;
     img_info.samples = VK_SAMPLE_COUNT_1_BIT;
     img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    img_info.usage =
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    img_info.usage = usage;
     VmaAllocationCreateInfo alloc_info = {0};
     alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     err = create_image(alloc, &img_info, &alloc_info, &device_image);
@@ -107,8 +120,8 @@ void load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     create_info.image = device_image.image;
     create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
-    create_info.subresourceRange =
-        (VkImageSubresourceRange){VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    create_info.subresourceRange = (VkImageSubresourceRange){
+        VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_levels, 0, 1};
     err = vkCreateImageView(device, &create_info, NULL, &view);
     assert(err == VK_SUCCESS);
   };
@@ -119,6 +132,7 @@ void load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
   t->format = VK_FORMAT_R8G8B8A8_SRGB;
   t->width = opt_img->w;
   t->height = opt_img->h;
+  t->mip_levels = mip_levels;
   t->view = view;
 
   SDL_FreeSurface(opt_img);
