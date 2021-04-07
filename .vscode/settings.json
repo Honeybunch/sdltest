@@ -24,6 +24,7 @@
         "sdl_events.h": "c",
         "atomic": "c",
         "color_mesh_frag.h": "c",
-        "xmemory": "c"
+        "xmemory": "c",
+        "cube.h": "c"
     }
 }

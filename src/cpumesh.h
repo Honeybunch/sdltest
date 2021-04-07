@@ -2,18 +2,6 @@
 
 #include "simd.h"
 
-// Simple struct i've been using for describing the cube mesh
-typedef struct cpumesh {
-  uint64_t index_size;
-  uint64_t geom_size;
-  uint32_t index_count;
-  uint32_t vertex_count;
-  const uint16_t *indices;
-  const float3 *positions;
-  const float3 *colors;
-  const float3 *normals;
-} cpumesh;
-
 /*
   Struct describing a mesh where each vertex element is packed in-line.
   eg: [x, y, z, u, v, r, g, b, x, y, z, u,, v, r, g, b, ...]

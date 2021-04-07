@@ -258,51 +258,7 @@ static VkResult create_gpubuffer(VmaAllocator allocator, VkDeviceSize size,
 }
 
 static VkResult create_mesh(VkDevice device, VmaAllocator allocator,
-                            const cpumesh *src_mesh, gpumesh *dst_mesh) {
-  VkResult err = VK_SUCCESS;
-
-  size_t idx_size = src_mesh->index_size;
-  size_t geom_size = src_mesh->geom_size;
-
-  size_t size = idx_size + geom_size;
-
-  gpubuffer host_buffer = {0};
-  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
-                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
-  assert(err == VK_SUCCESS);
-
-  gpubuffer device_buffer = {0};
-  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
-                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                             VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                         &device_buffer);
-  assert(err == VK_SUCCESS);
-
-  VkFence fence = VK_NULL_HANDLE;
-  {
-    VkFenceCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    err = vkCreateFence(device, &create_info, NULL, &fence);
-    assert(err == VK_SUCCESS);
-  }
-
-  *dst_mesh = (gpumesh){fence,
-                        src_mesh->index_count,
-                        src_mesh->vertex_count,
-                        VK_INDEX_TYPE_UINT16,
-                        size,
-                        src_mesh->index_size,
-                        src_mesh->geom_size,
-                        host_buffer,
-                        device_buffer};
-
-  return err;
-}
-
-static VkResult create_mesh_buffer(VkDevice device, VmaAllocator allocator,
-                                   const cpumesh_buffer *src_mesh,
-                                   gpumesh *dst_mesh) {
+                            const cpumesh_buffer *src_mesh, gpumesh *dst_mesh) {
   VkResult err = VK_SUCCESS;
 
   size_t idx_size = src_mesh->index_size;
@@ -772,7 +728,13 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   // Create Cube Mesh
   gpumesh cube = {0};
   {
-    err = create_mesh(device, allocator, &cube_cpu, &cube);
+    size_t cube_size = cube_alloc_size();
+    cpumesh_buffer *cube_cpu = malloc(cube_size);
+    assert(cube_cpu);
+    memset(cube_cpu, 0, cube_size);
+    create_cube(cube_cpu);
+
+    err = create_mesh(device, allocator, cube_cpu, &cube);
     assert(err == VK_SUCCESS);
 
     // Actually copy cube data to cpu local buffer
@@ -780,25 +742,15 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
       uint8_t *data = NULL;
       vmaMapMemory(allocator, cube.host.alloc, (void **)&data);
 
-      size_t offset = 0;
-      // Copy Indices
-      size_t size = cube.idx_count * sizeof(uint16_t) >> cube.idx_type;
-      memcpy(data + offset, cube_cpu.indices, size);
-      offset += size;
-      // Copy Positions
-      size = sizeof(float3) * cube_cpu.vertex_count;
-      memcpy(data + offset, cube_cpu.positions, size);
-      offset += size;
-      // Copy Colors
-      memcpy(data + offset, cube_cpu.colors, size);
-      offset += size;
-      // Copy Normals
-      memcpy(data + offset, cube_cpu.normals, size);
-      offset += size;
+      // Copy Data
+      size_t size = cube_cpu->index_size + cube_cpu->geom_size;
+      memcpy(data, cube_cpu->indices, size);
 
       vmaUnmapMemory(allocator, cube.host.alloc);
       data = NULL;
     }
+
+    free(cube_cpu);
   }
 
   // Create Plane Mesh
@@ -811,7 +763,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     memset(plane_cpu, 0, plane_size);
     create_plane(plane_subdiv, plane_cpu);
 
-    err = create_mesh_buffer(device, allocator, plane_cpu, &plane);
+    err = create_mesh(device, allocator, plane_cpu, &plane);
     assert(err == VK_SUCCESS);
 
     // Actually copy plane data to cpu local buffer
