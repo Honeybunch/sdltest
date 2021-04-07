@@ -1,5 +1,7 @@
 #include "plane.h"
 
+#include "cpuresources.h"
+
 #include <assert.h>
 #include <math.h>
 
@@ -33,9 +35,9 @@ size_t plane_alloc_size(uint32_t subdiv) {
   size_t index_size = aligned(index_count * sizeof(uint16_t));
   size_t vertex_size = aligned(vertex_count * PLANE_VERTEX_STRIDE);
 
-  return sizeof(cpumesh_buffer) + index_size + vertex_size;
+  return sizeof(cpumesh) + index_size + vertex_size;
 }
-void create_plane(uint32_t subdiv, cpumesh_buffer *plane) {
+void create_plane(uint32_t subdiv, cpumesh *plane) {
   uint32_t index_count = 0;
   uint32_t vertex_count = 0;
   calc_subdiv(subdiv, &index_count, &vertex_count);
@@ -45,7 +47,7 @@ void create_plane(uint32_t subdiv, cpumesh_buffer *plane) {
   size_t index_size = aligned(index_count * sizeof(uint16_t));
   size_t geom_size = aligned(vertex_count * PLANE_VERTEX_STRIDE);
 
-  size_t offset = sizeof(cpumesh_buffer);
+  size_t offset = sizeof(cpumesh);
   plane->indices = (uint16_t *)(((uint8_t *)plane) + offset);
   offset += index_size;
   plane->vertices = (((uint8_t *)plane) + offset);

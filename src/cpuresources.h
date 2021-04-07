@@ -10,14 +10,14 @@
   line up with the layout it is used in conjunction with. It does
   not contain info about the stride of each attribute of each vertex.
 */
-typedef struct cpumesh_buffer {
+typedef struct cpumesh {
   uint64_t index_size;     // size of the indices buffer in bytes
   uint64_t geom_size;      // size of the vertices buffer in bytes
   uint32_t index_count;    // Number of indices
   uint32_t vertex_count;   // Number of vertices
   const uint16_t *indices; // index buffer
   const uint8_t *vertices; // vertex buffer
-} cpumesh_buffer;
+} cpumesh;
 
 #define MAX_CPUMESH_ELEMENTS 8
 /*

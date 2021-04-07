@@ -84,11 +84,11 @@ add_custom_target(shaders ALL DEPENDS ${shader_headers})
 set(source "${CMAKE_CURRENT_LIST_DIR}/src/camera.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/cube.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/fractal.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/gpuresources.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/main.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/mesh.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/pipelines.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/plane.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/simd.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/texture.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp")
 if(WIN32)
   add_executable(sdltest WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.rc")

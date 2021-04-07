@@ -1,4 +1,6 @@
-#include "gputexture.h"
+#include "gpuresources.h"
+
+#include "cpuresources.h"
 
 #include <SDL2/SDL_image.h>
 #include <volk.h>
@@ -8,10 +10,73 @@
 #include <assert.h>
 #include <stdio.h>
 
-static VkResult create_image(VmaAllocator alloc,
-                             const VkImageCreateInfo *img_create_info,
-                             const VmaAllocationCreateInfo *alloc_create_info,
-                             gpuimage *i) {
+int32_t create_gpubuffer(VmaAllocator allocator, uint64_t size,
+                         int32_t mem_usage, int32_t buf_usage, gpubuffer *out) {
+  VkResult err = VK_SUCCESS;
+  VkBuffer buffer = {0};
+  VmaAllocation alloc = {0};
+  VmaAllocationInfo alloc_info = {0};
+  {
+    VkMemoryRequirements mem_reqs = {size, 16, 0};
+    VmaAllocationCreateInfo alloc_create_info = {0};
+    alloc_create_info.usage = mem_usage;
+    VkBufferCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    create_info.size = size;
+    create_info.usage = buf_usage;
+    err = vmaCreateBuffer(allocator, &create_info, &alloc_create_info, &buffer,
+                          &alloc, &alloc_info);
+    assert(err == VK_SUCCESS);
+  }
+  *out = (gpubuffer){buffer, alloc};
+
+  return err;
+}
+
+void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer) {
+  vmaDestroyBuffer(allocator, buffer->buffer, buffer->alloc);
+}
+
+int32_t create_mesh(VkDevice device, VmaAllocator allocator,
+                    const cpumesh *src_mesh, gpumesh *dst_mesh) {
+  VkResult err = VK_SUCCESS;
+
+  size_t idx_size = src_mesh->index_size;
+  size_t geom_size = src_mesh->geom_size;
+
+  size_t size = idx_size + geom_size;
+
+  gpubuffer host_buffer = {0};
+  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
+                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
+  assert(err == VK_SUCCESS);
+
+  gpubuffer device_buffer = {0};
+  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
+                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                             VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                         &device_buffer);
+  assert(err == VK_SUCCESS);
+
+  *dst_mesh = (gpumesh){src_mesh->index_count, src_mesh->vertex_count,
+                        VK_INDEX_TYPE_UINT16,  size,
+                        src_mesh->index_size,  src_mesh->geom_size,
+                        host_buffer,           device_buffer};
+
+  return err;
+}
+
+void destroy_mesh(VkDevice device, VmaAllocator allocator,
+                  const gpumesh *mesh) {
+  destroy_gpubuffer(allocator, &mesh->host);
+  destroy_gpubuffer(allocator, &mesh->gpu);
+}
+
+int32_t create_gpuimage(VmaAllocator alloc,
+                        const VkImageCreateInfo *img_create_info,
+                        const VmaAllocationCreateInfo *alloc_create_info,
+                        gpuimage *i) {
   VkResult err = VK_SUCCESS;
   gpuimage img = {0};
 
@@ -26,8 +91,12 @@ static VkResult create_image(VmaAllocator alloc,
   return err;
 }
 
-void load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
-                  gputexture *t) {
+void destroy_gpuimage(VmaAllocator allocator, const gpuimage *image) {
+  vmaDestroyImage(allocator, image->image, image->alloc);
+}
+
+int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
+                     gputexture *t) {
   assert(filename);
   assert(t);
 
@@ -45,14 +114,6 @@ void load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
   assert(opt_img);
 
   VkResult err = VK_SUCCESS;
-
-  VkFence uploaded = VK_NULL_HANDLE;
-  {
-    VkFenceCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    err = vkCreateFence(device, &create_info, NULL, &uploaded);
-    assert(err == VK_SUCCESS);
-  }
 
   uint32_t img_width = opt_img->w;
   uint32_t img_height = opt_img->h;
@@ -98,7 +159,7 @@ void load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     img_info.usage = usage;
     VmaAllocationCreateInfo alloc_info = {0};
     alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    err = create_image(alloc, &img_info, &alloc_info, &device_image);
+    err = create_gpuimage(alloc, &img_info, &alloc_info, &device_image);
     assert(err == VK_SUCCESS);
   }
 
@@ -126,7 +187,6 @@ void load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     assert(err == VK_SUCCESS);
   };
 
-  t->uploaded = uploaded;
   t->host = host_buffer;
   t->device = device_image;
   t->format = VK_FORMAT_R8G8B8A8_SRGB;
@@ -136,11 +196,12 @@ void load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
   t->view = view;
 
   SDL_FreeSurface(opt_img);
+
+  return err;
 }
 
 void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t) {
-  vkDestroyFence(device, t->uploaded, NULL);
-  vmaDestroyBuffer(alloc, t->host.buffer, t->host.alloc);
-  vmaDestroyImage(alloc, t->device.image, t->device.alloc);
+  destroy_gpubuffer(alloc, &t->host);
+  destroy_gpuimage(alloc, &t->device);
   vkDestroyImageView(device, t->view, NULL);
 }

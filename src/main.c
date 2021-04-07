@@ -9,15 +9,14 @@
 #include <vk_mem_alloc.h>
 
 #include "camera.h"
+#include "cpuresources.h"
+#include "cube.h"
 #include "fractal.h"
-#include "mesh.h"
+#include "gpuresources.h"
+#include "pipelines.h"
+#include "plane.h"
 #include "shadercommon.h"
 #include "simd.h"
-
-#include "cube.h"
-#include "gpumesh.h"
-#include "gputexture.h"
-#include "plane.h"
 
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
@@ -231,84 +230,6 @@ pick_surface_format(VkSurfaceFormatKHR *surface_formats,
 
   assert(format_count >= 1);
   return surface_formats[0];
-}
-
-static VkResult create_gpubuffer(VmaAllocator allocator, VkDeviceSize size,
-                                 VmaMemoryUsage mem_usage,
-                                 VkBufferUsageFlags buf_usage, gpubuffer *out) {
-  VkResult err = VK_SUCCESS;
-  VkBuffer buffer = {0};
-  VmaAllocation alloc = {0};
-  VmaAllocationInfo alloc_info = {0};
-  {
-    VkMemoryRequirements mem_reqs = {size, 16, 0};
-    VmaAllocationCreateInfo alloc_create_info = {0};
-    alloc_create_info.usage = mem_usage;
-    VkBufferCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    create_info.size = size;
-    create_info.usage = buf_usage;
-    err = vmaCreateBuffer(allocator, &create_info, &alloc_create_info, &buffer,
-                          &alloc, &alloc_info);
-    assert(err == VK_SUCCESS);
-  }
-  *out = (gpubuffer){buffer, alloc};
-
-  return err;
-}
-
-static VkResult create_mesh(VkDevice device, VmaAllocator allocator,
-                            const cpumesh_buffer *src_mesh, gpumesh *dst_mesh) {
-  VkResult err = VK_SUCCESS;
-
-  size_t idx_size = src_mesh->index_size;
-  size_t geom_size = src_mesh->geom_size;
-
-  size_t size = idx_size + geom_size;
-
-  gpubuffer host_buffer = {0};
-  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
-                         VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
-  assert(err == VK_SUCCESS);
-
-  gpubuffer device_buffer = {0};
-  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
-                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
-                             VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
-                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                         &device_buffer);
-  assert(err == VK_SUCCESS);
-
-  VkFence fence = VK_NULL_HANDLE;
-  {
-    VkFenceCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    err = vkCreateFence(device, &create_info, NULL, &fence);
-    assert(err == VK_SUCCESS);
-  }
-
-  *dst_mesh = (gpumesh){fence,
-                        src_mesh->index_count,
-                        src_mesh->vertex_count,
-                        VK_INDEX_TYPE_UINT16,
-                        size,
-                        src_mesh->index_size,
-                        src_mesh->geom_size,
-                        host_buffer,
-                        device_buffer};
-
-  return err;
-}
-
-static void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer) {
-  vmaDestroyBuffer(allocator, buffer->buffer, buffer->alloc);
-}
-
-static void destroy_mesh(VkDevice device, VmaAllocator allocator,
-                         const gpumesh *mesh) {
-  destroy_gpubuffer(allocator, &mesh->host);
-  destroy_gpubuffer(allocator, &mesh->gpu);
-  vkDestroyFence(device, mesh->uploaded, NULL);
 }
 
 static void demo_upload_mesh(demo *d, const gpumesh *mesh) {
@@ -729,7 +650,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   gpumesh cube = {0};
   {
     size_t cube_size = cube_alloc_size();
-    cpumesh_buffer *cube_cpu = malloc(cube_size);
+    cpumesh *cube_cpu = malloc(cube_size);
     assert(cube_cpu);
     memset(cube_cpu, 0, cube_size);
     create_cube(cube_cpu);
@@ -758,7 +679,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   {
     uint32_t plane_subdiv = 16;
     size_t plane_size = plane_alloc_size(plane_subdiv);
-    cpumesh_buffer *plane_cpu = malloc(plane_size);
+    cpumesh *plane_cpu = malloc(plane_size);
     assert(plane_cpu);
     memset(plane_cpu, 0, plane_size);
     create_plane(plane_subdiv, plane_cpu);

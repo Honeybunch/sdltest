@@ -25,6 +25,7 @@
         "atomic": "c",
         "color_mesh_frag.h": "c",
         "xmemory": "c",
-        "cube.h": "c"
+        "cube.h": "c",
+        "cpuresources.h": "c"
     }
 }
