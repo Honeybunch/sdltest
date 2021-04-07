@@ -1732,6 +1732,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Pass MVP to shader
     d.push_constants.mvp = cube_mvp;
     d.push_constants.m = cube_obj_mat;
+    d.push_constants.view_pos = main_cam.transform.position;
 
     demo_render_frame(&d, &vp);
   }
