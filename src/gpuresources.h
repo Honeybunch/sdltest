@@ -10,6 +10,7 @@ typedef struct VkImageView_T *VkImageView;
 
 typedef struct VmaAllocator_T *VmaAllocator;
 typedef struct VmaAllocation_T *VmaAllocation;
+typedef struct VmaPool_T *VmaPool;
 
 typedef struct VkImageCreateInfo VkImageCreateInfo;
 typedef struct VmaAllocationCreateInfo VmaAllocationCreateInfo;
@@ -59,9 +60,10 @@ void destroy_gpumesh(VkDevice device, VmaAllocator allocator,
 int32_t create_gpuimage(VmaAllocator alloc,
                         const VkImageCreateInfo *img_create_info,
                         const VmaAllocationCreateInfo *alloc_create_info,
+
                         gpuimage *i);
 void destroy_gpuimage(VmaAllocator allocator, const gpuimage *image);
 
 int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
-                     gputexture *t);
+                     VmaPool up_pool, VmaPool tex_pool, gputexture *t);
 void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t);

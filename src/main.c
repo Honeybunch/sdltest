@@ -756,8 +756,13 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     }
     assert(mem_type_idx != 0xFFFFFFFF);
 
+    // block size to fit an 8k R8G8B8A8 uncompressed texture w/ metadata
+    uint64_t block_size = (uint64_t)(8192.0 * 8192.0 * 4.0 * 1.4);
+
     VmaPoolCreateInfo create_info = {0};
     create_info.memoryTypeIndex = mem_type_idx;
+    create_info.blockSize = block_size;
+    create_info.minBlockCount = 4; // We know we will have at least 4 textures
     err = vmaCreatePool(allocator, &create_info, &texture_mem_pool);
     assert(err == VK_SUCCESS);
   }
@@ -822,19 +827,20 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   // Load Textures
   gputexture albedo = {0};
   load_texture(device, allocator, "./assets/textures/shfsaida_8K_Albedo.png",
-               &albedo);
+               upload_mem_pool, texture_mem_pool, &albedo);
 
   gputexture displacement = {0};
   load_texture(device, allocator,
-               "./assets/textures/shfsaida_8K_Displacement.png", &displacement);
+               "./assets/textures/shfsaida_8K_Displacement.png",
+               upload_mem_pool, texture_mem_pool, &displacement);
 
   gputexture normal = {0};
   load_texture(device, allocator, "./assets/textures/shfsaida_8K_Normal.png",
-               &normal);
+               upload_mem_pool, texture_mem_pool, &normal);
 
   gputexture roughness = {0};
   load_texture(device, allocator, "./assets/textures/shfsaida_8K_Roughness.png",
-               &roughness);
+               upload_mem_pool, texture_mem_pool, &roughness);
 
   // Apply to output var
   d->instance = instance;

@@ -96,7 +96,7 @@ void destroy_gpuimage(VmaAllocator allocator, const gpuimage *image) {
 }
 
 int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
-                     gputexture *t) {
+                     VmaPool up_pool, VmaPool tex_pool, gputexture *t) {
   assert(filename);
   assert(t);
 
@@ -128,6 +128,7 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     VmaAllocationCreateInfo alloc_create_info = {0};
     alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    alloc_create_info.pool = up_pool;
     VmaAllocationInfo alloc_info = {0};
     err = vmaCreateBuffer(alloc, &buffer_create_info, &alloc_create_info,
                           &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
@@ -159,6 +160,7 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     img_info.usage = usage;
     VmaAllocationCreateInfo alloc_info = {0};
     alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_info.pool = tex_pool;
     err = create_gpuimage(alloc, &img_info, &alloc_info, &device_image);
     assert(err == VK_SUCCESS);
   }
