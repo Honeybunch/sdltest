@@ -37,8 +37,8 @@ void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer) {
   vmaDestroyBuffer(allocator, buffer->buffer, buffer->alloc);
 }
 
-int32_t create_mesh(VkDevice device, VmaAllocator allocator,
-                    const cpumesh *src_mesh, gpumesh *dst_mesh) {
+int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
+                       const cpumesh *src_mesh, gpumesh *dst_mesh) {
   VkResult err = VK_SUCCESS;
 
   size_t idx_size = src_mesh->index_size;
@@ -67,8 +67,8 @@ int32_t create_mesh(VkDevice device, VmaAllocator allocator,
   return err;
 }
 
-void destroy_mesh(VkDevice device, VmaAllocator allocator,
-                  const gpumesh *mesh) {
+void destroy_gpumesh(VkDevice device, VmaAllocator allocator,
+                     const gpumesh *mesh) {
   destroy_gpubuffer(allocator, &mesh->host);
   destroy_gpubuffer(allocator, &mesh->gpu);
 }
@@ -118,7 +118,7 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
   uint32_t img_width = opt_img->w;
   uint32_t img_height = opt_img->h;
 
-  size_t host_buffer_size = img_width * img_height * (sizeof(uint8_t) * 4);
+  size_t host_buffer_size = opt_img->pitch * img_height;
 
   gpubuffer host_buffer = {0};
   {

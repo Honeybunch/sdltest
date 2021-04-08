@@ -26,6 +26,7 @@
         "color_mesh_frag.h": "c",
         "xmemory": "c",
         "cube.h": "c",
-        "cpuresources.h": "c"
+        "cpuresources.h": "c",
+        "gpuresources.h": "c"
     }
 }

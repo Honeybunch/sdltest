@@ -11,7 +11,6 @@
 #include "camera.h"
 #include "cpuresources.h"
 #include "cube.h"
-#include "fractal.h"
 #include "gpuresources.h"
 #include "pipelines.h"
 #include "plane.h"
@@ -39,6 +38,7 @@ typedef struct demo {
   uint32_t queue_family_count;
   VkQueueFamilyProperties *queue_props;
   VkPhysicalDeviceFeatures gpu_features;
+  VkPhysicalDeviceMemoryProperties gpu_mem_props;
 
   VkSurfaceKHR surface;
   uint32_t graphics_queue_family_index;
@@ -65,9 +65,14 @@ typedef struct demo {
   VkPipeline color_mesh_pipeline;
 
   VkSampler sampler;
+
   VkDescriptorSetLayout material_layout;
   VkPipelineLayout material_pipe_layout;
   VkPipeline uv_mesh_pipeline;
+
+  VkDescriptorSetLayout skybox_layout;
+  VkPipelineLayout skybox_pipe_layout;
+  VkPipeline skybox_pipeline;
 
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
@@ -87,6 +92,9 @@ typedef struct demo {
   uint32_t frame_idx;
   uint32_t swap_img_idx;
   VkFence fences[FRAME_LATENCY];
+
+  VmaPool upload_mem_pool;
+  VmaPool texture_mem_pool;
 
   gpumesh cube_gpu;
   gpumesh plane_gpu;
@@ -270,6 +278,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
   VkPhysicalDeviceFeatures gpu_features = {0};
   vkGetPhysicalDeviceFeatures(gpu, &gpu_features);
+
+  VkPhysicalDeviceMemoryProperties gpu_mem_props;
+  vkGetPhysicalDeviceMemoryProperties(gpu, &gpu_mem_props);
 
   // Create vulkan surface
   VkSurfaceKHR surface = VK_NULL_HANDLE;
@@ -548,10 +559,34 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   // Create Pipeline Cache
   VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
   {
+    size_t data_size = 0;
+    void *data = NULL;
+
+    // If an existing pipeline cache exists, load it
+    FILE *cache_file = NULL;
+    errno_t e = fopen_s(&cache_file, "./pipeline.cache", "rb");
+    bool cache_open = cache_file && e == 0;
+    if (cache_open) {
+      fseek(cache_file, 0, SEEK_END);
+      data_size = ftell(cache_file);
+      rewind(cache_file);
+
+      data = malloc(data_size);
+
+      fread(data, data_size, 1, cache_file);
+      fclose(cache_file);
+    }
+
     VkPipelineCacheCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+    create_info.initialDataSize = data_size;
+    create_info.pInitialData = data;
     err = vkCreatePipelineCache(device, &create_info, NULL, &pipeline_cache);
     assert(err == VK_SUCCESS);
+
+    if (data) {
+      free(data);
+    }
   }
 
   VkPushConstantRange const_range = {
@@ -640,11 +675,92 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     assert(err == VK_SUCCESS);
   }
 
+  // Create UV mesh pipeline
   VkPipeline uv_mesh_pipeline = VK_NULL_HANDLE;
   err =
       create_uv_mesh_pipeline(device, pipeline_cache, render_pass, width,
                               height, material_pipe_layout, &uv_mesh_pipeline);
   assert(err == VK_SUCCESS);
+
+  // Create Skybox Descriptor Set Layout
+  VkDescriptorSetLayout skybox_layout = VK_NULL_HANDLE;
+  {
+    // Note: binding 1 is for the displacement map, which is useful only in the
+    // vertex stage
+    VkDescriptorSetLayoutBinding bindings[2] = {
+        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         &sampler},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = 2;
+    create_info.pBindings = bindings;
+    err =
+        vkCreateDescriptorSetLayout(device, &create_info, NULL, &skybox_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Skybox Pipeline Layout
+  VkPipelineLayout skybox_pipe_layout = VK_NULL_HANDLE;
+  {
+    VkPipelineLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    create_info.setLayoutCount = 1;
+    create_info.pSetLayouts = &skybox_layout;
+    create_info.pushConstantRangeCount = 1;
+    create_info.pPushConstantRanges = &const_range;
+
+    err =
+        vkCreatePipelineLayout(device, &create_info, NULL, &skybox_pipe_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Skybox Pipeline
+  VkPipeline skybox_pipeline = VK_NULL_HANDLE;
+  err = create_skybox_pipeline(device, pipeline_cache, render_pass, width,
+                               height, skybox_pipe_layout, &skybox_pipeline);
+
+  // Create a pool for host memory uploads
+  VmaPool upload_mem_pool = VK_NULL_HANDLE;
+  {
+    uint32_t mem_type_idx = 0xFFFFFFFF;
+    // Find the desired memory type index
+    for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
+      VkMemoryType type = gpu_mem_props.memoryTypes[i];
+      if (type.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+        mem_type_idx = i;
+        break;
+      }
+    }
+    assert(mem_type_idx != 0xFFFFFFFF);
+
+    VmaPoolCreateInfo create_info = {0};
+    create_info.memoryTypeIndex = mem_type_idx;
+    err = vmaCreatePool(allocator, &create_info, &upload_mem_pool);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create a pool for texture memory
+  VmaPool texture_mem_pool = VK_NULL_HANDLE;
+  {
+    uint32_t mem_type_idx = 0xFFFFFFFF;
+    // Find the desired memory type index
+    for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
+      VkMemoryType type = gpu_mem_props.memoryTypes[i];
+      if (type.propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+        mem_type_idx = i;
+        break;
+      }
+    }
+    assert(mem_type_idx != 0xFFFFFFFF);
+
+    VmaPoolCreateInfo create_info = {0};
+    create_info.memoryTypeIndex = mem_type_idx;
+    err = vmaCreatePool(allocator, &create_info, &texture_mem_pool);
+    assert(err == VK_SUCCESS);
+  }
 
   // Create Cube Mesh
   gpumesh cube = {0};
@@ -655,7 +771,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     memset(cube_cpu, 0, cube_size);
     create_cube(cube_cpu);
 
-    err = create_mesh(device, allocator, cube_cpu, &cube);
+    err = create_gpumesh(device, allocator, cube_cpu, &cube);
     assert(err == VK_SUCCESS);
 
     // Actually copy cube data to cpu local buffer
@@ -684,7 +800,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     memset(plane_cpu, 0, plane_size);
     create_plane(plane_subdiv, plane_cpu);
 
-    err = create_mesh(device, allocator, plane_cpu, &plane);
+    err = create_gpumesh(device, allocator, plane_cpu, &plane);
     assert(err == VK_SUCCESS);
 
     // Actually copy plane data to cpu local buffer
@@ -725,6 +841,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->gpu = gpu;
   d->allocator = allocator;
   d->gpu_props = gpu_props;
+  d->gpu_mem_props = gpu_mem_props;
   d->queue_family_count = queue_family_count;
   d->queue_props = queue_props;
   d->gpu_features = gpu_features;
@@ -749,6 +866,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->material_layout = material_layout;
   d->material_pipe_layout = material_pipe_layout;
   d->uv_mesh_pipeline = uv_mesh_pipeline;
+  d->skybox_layout = skybox_layout;
+  d->skybox_pipe_layout = skybox_pipe_layout;
+  d->skybox_pipeline = skybox_pipeline;
+  d->upload_mem_pool = upload_mem_pool;
+  d->texture_mem_pool = texture_mem_pool;
   d->cube_gpu = cube;
   d->plane_gpu = plane;
   d->albedo = albedo;
@@ -1411,6 +1533,31 @@ static void demo_destroy(demo *d) {
 
   vkDeviceWaitIdle(device);
 
+  // Write out the pipeline cache
+  {
+    VkResult err = VK_SUCCESS;
+
+    size_t cache_size = 0;
+    err = vkGetPipelineCacheData(device, d->pipeline_cache, &cache_size, NULL);
+    if (err == VK_SUCCESS) {
+      void *cache = malloc(cache_size);
+      err =
+          vkGetPipelineCacheData(device, d->pipeline_cache, &cache_size, cache);
+      if (err == VK_SUCCESS) {
+
+        FILE *cache_file = NULL;
+        errno_t e = fopen_s(&cache_file, "./pipeline.cache", "wb");
+        bool cache_open = cache_file && e == 0;
+        if (cache_open) {
+          fwrite(cache, cache_size, 1, cache_file);
+          fclose(cache_file);
+        }
+      }
+
+      free(cache);
+    }
+  }
+
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
     vkDestroyDescriptorPool(device, d->descriptor_pools[i], NULL);
     vkDestroyFence(device, d->fences[i], NULL);
@@ -1427,14 +1574,20 @@ static void demo_destroy(demo *d) {
   destroy_texture(d->device, d->allocator, &d->normal);
   destroy_texture(d->device, d->allocator, &d->displacement);
   destroy_texture(d->device, d->allocator, &d->albedo);
-  destroy_mesh(d->device, d->allocator, &d->plane_gpu);
-  destroy_mesh(d->device, d->allocator, &d->cube_gpu);
+  destroy_gpumesh(d->device, d->allocator, &d->plane_gpu);
+  destroy_gpumesh(d->device, d->allocator, &d->cube_gpu);
+
+  vmaDestroyPool(d->allocator, d->upload_mem_pool);
+  vmaDestroyPool(d->allocator, d->texture_mem_pool);
 
   free(d->queue_props);
   vkDestroySampler(device, d->sampler, NULL);
+  vkDestroyDescriptorSetLayout(device, d->skybox_layout, NULL);
+  vkDestroyPipelineLayout(device, d->skybox_pipe_layout, NULL);
   vkDestroyDescriptorSetLayout(device, d->material_layout, NULL);
   vkDestroyPipelineLayout(device, d->material_pipe_layout, NULL);
   vkDestroyPipelineLayout(device, d->simple_pipe_layout, NULL);
+  vkDestroyPipeline(device, d->skybox_pipeline, NULL);
   vkDestroyPipeline(device, d->uv_mesh_pipeline, NULL);
   vkDestroyPipeline(device, d->color_mesh_pipeline, NULL);
   vkDestroyPipeline(device, d->fractal_pipeline, NULL);
