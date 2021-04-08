@@ -1446,6 +1446,29 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
           vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
         }
 
+        // Draw Skybox Cube
+        {
+          uint32_t idx_count = d->cube_gpu.idx_count;
+          uint32_t vert_count = d->cube_gpu.vtx_count;
+
+          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            d->skybox_pipeline);
+
+          VkBuffer b = d->cube_gpu.gpu.buffer;
+
+          size_t idx_size =
+              idx_count * sizeof(uint16_t) >> d->cube_gpu.idx_type;
+          size_t pos_size = sizeof(float3) * vert_count;
+          size_t colors_size = sizeof(float3) * vert_count;
+
+          VkBuffer buffers[1] = {b};
+          VkDeviceSize offsets[1] = {idx_size};
+
+          vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+          vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
+          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+        }
+
         vkCmdEndRenderPass(graphics_buffer);
       }
 

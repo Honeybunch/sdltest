@@ -439,9 +439,21 @@ uint32_t create_skybox_pipeline(VkDevice device, VkPipelineCache cache,
 
     VkPipelineShaderStageCreateInfo shader_stages[] = {vert_stage, frag_stage};
 
+    VkVertexInputBindingDescription vert_bindings[1] = {
+        {0, sizeof(float3), VK_VERTEX_INPUT_RATE_VERTEX},
+    };
+
+    VkVertexInputAttributeDescription vert_attrs[1] = {
+        {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},
+    };
+
     VkPipelineVertexInputStateCreateInfo vert_input_state = {0};
     vert_input_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vert_input_state.vertexBindingDescriptionCount = 1;
+    vert_input_state.pVertexBindingDescriptions = vert_bindings;
+    vert_input_state.vertexAttributeDescriptionCount = 1;
+    vert_input_state.pVertexAttributeDescriptions = vert_attrs;
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_state = {0};
     input_assembly_state.sType =
