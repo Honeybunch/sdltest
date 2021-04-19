@@ -28,6 +28,7 @@
         "cube.h": "c",
         "cpuresources.h": "c",
         "gpuresources.h": "c",
-        "filesystem": "c"
+        "filesystem": "c",
+        "set": "c"
     }
 }

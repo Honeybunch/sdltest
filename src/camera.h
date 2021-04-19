@@ -42,6 +42,9 @@ typedef struct editor_camera_controller {
 
 typedef union SDL_Event SDL_Event;
 
+void camera_projection(const camera *c, float4x4 *p);
+void camera_view(const camera *c, float4x4 *v);
+void camera_sky_view(const camera *c, float4x4 *v);
 void camera_view_projection(const camera *c, float4x4 *vp);
 
 void editor_camera_control(float delta_time_seconds, const SDL_Event *event,

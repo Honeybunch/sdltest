@@ -2,17 +2,34 @@
 
 #include <SDL2/SDL_events.h>
 
-void camera_view_projection(const camera *c, float4x4 *vp) {
+void camera_projection(const camera *c, float4x4 *p) {
+  perspective(p, c->fov, c->aspect, c->near, c->far);
+}
+
+void camera_view(const camera *c, float4x4 *v) {
   float4x4 model_matrix = {0};
   transform_to_matrix(&model_matrix, &c->transform);
 
   float3 forward = f4tof3(model_matrix.row2);
 
+  look_forward(v, c->transform.position, forward, (float3){0, 1, 0});
+}
+
+void camera_sky_view(const camera *c, float4x4 *v) {
+  float4x4 model_matrix = {0};
+  transform_to_matrix(&model_matrix, &c->transform);
+
+  float3 forward = f4tof3(model_matrix.row2);
+
+  look_forward(v, (float3){0, 0, 0}, forward, (float3){0, 1, 0});
+}
+
+void camera_view_projection(const camera *c, float4x4 *vp) {
   float4x4 view = {0};
-  look_forward(&view, c->transform.position, forward, (float3){0, 1, 0});
+  camera_view(c, &view);
 
   float4x4 proj = {0};
-  perspective(&proj, c->fov, c->aspect, c->near, c->far);
+  camera_projection(c, &proj);
 
   mulmf44(&proj, &view, vp);
 }

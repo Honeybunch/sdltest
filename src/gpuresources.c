@@ -211,8 +211,9 @@ int32_t load_skybox(VkDevice device, VmaAllocator alloc,
   assert(t);
 
   const uint32_t skybox_side_count = 6;
-  const char *file_names[6] = {"back", "bottom", "front",
-                               "left", "right",  "top"};
+  // ORDER MATTERS
+  const char *file_names[6] = {"right",  "left",  "top",
+                               "bottom", "front", "back"};
 
   // TODO: Use some sort of arena allocator
 

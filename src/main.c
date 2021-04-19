@@ -106,7 +106,8 @@ typedef struct demo {
   gputexture skybox;
 
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
-  VkDescriptorSet descriptor_sets[FRAME_LATENCY];
+  VkDescriptorSet skybox_descriptor_sets[FRAME_LATENCY];
+  VkDescriptorSet mesh_descriptor_sets[FRAME_LATENCY];
 
   uint32_t mesh_upload_count;
   gpumesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
@@ -1002,10 +1003,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
   // Create Descriptor Set Pools
   {
-    VkDescriptorPoolSize pool_size = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 4};
+    VkDescriptorPoolSize pool_size = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 5};
     VkDescriptorPoolCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    create_info.maxSets = 1;
+    create_info.maxSets = 2;
     create_info.poolSizeCount = 1;
     create_info.pPoolSizes = &pool_size;
 
@@ -1025,8 +1026,17 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       alloc_info.descriptorPool = d->descriptor_pools[i];
-      err =
-          vkAllocateDescriptorSets(device, &alloc_info, &d->descriptor_sets[i]);
+      err = vkAllocateDescriptorSets(device, &alloc_info,
+                                     &d->mesh_descriptor_sets[i]);
+      assert(err == VK_SUCCESS);
+    }
+
+    alloc_info.pSetLayouts = &skybox_layout;
+
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      alloc_info.descriptorPool = d->descriptor_pools[i];
+      err = vkAllocateDescriptorSets(device, &alloc_info,
+                                     &d->skybox_descriptor_sets[i]);
       assert(err == VK_SUCCESS);
     }
   }
@@ -1041,7 +1051,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
         NULL, normal.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorImageInfo roughness_info = {
         NULL, roughness.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkWriteDescriptorSet writes[4] = {
+    VkDescriptorImageInfo skybox_info = {
+        NULL, skybox.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkWriteDescriptorSet writes[5] = {
         {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             NULL,
@@ -1090,16 +1102,31 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
             NULL,
             NULL,
         },
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            &skybox_info,
+            NULL,
+            NULL,
+        },
     };
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      VkDescriptorSet set = d->descriptor_sets[i];
+      VkDescriptorSet mesh_set = d->mesh_descriptor_sets[i];
+      VkDescriptorSet skybox_set = d->skybox_descriptor_sets[i];
 
-      writes[0].dstSet = set;
-      writes[1].dstSet = set;
-      writes[2].dstSet = set;
-      writes[3].dstSet = set;
+      writes[0].dstSet = mesh_set;
+      writes[1].dstSet = mesh_set;
+      writes[2].dstSet = mesh_set;
+      writes[3].dstSet = mesh_set;
 
-      vkUpdateDescriptorSets(device, 4, writes, 0, NULL);
+      writes[4].dstSet = skybox_set;
+
+      vkUpdateDescriptorSets(device, 5, writes, 0, NULL);
     }
   }
 
@@ -1118,7 +1145,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   return true;
 }
 
-static void demo_render_frame(demo *d, const float4x4 *vp) {
+static void demo_render_frame(demo *d, const float4x4 *vp,
+                              const float4x4 *sky_vp) {
   VkResult err = VK_SUCCESS;
 
   VkDevice device = d->device;
@@ -1402,8 +1430,51 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
                           d->fractal_pipeline);
         vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
 
+        float4x4 mvp = d->push_constants.mvp;
+        // Draw Skybox Cube
+        {
+          // Another hack to fiddle with the matrix we send to the shader for
+          // the skybox
+          d->push_constants.mvp = *sky_vp;
+          vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+                             VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                             sizeof(PushConstants),
+                             (const void *)&d->push_constants);
+
+          uint32_t idx_count = d->cube_gpu.idx_count;
+          uint32_t vert_count = d->cube_gpu.vtx_count;
+
+          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            d->skybox_pipeline);
+
+          vkCmdBindDescriptorSets(
+              graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+              d->skybox_pipe_layout, 0, 1,
+              &d->skybox_descriptor_sets[frame_idx], 0, NULL);
+
+          VkBuffer b = d->cube_gpu.gpu.buffer;
+
+          size_t idx_size =
+              idx_count * sizeof(uint16_t) >> d->cube_gpu.idx_type;
+          size_t pos_size = sizeof(float3) * vert_count;
+          size_t colors_size = sizeof(float3) * vert_count;
+
+          VkBuffer buffers[1] = {b};
+          VkDeviceSize offsets[1] = {idx_size};
+
+          vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+          vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
+          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+        }
+
         // Draw Cube
         {
+          d->push_constants.mvp = mvp;
+          vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+                             VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                             sizeof(PushConstants),
+                             (const void *)&d->push_constants);
+
           uint32_t idx_count = d->cube_gpu.idx_count;
           uint32_t vert_count = d->cube_gpu.vtx_count;
 
@@ -1445,7 +1516,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
           vkCmdBindDescriptorSets(graphics_buffer,
                                   VK_PIPELINE_BIND_POINT_GRAPHICS,
                                   d->material_pipe_layout, 0, 1,
-                                  &d->descriptor_sets[frame_idx], 0, NULL);
+                                  &d->mesh_descriptor_sets[frame_idx], 0, NULL);
 
           VkBuffer buffer = d->plane_gpu.gpu.buffer;
           VkDeviceSize offset = d->plane_gpu.idx_size;
@@ -1453,29 +1524,6 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
           vkCmdBindIndexBuffer(graphics_buffer, buffer, 0,
                                VK_INDEX_TYPE_UINT16);
           vkCmdBindVertexBuffers(graphics_buffer, 0, 1, &buffer, &offset);
-          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
-        }
-
-        // Draw Skybox Cube
-        {
-          uint32_t idx_count = d->cube_gpu.idx_count;
-          uint32_t vert_count = d->cube_gpu.vtx_count;
-
-          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            d->skybox_pipeline);
-
-          VkBuffer b = d->cube_gpu.gpu.buffer;
-
-          size_t idx_size =
-              idx_count * sizeof(uint16_t) >> d->cube_gpu.idx_type;
-          size_t pos_size = sizeof(float3) * vert_count;
-          size_t colors_size = sizeof(float3) * vert_count;
-
-          VkBuffer buffers[1] = {b};
-          VkDeviceSize offsets[1] = {idx_size};
-
-          vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
-          vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
           vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
         }
 
@@ -1787,8 +1835,21 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     cube_transform.rotation[1] += 1.0f * delta_time_seconds;
     transform_to_matrix(&cube_obj_mat, &cube_transform);
 
+    float4x4 view = {0};
+    camera_view(&main_cam, &view);
+
+    float4x4 sky_view = {0};
+    camera_sky_view(&main_cam, &sky_view);
+
+    float4x4 proj = {0};
+    camera_projection(&main_cam, &proj);
+
     float4x4 vp = {0};
-    camera_view_projection(&main_cam, &vp);
+    mulmf44(&proj, &view, &vp);
+
+    float4x4 sky_vp = {0};
+    mulmf44(&proj, &sky_view, &sky_vp);
+
     mulmf44(&vp, &cube_obj_mat, &cube_mvp);
 
     // Pass time to shader
@@ -1800,7 +1861,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     d.push_constants.m = cube_obj_mat;
     d.push_constants.view_pos = main_cam.transform.position;
 
-    demo_render_frame(&d, &vp);
+    demo_render_frame(&d, &vp, &sky_vp);
   }
 
   SDL_DestroyWindow(window);
