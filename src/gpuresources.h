@@ -45,6 +45,7 @@ typedef struct gputexture {
   uint32_t width;
   uint32_t height;
   uint32_t mip_levels;
+  uint32_t layer_count;
   uint32_t format;
 } gputexture;
 
@@ -66,4 +67,7 @@ void destroy_gpuimage(VmaAllocator allocator, const gpuimage *image);
 
 int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
                      VmaPool up_pool, VmaPool tex_pool, gputexture *t);
+int32_t load_skybox(VkDevice device, VmaAllocator alloc,
+                    const char *folder_path, VmaPool up_pool, VmaPool tex_pool,
+                    gputexture *t);
 void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t);

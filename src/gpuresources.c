@@ -95,30 +95,31 @@ void destroy_gpuimage(VmaAllocator allocator, const gpuimage *image) {
   vmaDestroyImage(allocator, image->image, image->alloc);
 }
 
+SDL_Surface *load_and_transform_image(const char *filename) {
+  SDL_Surface *img = IMG_Load(filename);
+  assert(img);
+
+  SDL_PixelFormat *opt_fmt = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA32);
+
+  SDL_Surface *opt_img = SDL_ConvertSurface(img, opt_fmt, 0);
+  SDL_FreeSurface(img);
+
+  return opt_img;
+}
+
 int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
                      VmaPool up_pool, VmaPool tex_pool, gputexture *t) {
   assert(filename);
   assert(t);
 
-  SDL_Surface *opt_img = NULL;
-  {
-    SDL_Surface *img = IMG_Load(filename);
-    assert(img);
-
-    SDL_PixelFormat *opt_fmt = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA32);
-
-    opt_img = SDL_ConvertSurface(img, opt_fmt, 0);
-    SDL_FreeSurface(img);
-    SDL_FreeFormat(opt_fmt);
-  }
-  assert(opt_img);
+  SDL_Surface *img = load_and_transform_image(filename);
 
   VkResult err = VK_SUCCESS;
 
-  uint32_t img_width = opt_img->w;
-  uint32_t img_height = opt_img->h;
+  uint32_t img_width = img->w;
+  uint32_t img_height = img->h;
 
-  size_t host_buffer_size = opt_img->pitch * img_height;
+  size_t host_buffer_size = img->pitch * img_height;
 
   gpubuffer host_buffer = {0};
   {
@@ -170,7 +171,7 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     uint8_t *data = NULL;
     vmaMapMemory(alloc, host_buffer.alloc, (void **)&data);
 
-    memcpy_s(data, host_buffer_size, opt_img->pixels, host_buffer_size);
+    memcpy_s(data, host_buffer_size, img->pixels, host_buffer_size);
 
     vmaUnmapMemory(alloc, host_buffer.alloc);
   }
@@ -192,12 +193,145 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
   t->host = host_buffer;
   t->device = device_image;
   t->format = VK_FORMAT_R8G8B8A8_SRGB;
-  t->width = opt_img->w;
-  t->height = opt_img->h;
+  t->width = img_width;
+  t->height = img_height;
   t->mip_levels = mip_levels;
+  t->layer_count = 1;
   t->view = view;
 
-  SDL_FreeSurface(opt_img);
+  SDL_FreeSurface(img);
+
+  return err;
+}
+
+int32_t load_skybox(VkDevice device, VmaAllocator alloc,
+                    const char *folder_path, VmaPool up_pool, VmaPool tex_pool,
+                    gputexture *t) {
+  assert(folder_path);
+  assert(t);
+
+  const uint32_t skybox_side_count = 6;
+  const char *file_names[6] = {"back", "bottom", "front",
+                               "left", "right",  "top"};
+
+  // TODO: Use some sort of arena allocator
+
+  // Load all images and count up how much space we need for them
+  SDL_Surface *skybox_imgs[6] = {0};
+  int32_t img_width = 0;
+  int32_t img_height = 0;
+  size_t host_buffer_size = 0;
+  {
+    const size_t max_file_name_len = 512;
+    char *file_path = malloc(max_file_name_len);
+    assert(file_path);
+
+    for (uint32_t i = 0; i < skybox_side_count; ++i) {
+      SDL_snprintf(file_path, max_file_name_len, "%s/%s.png", folder_path,
+                   file_names[i]);
+
+      SDL_Surface *img = load_and_transform_image(file_path);
+      assert(img);
+
+      host_buffer_size += (img->pitch * img->h);
+
+      // Every face of the skybox needs a texture of the same size
+      assert(img_width == 0 || img_width == img->w);
+      assert(img_height == 0 || img_height == img->h);
+
+      img_width = img->w;
+      img_height = img->h;
+      skybox_imgs[i] = img;
+    }
+    free(file_path);
+  }
+
+  VkResult err = VK_SUCCESS;
+
+  // Allocate host buffer for image data
+  gpubuffer host_buffer = {0};
+  {
+    VkBufferCreateInfo buffer_create_info = {0};
+    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_create_info.size = host_buffer_size;
+    buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo alloc_create_info = {0};
+    alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    alloc_create_info.pool = up_pool;
+    VmaAllocationInfo alloc_info = {0};
+    err = vmaCreateBuffer(alloc, &buffer_create_info, &alloc_create_info,
+                          &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Allocate device image
+  gpuimage device_image = {0};
+  {
+    VkImageUsageFlags usage =
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    VkImageCreateInfo img_info = {0};
+    img_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    img_info.imageType = VK_IMAGE_TYPE_2D;
+    img_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    img_info.extent = (VkExtent3D){img_width, img_height, 1};
+    img_info.mipLevels = 1;
+    img_info.arrayLayers = skybox_side_count;
+    img_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    img_info.usage = usage;
+    VmaAllocationCreateInfo alloc_info = {0};
+    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_info.pool = tex_pool;
+    err = create_gpuimage(alloc, &img_info, &alloc_info, &device_image);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Image View
+  VkImageView view = VK_NULL_HANDLE;
+  {
+    VkImageViewCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    create_info.image = device_image.image;
+    create_info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    create_info.subresourceRange = (VkImageSubresourceRange){
+        VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, skybox_side_count};
+    err = vkCreateImageView(device, &create_info, NULL, &view);
+    assert(err == VK_SUCCESS);
+  };
+
+  // Copy data to host buffer
+  {
+    uint8_t *data = NULL;
+    vmaMapMemory(alloc, host_buffer.alloc, (void **)&data);
+
+    uint32_t offset = 0;
+    uint32_t img_size = 0;
+    for (uint32_t i = 0; i < skybox_side_count; ++i) {
+      SDL_Surface *img = skybox_imgs[i];
+      img_size = (img->pitch * img->h);
+
+      memcpy_s(data + offset, img_size, img->pixels, img_size);
+      offset += img_size;
+    }
+    vmaUnmapMemory(alloc, host_buffer.alloc);
+  }
+
+  t->host = host_buffer;
+  t->device = device_image;
+  t->format = VK_FORMAT_R8G8B8A8_SRGB;
+  t->width = img_width;
+  t->height = img_height;
+  t->mip_levels = 1;
+  t->layer_count = skybox_side_count;
+  t->view = view;
+
+  // Free up sdl surfaces
+  for (uint32_t i = 0; i < skybox_side_count; ++i) {
+    SDL_FreeSurface(skybox_imgs[i]);
+  }
 
   return err;
 }

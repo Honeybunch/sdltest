@@ -103,6 +103,7 @@ typedef struct demo {
   gputexture displacement;
   gputexture normal;
   gputexture roughness;
+  gputexture skybox;
 
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
   VkDescriptorSet descriptor_sets[FRAME_LATENCY];
@@ -842,6 +843,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   load_texture(device, allocator, "./assets/textures/shfsaida_8K_Roughness.png",
                upload_mem_pool, texture_mem_pool, &roughness);
 
+  // Load skybox
+  gputexture skybox = {0};
+  load_skybox(device, allocator, "./assets/skybox", upload_mem_pool,
+              texture_mem_pool, &skybox);
+
   // Apply to output var
   d->instance = instance;
   d->gpu = gpu;
@@ -883,6 +889,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->displacement = displacement;
   d->normal = normal;
   d->roughness = roughness;
+  d->skybox = skybox;
   d->frame_idx = 0;
 
   demo_upload_mesh(d, &d->cube_gpu);
@@ -891,6 +898,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   demo_upload_texture(d, &d->displacement);
   demo_upload_texture(d, &d->normal);
   demo_upload_texture(d, &d->roughness);
+  demo_upload_texture(d, &d->skybox);
 
   // Create Semaphores
   {
@@ -1192,7 +1200,6 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
           barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
           barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
           barrier.subresourceRange.baseArrayLayer = 0;
-          barrier.subresourceRange.layerCount = 1;
 
           for (uint32_t i = 0; i < d->texture_upload_count; ++i) {
             const gputexture *tex = &d->texture_upload_queue[i];
@@ -1201,16 +1208,19 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
             uint32_t img_width = tex->width;
             uint32_t img_height = tex->height;
             uint32_t mip_levels = tex->mip_levels;
+            uint32_t layer_count = tex->layer_count;
 
             // Transition all mips to transfer dst
             {
               barrier.subresourceRange.baseMipLevel = 0;
               barrier.subresourceRange.levelCount = mip_levels;
+              barrier.subresourceRange.layerCount = layer_count;
               barrier.srcAccessMask = 0;
               barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
               barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
               barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
               barrier.image = image;
+
               vkCmdPipelineBarrier(upload_buffer,
                                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                                    VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL,
@@ -1223,8 +1233,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
 
             region.bufferRowLength = img_width;
             region.bufferImageHeight = img_height;
-            region.imageSubresource =
-                (VkImageSubresourceLayers){VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+            region.imageSubresource = (VkImageSubresourceLayers){
+                VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, layer_count};
             region.imageExtent = (VkExtent3D){img_width, img_height, 1};
             vkCmdCopyBufferToImage(upload_buffer, tex->host.buffer, image,
                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
@@ -1257,7 +1267,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
                 blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
                 blit.srcSubresource.mipLevel = i - 1;
                 blit.srcSubresource.baseArrayLayer = 0;
-                blit.srcSubresource.layerCount = 1;
+                blit.srcSubresource.layerCount = layer_count;
                 blit.dstOffsets[0] = (VkOffset3D){0, 0, 0};
                 blit.dstOffsets[1] =
                     (VkOffset3D){mip_width > 1 ? mip_width / 2 : 1,
@@ -1265,7 +1275,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp) {
                 blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
                 blit.dstSubresource.mipLevel = i;
                 blit.dstSubresource.baseArrayLayer = 0;
-                blit.dstSubresource.layerCount = 1;
+                blit.dstSubresource.layerCount = layer_count;
 
                 vkCmdBlitImage(upload_buffer, image,
                                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, image,
@@ -1599,6 +1609,7 @@ static void demo_destroy(demo *d) {
     vkDestroyCommandPool(device, d->command_pools[i], NULL);
   }
 
+  destroy_texture(d->device, d->allocator, &d->skybox);
   destroy_texture(d->device, d->allocator, &d->roughness);
   destroy_texture(d->device, d->allocator, &d->normal);
   destroy_texture(d->device, d->allocator, &d->displacement);

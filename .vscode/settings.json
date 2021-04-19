@@ -27,6 +27,7 @@
         "xmemory": "c",
         "cube.h": "c",
         "cpuresources.h": "c",
-        "gpuresources.h": "c"
+        "gpuresources.h": "c",
+        "filesystem": "c"
     }
 }
