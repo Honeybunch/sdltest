@@ -51,6 +51,8 @@ find_package(sdl2-image CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 find_program(DXC dxc CONFIG REQUIRED)
+find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
+find_package(imgui CONFIG REQUIRED)
 
 # Compile Shaders
 set(shader_includes 
@@ -82,6 +84,8 @@ add_custom_target(shaders ALL DEPENDS ${shader_headers})
 
 # Setup Main Executable
 set(source "${CMAKE_CURRENT_LIST_DIR}/src/camera.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/cgltf.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/cimgui.cpp"
            "${CMAKE_CURRENT_LIST_DIR}/src/cube.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/gpuresources.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/main.c"
@@ -104,13 +108,14 @@ else()
     get_filename_component(CMAKE_CFG_INTDIR_ABS "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}" ABSOLUTE)
 endif()
 #set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
-target_include_directories(sdltest PRIVATE "src/" "${CMAKE_CFG_INTDIR_ABS}/shaders")
+target_include_directories(sdltest PRIVATE "src/" "${CMAKE_CFG_INTDIR_ABS}/shaders" "${CGLTF_INCLUDE_DIRS}")
 target_link_libraries(sdltest PRIVATE
-  SDL2::SDL2main 
+  SDL2::SDL2main
   SDL2::SDL2_image
-  volk::volk 
-  volk::volk_headers 
-  unofficial::vulkan-memory-allocator::vulkan-memory-allocator)
+  volk::volk
+  volk::volk_headers
+  unofficial::vulkan-memory-allocator::vulkan-memory-allocator
+  imgui::imgui)
 if(STATIC)
   target_link_libraries(sdltest PRIVATE SDL2::SDL2-static)
 else()
