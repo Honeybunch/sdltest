@@ -12,6 +12,7 @@
 #include "cpuresources.h"
 #include "cube.h"
 #include "gpuresources.h"
+#include "pattern.h"
 #include "pipelines.h"
 #include "plane.h"
 #include "shadercommon.h"
@@ -848,6 +849,14 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   gputexture skybox = {0};
   load_skybox(device, allocator, "./assets/skybox", upload_mem_pool,
               texture_mem_pool, &skybox);
+
+  // Create procedural texture
+  cputexture *cpu_pattern = NULL;
+  alloc_pattern(1024, 1024, &cpu_pattern);
+  create_pattern(1024, 1024, cpu_pattern);
+  gputexture pattern = {0};
+  // create_texture(device, allocator, )
+  free(cpu_pattern);
 
   // Apply to output var
   d->instance = instance;

@@ -39,3 +39,17 @@ typedef struct cpumesh_buffers {
   const uint16_t *indices;                // index buffer
   const uint8_t *vertices;                // buffer containing all vertex data.
 } cpumesh_buffers;
+
+typedef struct texture_subresource {
+  uint64_t width;
+  uint64_t height;
+  uint64_t depth;
+  const uint8_t *data;
+} texture_subresource;
+
+typedef struct cputexture {
+  uint32_t subresource_count;
+  const texture_subresource *subresources;
+  uint64_t data_size;
+  const uint8_t *data;
+} cputexture;
