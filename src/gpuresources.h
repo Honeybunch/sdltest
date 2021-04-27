@@ -16,6 +16,7 @@ typedef struct VkImageCreateInfo VkImageCreateInfo;
 typedef struct VmaAllocationCreateInfo VmaAllocationCreateInfo;
 
 typedef struct cpumesh cpumesh;
+typedef struct cputexture cputexture;
 
 typedef struct gpubuffer {
   VkBuffer buffer;
@@ -71,6 +72,6 @@ int32_t load_skybox(VkDevice device, VmaAllocator alloc,
                     const char *folder_path, VmaPool up_pool, VmaPool tex_pool,
                     gputexture *t);
 int32_t create_texture(VkDevice device, VmaAllocator alloc,
-                       uint32_t* , VmaPool up_pool, VmaPool tex_pool,
+                       const cputexture *tex, VmaPool up_pool, VmaPool tex_pool,
                        gputexture *t);
 void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t);

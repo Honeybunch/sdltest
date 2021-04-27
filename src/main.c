@@ -105,6 +105,7 @@ typedef struct demo {
   gputexture normal;
   gputexture roughness;
   gputexture skybox;
+  gputexture pattern;
 
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
   VkDescriptorSet skybox_descriptor_sets[FRAME_LATENCY];
@@ -851,12 +852,17 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
               texture_mem_pool, &skybox);
 
   // Create procedural texture
-  cputexture *cpu_pattern = NULL;
-  alloc_pattern(1024, 1024, &cpu_pattern);
-  create_pattern(1024, 1024, cpu_pattern);
   gputexture pattern = {0};
-  // create_texture(device, allocator, )
-  free(cpu_pattern);
+  {
+    cputexture *cpu_pattern = NULL;
+    alloc_pattern(1024, 1024, &cpu_pattern);
+    create_pattern(1024, 1024, cpu_pattern);
+
+    create_texture(device, allocator, cpu_pattern, upload_mem_pool,
+                   texture_mem_pool, &pattern);
+
+    free(cpu_pattern);
+  }
 
   // Apply to output var
   d->instance = instance;
@@ -900,6 +906,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->normal = normal;
   d->roughness = roughness;
   d->skybox = skybox;
+  d->pattern = pattern;
   d->frame_idx = 0;
 
   demo_upload_mesh(d, &d->cube_gpu);
@@ -909,6 +916,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   demo_upload_texture(d, &d->normal);
   demo_upload_texture(d, &d->roughness);
   demo_upload_texture(d, &d->skybox);
+  demo_upload_texture(d, &d->pattern);
 
   // Create Semaphores
   {
@@ -1626,6 +1634,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
 static void demo_destroy(demo *d) {
   VkDevice device = d->device;
+  VmaAllocator allocator = d->allocator;
 
   vkDeviceWaitIdle(device);
 
@@ -1666,16 +1675,17 @@ static void demo_destroy(demo *d) {
     vkDestroyCommandPool(device, d->command_pools[i], NULL);
   }
 
-  destroy_texture(d->device, d->allocator, &d->skybox);
-  destroy_texture(d->device, d->allocator, &d->roughness);
-  destroy_texture(d->device, d->allocator, &d->normal);
-  destroy_texture(d->device, d->allocator, &d->displacement);
-  destroy_texture(d->device, d->allocator, &d->albedo);
-  destroy_gpumesh(d->device, d->allocator, &d->plane_gpu);
-  destroy_gpumesh(d->device, d->allocator, &d->cube_gpu);
+  destroy_texture(device, allocator, &d->pattern);
+  destroy_texture(device, allocator, &d->skybox);
+  destroy_texture(device, allocator, &d->roughness);
+  destroy_texture(device, allocator, &d->normal);
+  destroy_texture(device, allocator, &d->displacement);
+  destroy_texture(device, allocator, &d->albedo);
+  destroy_gpumesh(device, allocator, &d->plane_gpu);
+  destroy_gpumesh(device, allocator, &d->cube_gpu);
 
-  vmaDestroyPool(d->allocator, d->upload_mem_pool);
-  vmaDestroyPool(d->allocator, d->texture_mem_pool);
+  vmaDestroyPool(allocator, d->upload_mem_pool);
+  vmaDestroyPool(allocator, d->texture_mem_pool);
 
   free(d->queue_props);
   vkDestroySampler(device, d->sampler, NULL);
@@ -1692,8 +1702,8 @@ static void demo_destroy(demo *d) {
   vkDestroyRenderPass(device, d->render_pass, NULL);
   vkDestroySwapchainKHR(device, d->swapchain, NULL);
   vkDestroySurfaceKHR(d->instance, d->surface, NULL);
-  vmaDestroyAllocator(d->allocator);
-  vkDestroyDevice(d->device, NULL);
+  vmaDestroyAllocator(allocator);
+  vkDestroyDevice(device, NULL);
   *d = (demo){0};
 }
 

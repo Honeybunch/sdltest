@@ -337,6 +337,97 @@ int32_t load_skybox(VkDevice device, VmaAllocator alloc,
   return err;
 }
 
+int32_t create_texture(VkDevice device, VmaAllocator alloc,
+                       const cputexture *tex, VmaPool up_pool, VmaPool tex_pool,
+                       gputexture *t) {
+  VkResult err = VK_SUCCESS;
+
+  VkDeviceSize host_buffer_size = tex->data_size;
+  uint32_t layer_count = tex->layer_count;
+  uint32_t mip_count = tex->mip_count;
+  const texture_mip *tex_mip = &tex->layers[0].mips[0];
+  uint32_t img_width = tex_mip->width;
+  uint32_t img_height = tex_mip->height;
+
+  // Allocate host buffer for image data
+  gpubuffer host_buffer = {0};
+  {
+    VkBufferCreateInfo buffer_create_info = {0};
+    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_create_info.size = host_buffer_size;
+    buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo alloc_create_info = {0};
+    alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    alloc_create_info.pool = up_pool;
+    VmaAllocationInfo alloc_info = {0};
+    err = vmaCreateBuffer(alloc, &buffer_create_info, &alloc_create_info,
+                          &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
+    assert(err == VK_SUCCESS);
+  }
+
+  uint32_t desired_mip_levels = floor(log2(max(img_width, img_height))) + 1;
+
+  // Allocate device image
+  gpuimage device_image = {0};
+  {
+    VkImageUsageFlags usage =
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    VkImageCreateInfo img_info = {0};
+    img_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    img_info.imageType = VK_IMAGE_TYPE_2D;
+    img_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    img_info.extent = (VkExtent3D){img_width, img_height, 1};
+    img_info.mipLevels = desired_mip_levels;
+    img_info.arrayLayers = layer_count;
+    img_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    img_info.usage = usage;
+    VmaAllocationCreateInfo alloc_info = {0};
+    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_info.pool = tex_pool;
+    err = create_gpuimage(alloc, &img_info, &alloc_info, &device_image);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Image View
+  VkImageView view = VK_NULL_HANDLE;
+  {
+    VkImageViewCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    create_info.image = device_image.image;
+    create_info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
+    create_info.subresourceRange = (VkImageSubresourceRange){
+        VK_IMAGE_ASPECT_COLOR_BIT, 0, desired_mip_levels, 0, layer_count};
+    err = vkCreateImageView(device, &create_info, NULL, &view);
+    assert(err == VK_SUCCESS);
+  };
+
+  // Copy data to host buffer
+  {
+    uint8_t *data = NULL;
+    vmaMapMemory(alloc, host_buffer.alloc, (void **)&data);
+
+    uint64_t data_size = tex->data_size;
+    memcpy_s(data, data_size, tex->data, data_size);
+
+    vmaUnmapMemory(alloc, host_buffer.alloc);
+  }
+
+  t->host = host_buffer;
+  t->device = device_image;
+  t->format = VK_FORMAT_R8G8B8A8_SRGB;
+  t->width = img_width;
+  t->height = img_height;
+  t->mip_levels = desired_mip_levels;
+  t->layer_count = tex->layer_count;
+  t->view = view;
+
+  return err;
+}
+
 void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t) {
   destroy_gpubuffer(alloc, &t->host);
   destroy_gpuimage(alloc, &t->device);
