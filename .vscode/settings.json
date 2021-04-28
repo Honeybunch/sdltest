@@ -29,6 +29,8 @@
         "cpuresources.h": "c",
         "gpuresources.h": "c",
         "filesystem": "c",
-        "set": "c"
+        "set": "c",
+        "cgltf.h": "c",
+        "codecvt": "c"
     }
 }

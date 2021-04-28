@@ -3,6 +3,7 @@
 #include "cpuresources.h"
 
 #include <SDL2/SDL_image.h>
+#include <cgltf.h>
 #include <volk.h>
 
 #include <vk_mem_alloc.h>
@@ -41,10 +42,10 @@ int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
                        const cpumesh *src_mesh, gpumesh *dst_mesh) {
   VkResult err = VK_SUCCESS;
 
-  size_t idx_size = src_mesh->index_size;
+  size_t index_size = src_mesh->index_size;
   size_t geom_size = src_mesh->geom_size;
 
-  size_t size = idx_size + geom_size;
+  size_t size = index_size + geom_size;
 
   gpubuffer host_buffer = {0};
   err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -59,11 +60,96 @@ int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
                          &device_buffer);
   assert(err == VK_SUCCESS);
 
+  // Actually copy cube data to cpu local buffer
+  {
+    uint8_t *data = NULL;
+    vmaMapMemory(allocator, host_buffer.alloc, (void **)&data);
+
+    // Copy Data
+    memcpy(data, src_mesh->indices, size);
+
+    vmaUnmapMemory(allocator, host_buffer.alloc);
+  }
+
   *dst_mesh = (gpumesh){src_mesh->index_count, src_mesh->vertex_count,
                         VK_INDEX_TYPE_UINT16,  size,
                         src_mesh->index_size,  src_mesh->geom_size,
                         host_buffer,           device_buffer};
 
+  return err;
+}
+
+int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator allocator,
+                             const cgltf_mesh *src_mesh, gpumesh *dst_mesh) {
+  assert(src_mesh->primitives_count == 1);
+  cgltf_primitive *prim = &src_mesh->primitives[0];
+
+  cgltf_accessor *indices = prim->indices;
+
+  uint32_t index_count = indices->count;
+  uint32_t vertex_count = prim->attributes[0].data->count;
+
+  size_t index_size = indices->buffer_view->size;
+  size_t geom_size = 0;
+  for (uint32_t i = 0; i < prim->attributes_count; ++i) {
+    cgltf_accessor *attr = prim->attributes[i].data;
+    geom_size += attr->buffer_view->size;
+  }
+
+  size_t size = index_size + geom_size;
+
+  gpubuffer host_buffer = {0};
+  VkResult err =
+      create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
+                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
+  assert(err == VK_SUCCESS);
+
+  gpubuffer device_buffer = {0};
+  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
+                         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+                             VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                         &device_buffer);
+  assert(err == VK_SUCCESS);
+
+  // Actually copy cube data to cpu local buffer
+  {
+    uint8_t *data = NULL;
+    vmaMapMemory(allocator, host_buffer.alloc, (void **)&data);
+
+    size_t offset = 0;
+    // Copy Index Data
+    {
+      cgltf_buffer_view *view = indices->buffer_view;
+      size_t index_offset = view->offset;
+      size_t index_size = view->size;
+
+      void *index_data = ((uint8_t *)view->buffer->data) + index_offset;
+
+      memcpy(data, index_data, index_size);
+      offset += index_size;
+    }
+
+    for (uint32_t i = 0; i < prim->attributes_count; ++i) {
+      cgltf_attribute *attr = &prim->attributes[i];
+      cgltf_accessor *accessor = attr->data;
+      cgltf_buffer_view *view = accessor->buffer_view;
+
+      size_t attr_offset = view->offset;
+      size_t attr_size = view->size;
+
+      void *attr_data = ((uint8_t *)view->buffer->data) + attr_offset;
+
+      memcpy(data + offset, attr_data, attr_size);
+      offset += attr_size;
+    }
+
+    vmaUnmapMemory(allocator, host_buffer.alloc);
+  }
+
+  *dst_mesh =
+      (gpumesh){index_count, vertex_count, VK_INDEX_TYPE_UINT16, size,
+                index_size,  geom_size,    host_buffer,          device_buffer};
   return err;
 }
 

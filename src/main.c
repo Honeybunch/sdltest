@@ -15,6 +15,7 @@
 #include "pattern.h"
 #include "pipelines.h"
 #include "plane.h"
+#include "scene.h"
 #include "shadercommon.h"
 #include "simd.h"
 
@@ -783,19 +784,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     err = create_gpumesh(device, allocator, cube_cpu, &cube);
     assert(err == VK_SUCCESS);
 
-    // Actually copy cube data to cpu local buffer
-    {
-      uint8_t *data = NULL;
-      vmaMapMemory(allocator, cube.host.alloc, (void **)&data);
-
-      // Copy Data
-      size_t size = cube_cpu->index_size + cube_cpu->geom_size;
-      memcpy(data, cube_cpu->indices, size);
-
-      vmaUnmapMemory(allocator, cube.host.alloc);
-      data = NULL;
-    }
-
     free(cube_cpu);
   }
 
@@ -811,19 +799,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
     err = create_gpumesh(device, allocator, plane_cpu, &plane);
     assert(err == VK_SUCCESS);
-
-    // Actually copy plane data to cpu local buffer
-    {
-      uint8_t *data = NULL;
-      vmaMapMemory(allocator, plane.host.alloc, (void **)&data);
-
-      // Copy Data
-      size_t size = plane_cpu->index_size + plane_cpu->geom_size;
-      memcpy(data, plane_cpu->indices, size);
-
-      vmaUnmapMemory(allocator, plane.host.alloc);
-      data = NULL;
-    }
 
     free(plane_cpu);
   }
@@ -863,6 +838,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
     free(cpu_pattern);
   }
+
+  // Load scene
+  scene *duck = NULL;
+  load_scene(device, allocator, "./assets/scenes/duck.glb", &duck);
 
   // Apply to output var
   d->instance = instance;
@@ -911,6 +890,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
   demo_upload_mesh(d, &d->cube_gpu);
   demo_upload_mesh(d, &d->plane_gpu);
+  demo_upload_mesh(d, &duck->meshes[0]);
   demo_upload_texture(d, &d->albedo);
   demo_upload_texture(d, &d->displacement);
   demo_upload_texture(d, &d->normal);

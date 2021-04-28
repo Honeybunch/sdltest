@@ -16,6 +16,7 @@ typedef struct VkImageCreateInfo VkImageCreateInfo;
 typedef struct VmaAllocationCreateInfo VmaAllocationCreateInfo;
 
 typedef struct cpumesh cpumesh;
+typedef struct cgltf_mesh cgltf_mesh;
 typedef struct cputexture cputexture;
 
 typedef struct gpubuffer {
@@ -56,6 +57,8 @@ void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer);
 
 int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
                        const cpumesh *src_mesh, gpumesh *dst_mesh);
+int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator allocator,
+                             const cgltf_mesh *src_mesh, gpumesh *dst_mesh);
 void destroy_gpumesh(VkDevice device, VmaAllocator allocator,
                      const gpumesh *mesh);
 
