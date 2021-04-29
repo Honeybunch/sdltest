@@ -1288,10 +1288,10 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       VkDeviceSize offset = mesh->idx_size;
 
       vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
-      offset += vtx_count * sizeof(float3);
+      offset += vtx_count * sizeof(float) * 3;
 
       vkCmdBindVertexBuffers(cmd, 1, 1, &buffer, &offset);
-      offset += vtx_count * sizeof(float3);
+      offset += vtx_count * sizeof(float) * 3;
 
       vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
 

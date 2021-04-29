@@ -48,28 +48,40 @@ static scene *alloc_scene(const scene_alloc_info *info) {
   size_t offset = sizeof(scene);
   s->transforms = (scene_transform *)((uint8_t *)s + offset);
   offset += transform_size;
+  assert(offset <= scene_size_bytes);
+
   s->static_meshes = (scene_static_mesh *)((uint8_t *)s + offset);
   offset += static_mesh_size;
+  assert(offset <= scene_size_bytes);
+
   s->meshes = (gpumesh *)((uint8_t *)s + offset);
   offset += mesh_size;
+  assert(offset <= scene_size_bytes);
+
   s->textures = (gputexture *)((uint8_t *)s + offset);
   offset += texture_size;
+  assert(offset <= scene_size_bytes);
+
   s->components = (uint64_t *)((uint8_t *)s + offset);
   offset += components_size;
+  assert(offset <= scene_size_bytes);
 
   for (uint32_t i = 0; i < entity_count; ++i) {
     scene_transform *transform = &s->transforms[i];
     uint32_t child_count = child_counts[i];
-    transform->child_count = child_count;
-    transform->children = (scene_transform **)((uint8_t *)s + offset);
-    offset += child_count * sizeof(uint32_t);
+    if (child_count > 0) {
+      transform->child_count = child_count;
+      transform->children = (scene_transform **)((uint8_t *)s + offset);
+      offset += child_count * sizeof(uint32_t);
+      assert(offset <= scene_size_bytes);
+    }
   }
 
   return s;
 }
 
-void parse_node(scene *s, cgltf_data *data, cgltf_node *node,
-                uint32_t *entity_id) {
+uint32_t parse_node(scene *s, cgltf_data *data, cgltf_node *node,
+                    uint32_t *entity_id) {
   uint32_t idx = *entity_id;
   (*entity_id)++;
 
@@ -85,11 +97,13 @@ void parse_node(scene *s, cgltf_data *data, cgltf_node *node,
     transform->t.rotation = (float3){rot[0], rot[1], rot[2]};
     transform->t.scale = (float3){scale[0], scale[1], scale[2]};
 
-    transform->child_count = node->children_count;
+    assert(transform->child_count == node->children_count);
     for (uint32_t i = 0; i < node->children_count; ++i) {
       cgltf_node *child = node->children[i];
-      parse_node(s, data, child, entity_id);
-      transform->children[i] = &s->transforms[idx + 1];
+      uint32_t child_idx = parse_node(s, data, child, entity_id);
+
+      // For some reason this causes a heap corruption
+      // transform->children[i] = &s->transforms[child_idx];
     }
   }
 
@@ -105,6 +119,7 @@ void parse_node(scene *s, cgltf_data *data, cgltf_node *node,
   }
 
   s->components[idx] = components;
+  return idx;
 }
 
 int32_t load_scene(VkDevice device, VmaAllocator alloc, const char *filename,

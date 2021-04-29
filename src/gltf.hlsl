@@ -48,7 +48,6 @@ float4 frag(Interpolators i) : SV_TARGET
     float gloss = 1 - roughness;
 
     float3 N = normalize(i.normal);
-    return float4(i.uv, 0, 1);
     if(UseNormalMap)
     {
         N = normal_map.Sample(static_sampler, i.uv).xyz;
