@@ -125,21 +125,33 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator allocator,
       size_t index_size = view->size;
 
       void *index_data = ((uint8_t *)view->buffer->data) + index_offset;
-
       memcpy(data, index_data, index_size);
       offset += index_size;
     }
 
+    // Reorder attributes
+    uint32_t *attr_order = alloca(sizeof(uint32_t) * prim->attributes_count);
     for (uint32_t i = 0; i < prim->attributes_count; ++i) {
-      cgltf_attribute *attr = &prim->attributes[i];
+      cgltf_attribute_type attr_type = prim->attributes[i].type;
+      if (attr_type == cgltf_attribute_type_position) {
+        attr_order[0] = i;
+      } else if (attr_type == cgltf_attribute_type_normal) {
+        attr_order[1] = i;
+      } else if (attr_type == cgltf_attribute_type_texcoord) {
+        attr_order[2] = i;
+      }
+    }
+
+    for (uint32_t i = 0; i < prim->attributes_count; ++i) {
+      uint32_t attr_idx = attr_order[i];
+      cgltf_attribute *attr = &prim->attributes[attr_idx];
       cgltf_accessor *accessor = attr->data;
       cgltf_buffer_view *view = accessor->buffer_view;
 
-      size_t attr_offset = view->offset;
-      size_t attr_size = view->size;
+      size_t attr_offset = view->offset + accessor->offset;
+      size_t attr_size = accessor->count * accessor->stride;
 
       void *attr_data = ((uint8_t *)view->buffer->data) + attr_offset;
-
       memcpy(data + offset, attr_data, attr_size);
       offset += attr_size;
     }

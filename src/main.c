@@ -76,6 +76,10 @@ typedef struct demo {
   VkPipelineLayout skybox_pipe_layout;
   VkPipeline skybox_pipeline;
 
+  VkDescriptorSetLayout gltf_layout;
+  VkPipelineLayout gltf_pipe_layout;
+  VkPipeline gltf_pipeline;
+
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
   VkFramebuffer swapchain_framebuffers[FRAME_LATENCY];
@@ -113,6 +117,7 @@ typedef struct demo {
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
   VkDescriptorSet skybox_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet mesh_descriptor_sets[FRAME_LATENCY];
+  VkDescriptorSet gltf_descriptor_sets[FRAME_LATENCY];
 
   uint32_t mesh_upload_count;
   gpumesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
@@ -738,6 +743,46 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   VkPipeline skybox_pipeline = VK_NULL_HANDLE;
   err = create_skybox_pipeline(device, pipeline_cache, render_pass, width,
                                height, skybox_pipe_layout, &skybox_pipeline);
+  assert(err == VK_SUCCESS);
+
+  // Create GLTF Descriptor Set Layout
+  VkDescriptorSetLayout gltf_layout = VK_NULL_HANDLE;
+  {
+    VkDescriptorSetLayoutBinding bindings[4] = {
+        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {3, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         &sampler},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = 4;
+    create_info.pBindings = bindings;
+    err = vkCreateDescriptorSetLayout(device, &create_info, NULL, &gltf_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create GLTF Pipeline Layout
+  VkPipelineLayout gltf_pipe_layout = VK_NULL_HANDLE;
+  {
+    VkPipelineLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    create_info.setLayoutCount = 1;
+    create_info.pSetLayouts = &gltf_layout;
+    create_info.pushConstantRangeCount = 1;
+    create_info.pPushConstantRanges = &const_range;
+
+    err = vkCreatePipelineLayout(device, &create_info, NULL, &gltf_pipe_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create GLTF Pipeline
+  VkPipeline gltf_pipeline = VK_NULL_HANDLE;
+  err = create_gltf_pipeline(device, pipeline_cache, render_pass, width, height,
+                             gltf_pipe_layout, &gltf_pipeline);
+  assert(err == VK_SUCCESS);
 
   // Create a pool for host memory uploads
   VmaPool upload_mem_pool = VK_NULL_HANDLE;
@@ -888,6 +933,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->skybox_layout = skybox_layout;
   d->skybox_pipe_layout = skybox_pipe_layout;
   d->skybox_pipeline = skybox_pipeline;
+  d->gltf_layout = gltf_layout;
+  d->gltf_pipe_layout = gltf_pipe_layout;
+  d->gltf_pipeline = gltf_pipeline;
   d->upload_mem_pool = upload_mem_pool;
   d->texture_mem_pool = texture_mem_pool;
   d->cube_gpu = cube;
@@ -1013,10 +1061,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
   // Create Descriptor Set Pools
   {
-    VkDescriptorPoolSize pool_size = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 5};
+    VkDescriptorPoolSize pool_size = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 8};
     VkDescriptorPoolCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    create_info.maxSets = 2;
+    create_info.maxSets = 3;
     create_info.poolSizeCount = 1;
     create_info.pPoolSizes = &pool_size;
 
@@ -1042,11 +1090,18 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     }
 
     alloc_info.pSetLayouts = &skybox_layout;
-
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       alloc_info.descriptorPool = d->descriptor_pools[i];
       err = vkAllocateDescriptorSets(device, &alloc_info,
                                      &d->skybox_descriptor_sets[i]);
+      assert(err == VK_SUCCESS);
+    }
+
+    alloc_info.pSetLayouts = &gltf_layout;
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      alloc_info.descriptorPool = d->descriptor_pools[i];
+      err = vkAllocateDescriptorSets(device, &alloc_info,
+                                     &d->gltf_descriptor_sets[i]);
       assert(err == VK_SUCCESS);
     }
   }
@@ -1063,7 +1118,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
         NULL, roughness.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorImageInfo skybox_info = {
         NULL, skybox.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkWriteDescriptorSet writes[5] = {
+    VkWriteDescriptorSet writes[8] = {
         {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             NULL,
@@ -1124,8 +1179,45 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
             NULL,
             NULL,
         },
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            &albedo_info,
+            NULL,
+            NULL,
+        },
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            NULL,
+            0,
+            1,
+            0,
+            1,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            &normal_info,
+            NULL,
+            NULL,
+        },
+        {
+            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            NULL,
+            0,
+            2,
+            0,
+            1,
+            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            &roughness_info,
+            NULL,
+            NULL,
+        },
     };
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      VkDescriptorSet gltf_set = d->gltf_descriptor_sets[i];
       VkDescriptorSet mesh_set = d->mesh_descriptor_sets[i];
       VkDescriptorSet skybox_set = d->skybox_descriptor_sets[i];
 
@@ -1136,7 +1228,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
       writes[4].dstSet = skybox_set;
 
-      vkUpdateDescriptorSets(device, 5, writes, 0, NULL);
+      writes[5].dstSet = gltf_set;
+      writes[6].dstSet = gltf_set;
+      writes[7].dstSet = gltf_set;
+
+      vkUpdateDescriptorSets(device, 8, writes, 0, NULL);
     }
   }
 
@@ -1153,6 +1249,29 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   }
 
   return true;
+}
+
+static void demo_render_scene(scene *s, VkCommandBuffer cmd) {
+
+  for (uint32_t i = 0; i < s->mesh_count; ++i) {
+    const gpumesh *m = &s->meshes[i];
+    uint32_t idx_count = m->idx_count;
+    uint32_t vtx_count = m->vtx_count;
+    VkBuffer buffer = m->gpu.buffer;
+
+    vkCmdBindIndexBuffer(cmd, buffer, 0, VK_INDEX_TYPE_UINT16);
+    VkDeviceSize offset = m->idx_size;
+
+    vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
+    offset += vtx_count * sizeof(float3);
+
+    vkCmdBindVertexBuffers(cmd, 1, 1, &buffer, &offset);
+    offset += vtx_count * sizeof(float3);
+
+    vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
+
+    vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
+  }
 }
 
 static void demo_render_frame(demo *d, const float4x4 *vp,
@@ -1517,9 +1636,6 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                              sizeof(PushConstants),
                              (const void *)&d->push_constants);
 
-          uint32_t idx_count = d->plane_gpu.idx_count;
-          uint32_t vert_count = d->plane_gpu.vtx_count;
-
           vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                             d->uv_mesh_pipeline);
 
@@ -1528,6 +1644,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                                   d->material_pipe_layout, 0, 1,
                                   &d->mesh_descriptor_sets[frame_idx], 0, NULL);
 
+          uint32_t idx_count = d->plane_gpu.idx_count;
           VkBuffer buffer = d->plane_gpu.gpu.buffer;
           VkDeviceSize offset = d->plane_gpu.idx_size;
 
@@ -1535,6 +1652,17 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                                VK_INDEX_TYPE_UINT16);
           vkCmdBindVertexBuffers(graphics_buffer, 0, 1, &buffer, &offset);
           vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+        }
+
+        // Draw Scene
+        {
+          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            d->gltf_pipeline);
+          vkCmdBindDescriptorSets(graphics_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  d->gltf_pipe_layout, 0, 1,
+                                  &d->gltf_descriptor_sets[frame_idx], 0, NULL);
+          demo_render_scene(d->duck, graphics_buffer);
         }
 
         vkCmdEndRenderPass(graphics_buffer);
@@ -1683,11 +1811,14 @@ static void demo_destroy(demo *d) {
 
   free(d->queue_props);
   vkDestroySampler(device, d->sampler, NULL);
+  vkDestroyDescriptorSetLayout(device, d->gltf_layout, NULL);
+  vkDestroyPipelineLayout(device, d->gltf_pipe_layout, NULL);
   vkDestroyDescriptorSetLayout(device, d->skybox_layout, NULL);
   vkDestroyPipelineLayout(device, d->skybox_pipe_layout, NULL);
   vkDestroyDescriptorSetLayout(device, d->material_layout, NULL);
   vkDestroyPipelineLayout(device, d->material_pipe_layout, NULL);
   vkDestroyPipelineLayout(device, d->simple_pipe_layout, NULL);
+  vkDestroyPipeline(device, d->gltf_pipeline, NULL);
   vkDestroyPipeline(device, d->skybox_pipeline, NULL);
   vkDestroyPipeline(device, d->uv_mesh_pipeline, NULL);
   vkDestroyPipeline(device, d->color_mesh_pipeline, NULL);
