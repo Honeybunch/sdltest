@@ -32,6 +32,7 @@
         "set": "c",
         "cgltf.h": "c",
         "codecvt": "c",
-        "uv_mesh_vert.h": "c"
+        "uv_mesh_vert.h": "c",
+        "random": "c"
     }
 }

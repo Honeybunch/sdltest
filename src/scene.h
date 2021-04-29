@@ -19,7 +19,7 @@ typedef struct scene_transform scene_transform;
 typedef struct scene_transform {
   transform t;
   uint32_t child_count;
-  scene_transform *children;
+  scene_transform **children;
 } scene_transform;
 
 typedef struct scene_static_mesh {
@@ -30,6 +30,7 @@ typedef struct scene_static_mesh {
 typedef struct scene {
   uint32_t max_entity_count;
   uint32_t entity_count;
+  uint64_t *components;
   scene_transform *transforms;
   scene_static_mesh *static_meshes;
 

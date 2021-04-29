@@ -1253,6 +1253,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
 static void demo_render_scene(scene *s, VkCommandBuffer cmd) {
 
+  for (uint32_t i = 0; i < s->entity_count; ++i) {
+    scene_transform *scene_transform = &s->transforms[i];
+    scene_static_mesh *static_mesh = &s->static_meshes[i];
+  }
+
   for (uint32_t i = 0; i < s->mesh_count; ++i) {
     const gpumesh *m = &s->meshes[i];
     uint32_t idx_count = m->idx_count;

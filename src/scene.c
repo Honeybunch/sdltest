@@ -3,26 +3,46 @@
 #include "gpuresources.h"
 
 #include <assert.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 #include <cgltf.h>
 
-scene *alloc_scene(uint32_t max_entity_count, uint32_t max_mesh_count,
-                   uint32_t max_texture_count) {
+typedef struct scene_alloc_info {
+  uint32_t entity_count;
+  uint32_t *child_counts;
 
-  size_t transform_size = sizeof(scene_transform) * max_entity_count;
-  size_t static_mesh_size = sizeof(scene_static_mesh) * max_entity_count;
-  size_t mesh_size = sizeof(gpumesh) * max_mesh_count;
-  size_t texture_size = sizeof(gputexture) * max_texture_count;
+  uint32_t mesh_count;
+  uint32_t texture_count;
+} scene_alloc_info;
+
+static scene *alloc_scene(const scene_alloc_info *info) {
+  uint32_t entity_count = info->entity_count;
+  uint32_t *child_counts = info->child_counts;
+  uint32_t mesh_count = info->mesh_count;
+  uint32_t texture_count = info->texture_count;
+
+  size_t children_size = 0;
+  for (uint32_t i = 0; i < entity_count; ++i) {
+    children_size += child_counts[i] * sizeof(uint32_t);
+  }
+
+  size_t transform_size = sizeof(scene_transform) * entity_count;
+  size_t static_mesh_size = sizeof(scene_static_mesh) * entity_count;
+  size_t mesh_size = sizeof(gpumesh) * mesh_count;
+  size_t texture_size = sizeof(gputexture) * texture_count;
+  size_t components_size = sizeof(uint64_t) * entity_count;
 
   size_t scene_size_bytes = sizeof(scene) + transform_size + static_mesh_size +
-                            mesh_size + texture_size;
+                            mesh_size + texture_size + components_size +
+                            children_size;
+
   scene *s = calloc(1, scene_size_bytes);
   assert(s);
 
-  s->max_entity_count = max_entity_count;
-  s->max_mesh_count = max_mesh_count;
-  s->max_texture_count = max_texture_count;
+  s->max_entity_count = entity_count;
+  s->max_mesh_count = mesh_count;
+  s->max_texture_count = texture_count;
 
   size_t offset = sizeof(scene);
   s->transforms = (scene_transform *)((uint8_t *)s + offset);
@@ -33,8 +53,57 @@ scene *alloc_scene(uint32_t max_entity_count, uint32_t max_mesh_count,
   offset += mesh_size;
   s->textures = (gputexture *)((uint8_t *)s + offset);
   offset += texture_size;
+  s->components = (uint64_t *)((uint8_t *)s + offset);
+  offset += components_size;
+
+  for (uint32_t i = 0; i < entity_count; ++i) {
+    scene_transform *transform = &s->transforms[i];
+    uint32_t child_count = child_counts[i];
+    transform->child_count = child_count;
+    transform->children = (scene_transform **)((uint8_t *)s + offset);
+    offset += child_count * sizeof(uint32_t);
+  }
 
   return s;
+}
+
+void parse_node(scene *s, cgltf_data *data, cgltf_node *node,
+                uint32_t *entity_id) {
+  uint32_t idx = *entity_id;
+  (*entity_id)++;
+
+  uint64_t components = 0;
+  {
+    components |= COMPONENT_TYPE_TRANSFORM;
+    scene_transform *transform = &s->transforms[idx];
+
+    float *pos = node->translation;
+    float *rot = node->rotation;
+    float *scale = node->scale;
+    transform->t.position = (float3){pos[0], pos[1], pos[2]};
+    transform->t.rotation = (float3){rot[0], rot[1], rot[2]};
+    transform->t.scale = (float3){scale[0], scale[1], scale[2]};
+
+    transform->child_count = node->children_count;
+    for (uint32_t i = 0; i < node->children_count; ++i) {
+      cgltf_node *child = node->children[i];
+      parse_node(s, data, child, entity_id);
+      transform->children[i] = &s->transforms[idx + 1];
+    }
+  }
+
+  if (node->mesh != NULL) {
+    components |= COMPONENT_TYPE_STATIC_MESH;
+    scene_static_mesh *static_mesh = &s->static_meshes[idx];
+
+    for (uint32_t i = 0; i < data->meshes_count; ++i) {
+      if (node->mesh == &data->meshes[i]) {
+        static_mesh->mesh = &s->meshes[i];
+      }
+    }
+  }
+
+  s->components[idx] = components;
 }
 
 int32_t load_scene(VkDevice device, VmaAllocator alloc, const char *filename,
@@ -53,20 +122,46 @@ int32_t load_scene(VkDevice device, VmaAllocator alloc, const char *filename,
 
   // Allocate scene
   assert(data->scenes_count == 1);
-  uint32_t max_entity_count = data->scene->nodes_count;
-  uint32_t max_mesh_count = data->meshes_count;
-  uint32_t max_texture_count = data->images_count;
-  scene *s = alloc_scene(max_entity_count, max_mesh_count, max_texture_count);
 
-  // Parse scene
-  s->mesh_count = max_mesh_count;
-  for (uint32_t i = 0; i < max_mesh_count; ++i) {
+  uint32_t entity_count = data->nodes_count;
+  uint32_t mesh_count = data->meshes_count;
+  uint32_t texture_count = data->images_count;
+
+  scene *s = NULL;
+  {
+    scene_alloc_info alloc_info = {0};
+    alloc_info.entity_count = entity_count;
+    alloc_info.mesh_count = mesh_count;
+    alloc_info.texture_count = texture_count;
+    alloc_info.child_counts =
+        alloca(alloc_info.entity_count * sizeof(uint32_t));
+    for (uint32_t i = 0; i < alloc_info.entity_count; ++i) {
+      alloc_info.child_counts[i] = data->nodes[i].children_count;
+    }
+
+    s = alloc_scene(&alloc_info);
+  }
+  assert(s);
+
+  // Parse meshes
+  s->mesh_count = mesh_count;
+  for (uint32_t i = 0; i < mesh_count; ++i) {
     cgltf_mesh *mesh = &data->meshes[i];
-
     create_gpumesh_cgltf(device, alloc, mesh, &s->meshes[i]);
   }
 
-  // s->texture_count = max_texture_count;
+  // Parse scene
+  s->entity_count = entity_count;
+  uint32_t entity_tracker = 0;
+
+  cgltf_scene *gltf_scene = data->scene;
+  for (uint32_t i = 0; i < gltf_scene->nodes_count; ++i) {
+    cgltf_node *node = gltf_scene->nodes[i];
+
+    if (node->parent == NULL) {
+      parse_node(s, data, node, &entity_tracker);
+    }
+  }
 
   cgltf_free(data);
 
