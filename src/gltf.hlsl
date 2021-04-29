@@ -7,6 +7,9 @@ Texture2D roughness_map : register(t2, space0); // Fragment Stage Only
 // Immutable sampler
 sampler static_sampler : register(s3, space0);
 
+[[vk::constant_id(0)]] const bool UseNormalMap = false;
+[[vk::constant_id(1)]] const bool UsePBRMetallicRoughness = false;
+
 struct VertexIn
 {
     float3 local_pos : SV_POSITION;
@@ -41,9 +44,19 @@ float4 frag(Interpolators i) : SV_TARGET
 {
     // Sample textures up-front
     float3 albedo = albedo_map.Sample(static_sampler, i.uv).rgb;
-    float3 normal = normal_map.Sample(static_sampler, i.uv).xyz;
     float roughness = roughness_map.Sample(static_sampler, i.uv).x;
     float gloss = 1 - roughness;
+
+    float3 N = normalize(i.normal);
+    if(UseNormalMap)
+    {
+        N = normal_map.Sample(static_sampler, i.uv).xyz;
+        N = normalize(N * 2 - 1); // Must unpack normal
+    }
+
+    // TODO: Use tangents and bitangents to create and apply
+    // tangent space to world space transformation matrix.
+    // Technically this only works because this is a plane
 
     // Change light direction over time
     float seconds = consts.time[0];
@@ -54,11 +67,7 @@ float4 frag(Interpolators i) : SV_TARGET
 
     // Lighting calcs
     float3 L = normalize(float3(x, y, 1));
-    // TODO: Use tangents and bitangents to create and apply
-    // tangent space to world space transformation matrix.
-    // Technically this only works because this is a plane
-    float3 N = normalize(normal * 2 - 1); // Must unpack normal
-
+    
     // Calc ambient light
     float3 ambient = float3(0.01, 0.01, 0.01);
 

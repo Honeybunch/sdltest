@@ -121,7 +121,7 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator allocator,
     // Copy Index Data
     {
       cgltf_buffer_view *view = indices->buffer_view;
-      size_t index_offset = view->offset;
+      size_t index_offset = indices->offset + view->offset;
       size_t index_size = view->size;
 
       void *index_data = ((uint8_t *)view->buffer->data) + index_offset;
@@ -149,7 +149,7 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator allocator,
       cgltf_buffer_view *view = accessor->buffer_view;
 
       size_t attr_offset = view->offset + accessor->offset;
-      size_t attr_size = accessor->count * accessor->stride;
+      size_t attr_size = view->size;
 
       void *attr_data = ((uint8_t *)view->buffer->data) + attr_offset;
       memcpy(data + offset, attr_data, attr_size);

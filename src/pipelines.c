@@ -13,6 +13,7 @@
 #include "uv_mesh_vert.h"
 
 #include <assert.h>
+#include <stdbool.h>
 
 #include "volk.h"
 
@@ -564,18 +565,34 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
     vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
     vert_stage.module = vert_mod;
     vert_stage.pName = "vert";
+
+    VkSpecializationMapEntry map_entries[2] = {
+        {0, 0, sizeof(bool)},
+        {1, sizeof(bool), sizeof(bool)},
+    };
+
+    bool const_data[2] = {false, true};
+
+    VkSpecializationInfo frag_info = {
+        2,
+        map_entries,
+        sizeof(bool) * 2,
+        const_data,
+    };
+
     VkPipelineShaderStageCreateInfo frag_stage = {0};
     frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
     frag_stage.module = frag_mod;
+    frag_stage.pSpecializationInfo = &frag_info;
     frag_stage.pName = "frag";
 
     VkPipelineShaderStageCreateInfo shader_stages[] = {vert_stage, frag_stage};
 
     VkVertexInputBindingDescription vert_bindings[3] = {
-        {0, sizeof(float3), VK_VERTEX_INPUT_RATE_VERTEX},
-        {1, sizeof(float3), VK_VERTEX_INPUT_RATE_VERTEX},
-        {2, sizeof(float2), VK_VERTEX_INPUT_RATE_VERTEX},
+        {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+        {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
+        {2, sizeof(float) * 2, VK_VERTEX_INPUT_RATE_VERTEX},
     };
 
     VkVertexInputAttributeDescription vert_attrs[3] = {
