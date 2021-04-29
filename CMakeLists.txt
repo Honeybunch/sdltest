@@ -50,9 +50,10 @@ find_package(SDL2 REQUIRED)
 find_package(sdl2-image CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
-find_program(DXC dxc CONFIG REQUIRED)
+find_program(DXC dxc REQUIRED)
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 find_package(imgui CONFIG REQUIRED)
+find_program(BASISU basisu_tool REQUIRED)
 
 # Compile Shaders
 set(shader_includes 
