@@ -149,7 +149,7 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator allocator,
       cgltf_buffer_view *view = accessor->buffer_view;
 
       size_t attr_offset = view->offset + accessor->offset;
-      size_t attr_size = view->size;
+      size_t attr_size = accessor->stride * accessor->count;
 
       void *attr_data = ((uint8_t *)view->buffer->data) + attr_offset;
       memcpy(data + offset, attr_data, attr_size);

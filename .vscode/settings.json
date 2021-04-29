@@ -33,6 +33,9 @@
         "cgltf.h": "c",
         "codecvt": "c",
         "uv_mesh_vert.h": "c",
-        "random": "c"
+        "random": "c",
+        "deque": "c",
+        "regex": "c",
+        "stack": "c"
     }
 }
