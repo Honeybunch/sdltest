@@ -48,6 +48,7 @@ float4 frag(Interpolators i) : SV_TARGET
     float gloss = 1 - roughness;
 
     float3 N = normalize(i.normal);
+    return float4(i.uv, 0, 1);
     if(UseNormalMap)
     {
         N = normal_map.Sample(static_sampler, i.uv).xyz;
@@ -56,7 +57,6 @@ float4 frag(Interpolators i) : SV_TARGET
 
     // TODO: Use tangents and bitangents to create and apply
     // tangent space to world space transformation matrix.
-    // Technically this only works because this is a plane
 
     // Change light direction over time
     float seconds = consts.time[0];

@@ -1251,31 +1251,52 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   return true;
 }
 
-static void demo_render_scene(scene *s, VkCommandBuffer cmd) {
+static void demo_render_scene(scene *s, VkCommandBuffer cmd,
+                              VkPipelineLayout layout,
+                              PushConstants *push_constants,
+                              const float4x4 *vp) {
 
   for (uint32_t i = 0; i < s->entity_count; ++i) {
+    uint64_t components = s->components[i];
     scene_transform *scene_transform = &s->transforms[i];
     scene_static_mesh *static_mesh = &s->static_meshes[i];
-  }
 
-  for (uint32_t i = 0; i < s->mesh_count; ++i) {
-    const gpumesh *m = &s->meshes[i];
-    uint32_t idx_count = m->idx_count;
-    uint32_t vtx_count = m->vtx_count;
-    VkBuffer buffer = m->gpu.buffer;
+    if (components & COMPONENT_TYPE_STATIC_MESH) {
+      transform *t = &scene_transform->t;
 
-    vkCmdBindIndexBuffer(cmd, buffer, 0, VK_INDEX_TYPE_UINT16);
-    VkDeviceSize offset = m->idx_size;
+      // Hack to fuck with the scale of the object
+      t->scale = (float3){0.01f, -0.01f, 0.01f};
 
-    vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
-    offset += vtx_count * sizeof(float3);
+      float4x4 m = {0};
+      transform_to_matrix(&m, t);
 
-    vkCmdBindVertexBuffers(cmd, 1, 1, &buffer, &offset);
-    offset += vtx_count * sizeof(float3);
+      float4x4 mvp = {0};
+      mulmf44(vp, &m, &mvp);
 
-    vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
+      // Hack to change the object's transform
+      push_constants->m = m;
+      push_constants->mvp = mvp;
+      vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                         sizeof(PushConstants), (const void *)push_constants);
 
-    vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
+      const gpumesh *mesh = static_mesh->mesh;
+      uint32_t idx_count = mesh->idx_count;
+      uint32_t vtx_count = mesh->vtx_count;
+      VkBuffer buffer = mesh->gpu.buffer;
+
+      vkCmdBindIndexBuffer(cmd, buffer, 0, VK_INDEX_TYPE_UINT16);
+      VkDeviceSize offset = mesh->idx_size;
+
+      vkCmdBindVertexBuffers(cmd, 0, 1, &buffer, &offset);
+      offset += vtx_count * sizeof(float3);
+
+      vkCmdBindVertexBuffers(cmd, 1, 1, &buffer, &offset);
+      offset += vtx_count * sizeof(float3);
+
+      vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
+
+      vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
+    }
   }
 }
 
@@ -1667,7 +1688,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                                   VK_PIPELINE_BIND_POINT_GRAPHICS,
                                   d->gltf_pipe_layout, 0, 1,
                                   &d->gltf_descriptor_sets[frame_idx], 0, NULL);
-          demo_render_scene(d->duck, graphics_buffer);
+          demo_render_scene(d->duck, graphics_buffer, d->gltf_pipe_layout,
+                            &d->push_constants, vp);
         }
 
         vkCmdEndRenderPass(graphics_buffer);
