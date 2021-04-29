@@ -44,3 +44,4 @@ typedef struct scene {
 
 int32_t load_scene(VkDevice device, VmaAllocator alloc, const char *filename,
                    scene **scene);
+void destroy_scene(VkDevice device, VmaAllocator alloc, scene *s);

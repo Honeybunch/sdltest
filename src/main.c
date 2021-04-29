@@ -108,6 +108,8 @@ typedef struct demo {
   gputexture skybox;
   gputexture pattern;
 
+  scene *duck;
+
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
   VkDescriptorSet skybox_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet mesh_descriptor_sets[FRAME_LATENCY];
@@ -257,6 +259,16 @@ static void demo_upload_texture(demo *d, const gputexture *tex) {
   assert(d->texture_upload_count + 1 < TEXTURE_UPLOAD_QUEUE_SIZE);
   d->texture_upload_queue[tex_idx] = *tex;
   d->texture_upload_count++;
+}
+
+static void demo_upload_scene(demo *d, const scene *s) {
+  for (uint32_t i = 0; i < s->mesh_count; ++i) {
+    demo_upload_mesh(d, &s->meshes[i]);
+  }
+
+  for (uint32_t i = 0; i < s->texture_count; ++i) {
+    demo_upload_texture(d, &s->textures[i]);
+  }
 }
 
 static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
@@ -886,17 +898,18 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->roughness = roughness;
   d->skybox = skybox;
   d->pattern = pattern;
+  d->duck = duck;
   d->frame_idx = 0;
 
   demo_upload_mesh(d, &d->cube_gpu);
   demo_upload_mesh(d, &d->plane_gpu);
-  demo_upload_mesh(d, &duck->meshes[0]);
   demo_upload_texture(d, &d->albedo);
   demo_upload_texture(d, &d->displacement);
   demo_upload_texture(d, &d->normal);
   demo_upload_texture(d, &d->roughness);
   demo_upload_texture(d, &d->skybox);
   demo_upload_texture(d, &d->pattern);
+  demo_upload_scene(d, d->duck);
 
   // Create Semaphores
   {
@@ -1655,6 +1668,7 @@ static void demo_destroy(demo *d) {
     vkDestroyCommandPool(device, d->command_pools[i], NULL);
   }
 
+  destroy_scene(device, allocator, d->duck);
   destroy_texture(device, allocator, &d->pattern);
   destroy_texture(device, allocator, &d->skybox);
   destroy_texture(device, allocator, &d->roughness);

@@ -456,11 +456,12 @@ int32_t create_texture(VkDevice device, VmaAllocator alloc,
   // Allocate device image
   gpuimage device_image = {0};
   {
-    VkImageUsageFlags usage =
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    VkImageUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                              VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                              VK_IMAGE_USAGE_SAMPLED_BIT;
 
     VkImageCreateInfo img_info = {0};
-    img_info.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+    img_info.flags = 0;
     img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     img_info.imageType = VK_IMAGE_TYPE_2D;
     img_info.format = VK_FORMAT_R8G8B8A8_SRGB;
@@ -483,7 +484,7 @@ int32_t create_texture(VkDevice device, VmaAllocator alloc,
     VkImageViewCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     create_info.image = device_image.image;
-    create_info.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
     create_info.subresourceRange = (VkImageSubresourceRange){
         VK_IMAGE_ASPECT_COLOR_BIT, 0, desired_mip_levels, 0, layer_count};

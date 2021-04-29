@@ -59,11 +59,14 @@ int32_t load_scene(VkDevice device, VmaAllocator alloc, const char *filename,
   scene *s = alloc_scene(max_entity_count, max_mesh_count, max_texture_count);
 
   // Parse scene
+  s->mesh_count = max_mesh_count;
   for (uint32_t i = 0; i < max_mesh_count; ++i) {
     cgltf_mesh *mesh = &data->meshes[i];
 
     create_gpumesh_cgltf(device, alloc, mesh, &s->meshes[i]);
   }
+
+  // s->texture_count = max_texture_count;
 
   cgltf_free(data);
 
