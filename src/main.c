@@ -898,7 +898,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
   // Load scene
   scene *duck = NULL;
-  load_scene(device, allocator, "./assets/scenes/duck.glb", &duck);
+  load_scene(device, allocator, upload_mem_pool, texture_mem_pool,
+             "./assets/scenes/duck.glb", &duck);
 
   // Apply to output var
   d->instance = instance;

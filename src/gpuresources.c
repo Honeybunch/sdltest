@@ -205,6 +205,19 @@ SDL_Surface *load_and_transform_image(const char *filename) {
   return opt_img;
 }
 
+SDL_Surface *parse_and_transform_image(const uint8_t *data, size_t size) {
+  SDL_RWops *ops = SDL_RWFromMem((void *)data, size);
+  SDL_Surface *img = IMG_Load_RW(ops, 0);
+  assert(img);
+
+  SDL_PixelFormat *opt_fmt = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA32);
+
+  SDL_Surface *opt_img = SDL_ConvertSurface(img, opt_fmt, 0);
+  SDL_FreeSurface(img);
+
+  return opt_img;
+}
+
 int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
                      VmaPool up_pool, VmaPool tex_pool, gputexture *t) {
   assert(filename);
@@ -300,6 +313,45 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
   SDL_FreeSurface(img);
 
   return err;
+}
+
+int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator alloc,
+                                const cgltf_texture *gltf, const uint8_t *bin,
+                                VmaPool up_pool, VmaPool tex_pool,
+                                gputexture *t) {
+  cgltf_buffer_view *image_view = gltf->image->buffer_view;
+  cgltf_buffer *image_data = image_view->buffer;
+  const uint8_t *data = (uint8_t *)(image_view->buffer) + image_view->offset;
+
+  if (image_data->uri == NULL) {
+    data = bin + image_view->offset;
+  }
+
+  size_t size = image_view->size;
+
+  SDL_Surface *image = parse_and_transform_image(data, size);
+  uint32_t image_width = image->w;
+  uint32_t image_height = image->h;
+  uint8_t *image_pixels = image->pixels;
+  size_t image_size = image->pitch * image_height;
+
+  texture_mip mip = {
+      image_width,
+      image_height,
+      1,
+      image_pixels,
+  };
+
+  texture_layer layer = {
+      image_width,
+      image_height,
+      1,
+      &mip,
+  };
+  cputexture cpu_tex = {
+      1, 1, &layer, image_size, image_pixels,
+  };
+  return create_texture(device, alloc, &cpu_tex, up_pool, tex_pool, t);
 }
 
 int32_t load_skybox(VkDevice device, VmaAllocator alloc,

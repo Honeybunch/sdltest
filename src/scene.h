@@ -6,6 +6,7 @@
 
 typedef struct VkDevice_T *VkDevice;
 typedef struct VmaAllocator_T *VmaAllocator;
+typedef struct VmaPool_T *VmaPool;
 typedef struct gpumesh gpumesh;
 typedef struct gputexture gputexture;
 
@@ -43,6 +44,6 @@ typedef struct scene {
   gputexture *textures;
 } scene;
 
-int32_t load_scene(VkDevice device, VmaAllocator alloc, const char *filename,
-                   scene **scene);
+int32_t load_scene(VkDevice device, VmaAllocator alloc, VmaPool up_pool,
+                   VmaPool tex_pool, const char *filename, scene **scene);
 void destroy_scene(VkDevice device, VmaAllocator alloc, scene *s);
