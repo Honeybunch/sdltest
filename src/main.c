@@ -1119,6 +1119,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
         NULL, roughness.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorImageInfo skybox_info = {
         NULL, skybox.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkDescriptorImageInfo duck_info = {
+        NULL, duck->textures[0].view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkWriteDescriptorSet writes[8] = {
         {
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1188,7 +1190,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
             0,
             1,
             VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            &albedo_info,
+            &duck_info,
             NULL,
             NULL,
         },
