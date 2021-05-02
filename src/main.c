@@ -84,6 +84,10 @@ typedef struct demo {
   VkImageView swapchain_image_views[FRAME_LATENCY];
   VkFramebuffer swapchain_framebuffers[FRAME_LATENCY];
 
+  gpuimage depth_buffers; // Implemented as an image array; one image for each
+                          // latency frame
+  VkImageView depth_buffer_views[FRAME_LATENCY];
+
   VkCommandPool command_pools[FRAME_LATENCY];
   VkCommandBuffer upload_buffers[FRAME_LATENCY];
   VkCommandBuffer graphics_buffers[FRAME_LATENCY];
@@ -550,30 +554,58 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   // Create Render Pass
   VkRenderPass render_pass = VK_NULL_HANDLE;
   {
-    VkAttachmentDescription attachment = {0};
-    attachment.format = swapchain_image_format;
-    attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    VkAttachmentDescription color_attachment = {0};
+    color_attachment.format = swapchain_image_format;
+    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
-    VkAttachmentReference attachment_ref = {
+    VkAttachmentDescription depth_attachment = {0};
+    depth_attachment.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+    depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    depth_attachment.finalLayout =
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+    VkAttachmentDescription attachments[2] = {color_attachment,
+                                              depth_attachment};
+
+    VkAttachmentReference color_attachment_ref = {
         0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    VkAttachmentReference depth_attachment_ref = {
+        1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
+    VkAttachmentReference attachment_refs[1] = {color_attachment_ref};
 
     VkSubpassDescription subpass = {0};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &attachment_ref;
+    subpass.pColorAttachments = attachment_refs;
+    subpass.pDepthStencilAttachment = &depth_attachment_ref;
+
+    VkSubpassDependency subpass_dep = {0};
+    subpass_dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    subpass_dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    subpass_dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                                VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
     VkRenderPassCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    create_info.attachmentCount = 1;
-    create_info.pAttachments = &attachment;
+    create_info.attachmentCount = 2;
+    create_info.pAttachments = attachments;
     create_info.subpassCount = 1;
     create_info.pSubpasses = &subpass;
+    create_info.pDependencies = &subpass_dep;
     err = vkCreateRenderPass(device, &create_info, NULL, &render_pass);
     assert(err == VK_SUCCESS);
   }
@@ -1011,18 +1043,70 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     }
   }
 
+  // Create Depth Buffers
+  {
+    VkImageCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    create_info.imageType = VK_IMAGE_TYPE_2D;
+    create_info.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+    create_info.extent = (VkExtent3D){d->swap_width, d->swap_height, 1};
+    create_info.mipLevels = 1;
+    create_info.arrayLayers = FRAME_LATENCY;
+    create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    VmaAllocationCreateInfo alloc_info = {0};
+    alloc_info.flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
+    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_info.pUserData = (void *)("Depth Buffer Memory");
+    err = create_gpuimage(allocator, &create_info, &alloc_info,
+                          &d->depth_buffers);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Depth Buffer Views
+  {
+    VkImageViewCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    create_info.image = d->depth_buffers.image;
+    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    create_info.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+    create_info.components = (VkComponentMapping){
+        VK_COMPONENT_SWIZZLE_R,
+        VK_COMPONENT_SWIZZLE_G,
+        VK_COMPONENT_SWIZZLE_B,
+        VK_COMPONENT_SWIZZLE_A,
+    };
+    create_info.subresourceRange = (VkImageSubresourceRange){
+        VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, 1, 0, 1,
+    };
+
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      create_info.subresourceRange.baseArrayLayer = i;
+      err = vkCreateImageView(device, &create_info, NULL,
+                              &d->depth_buffer_views[i]);
+      assert(err == VK_SUCCESS);
+    }
+  }
+
   // Create Framebuffers
   {
     VkFramebufferCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
     create_info.renderPass = render_pass;
-    create_info.attachmentCount = 1;
+    create_info.attachmentCount = 2;
     create_info.width = width;
     create_info.height = height;
     create_info.layers = 1;
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      create_info.pAttachments = &d->swapchain_image_views[i];
+      VkImageView attachments[2] = {
+          d->swapchain_image_views[i],
+          d->depth_buffer_views[i],
+      };
+
+      create_info.pAttachments = attachments;
       err = vkCreateFramebuffer(device, &create_info, NULL,
                                 &d->swapchain_framebuffers[i]);
       assert(err == VK_SUCCESS);
@@ -1557,7 +1641,10 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
         VkRenderPass render_pass = d->render_pass;
         VkFramebuffer framebuffer = d->swapchain_framebuffers[frame_idx];
 
-        VkClearValue clear_value = {.color = {.float32 = {0, 1, 1, 1}}};
+        VkClearValue clear_values[2] = {
+            {.color = {.float32 = {0, 1, 1, 1}}},
+            {.depthStencil = {.depth = 0.0f, .stencil = 0.0f}},
+        };
 
         const float width = d->swap_width;
         const float height = d->swap_height;
@@ -1567,8 +1654,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
         pass_info.renderPass = render_pass;
         pass_info.framebuffer = framebuffer;
         pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
-        pass_info.clearValueCount = 1;
-        pass_info.pClearValues = &clear_value;
+        pass_info.clearValueCount = 2;
+        pass_info.pClearValues = clear_values;
 
         vkCmdBeginRenderPass(graphics_buffer, &pass_info,
                              VK_SUBPASS_CONTENTS_INLINE);
@@ -1589,7 +1676,9 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
         vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
 
         float4x4 mvp = d->push_constants.mvp;
+
         // Draw Skybox Cube
+        // TODO: Figure out the best way to draw this last
         {
           // Another hack to fiddle with the matrix we send to the shader for
           // the skybox
@@ -1815,6 +1904,7 @@ static void demo_destroy(demo *d) {
   }
 
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+    vkDestroyImageView(device, d->depth_buffer_views[i], NULL);
     vkDestroyDescriptorPool(device, d->descriptor_pools[i], NULL);
     vkDestroyFence(device, d->fences[i], NULL);
     vkDestroySemaphore(device, d->upload_complete_sems[i], NULL);
@@ -1825,6 +1915,8 @@ static void demo_destroy(demo *d) {
     vkDestroyFramebuffer(device, d->swapchain_framebuffers[i], NULL);
     vkDestroyCommandPool(device, d->command_pools[i], NULL);
   }
+
+  destroy_gpuimage(allocator, &d->depth_buffers);
 
   destroy_scene(device, allocator, d->duck);
   destroy_texture(device, allocator, &d->pattern);

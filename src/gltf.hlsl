@@ -7,7 +7,6 @@ Texture2D roughness_map : register(t2, space0); // Fragment Stage Only
 // Immutable sampler
 sampler static_sampler : register(s3, space0);
 
-
 #define GLTF_PERM_NORMAL_MAP 0x00000001
 #define GLTF_PERM_PBR_METALLIC_ROUGHNESS 0x00000002
 #define GLTF_PERM_PBR_SPECULAR_GLOSSINESS 0x00000004

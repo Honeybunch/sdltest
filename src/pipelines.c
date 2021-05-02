@@ -225,6 +225,9 @@ uint32_t create_color_mesh_pipeline(VkDevice device, VkPipelineCache cache,
     VkPipelineDepthStencilStateCreateInfo depth_state = {0};
     depth_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_state.depthTestEnable = VK_TRUE;
+    depth_state.depthWriteEnable = VK_TRUE;
+    depth_state.depthCompareOp = VK_COMPARE_OP_GREATER;
     depth_state.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState attachment_state = {0};
@@ -358,6 +361,9 @@ uint32_t create_uv_mesh_pipeline(VkDevice device, VkPipelineCache cache,
     VkPipelineDepthStencilStateCreateInfo depth_state = {0};
     depth_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_state.depthTestEnable = VK_TRUE;
+    depth_state.depthWriteEnable = VK_TRUE;
+    depth_state.depthCompareOp = VK_COMPARE_OP_GREATER;
     depth_state.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState attachment_state = {0};
@@ -489,6 +495,9 @@ uint32_t create_skybox_pipeline(VkDevice device, VkPipelineCache cache,
     VkPipelineDepthStencilStateCreateInfo depth_state = {0};
     depth_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_state.depthTestEnable = VK_TRUE;
+    depth_state.depthWriteEnable = VK_FALSE;
+    depth_state.depthCompareOp = VK_COMPARE_OP_GREATER;
     depth_state.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState attachment_state = {0};
@@ -593,6 +602,9 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
     VkPipelineDepthStencilStateCreateInfo depth_state = {0};
     depth_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+    depth_state.depthTestEnable = VK_TRUE;
+    depth_state.depthWriteEnable = VK_TRUE;
+    depth_state.depthCompareOp = VK_COMPARE_OP_GREATER;
     depth_state.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState attachment_state = {0};
