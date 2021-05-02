@@ -7,8 +7,17 @@ Texture2D roughness_map : register(t2, space0); // Fragment Stage Only
 // Immutable sampler
 sampler static_sampler : register(s3, space0);
 
-[[vk::constant_id(0)]] const bool UseNormalMap = false;
-[[vk::constant_id(1)]] const bool UsePBRMetallicRoughness = false;
+
+#define GLTF_PERM_NORMAL_MAP 0x00000001
+#define GLTF_PERM_PBR_METALLIC_ROUGHNESS 0x00000002
+#define GLTF_PERM_PBR_SPECULAR_GLOSSINESS 0x00000004
+#define GLTF_PERM_CLEARCOAT 0x00000008
+#define GLTF_PERM_TRANSMISSION 0x00000010
+#define GLTF_PERM_IOR 0x00000020
+#define GLTF_PERM_SPECULAR 0x00000040
+#define GLTF_PERM_UNLIT 0x00000080
+
+[[vk::constant_id(0)]] const uint32_t PermutationFlags = 0;
 
 struct VertexIn
 {
@@ -44,11 +53,17 @@ float4 frag(Interpolators i) : SV_TARGET
 {
     // Sample textures up-front
     float3 albedo = albedo_map.Sample(static_sampler, i.uv).rgb;
-    float roughness = roughness_map.Sample(static_sampler, i.uv).x;
+    float roughness = 0.5;
+    
+    if(PermutationFlags & GLTF_PERM_PBR_METALLIC_ROUGHNESS)
+    {
+        roughness = roughness_map.Sample(static_sampler, i.uv).x;
+    }
+
     float gloss = 1 - roughness;
 
     float3 N = normalize(i.normal);
-    if(UseNormalMap)
+    if(PermutationFlags & GLTF_PERM_NORMAL_MAP)
     {
         N = normal_map.Sample(static_sampler, i.uv).xyz;
         N = normalize(N * 2 - 1); // Must unpack normal

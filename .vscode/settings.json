@@ -36,6 +36,8 @@
         "random": "c",
         "deque": "c",
         "regex": "c",
-        "stack": "c"
+        "stack": "c",
+        "cmath": "c",
+        "xlocnum": "c"
     }
 }

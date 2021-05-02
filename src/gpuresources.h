@@ -7,6 +7,8 @@ typedef struct VkDevice_T *VkDevice;
 typedef struct VkFence_T *VkFence;
 typedef struct VkImage_T *VkImage;
 typedef struct VkImageView_T *VkImageView;
+typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
+typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
 typedef struct VmaAllocator_T *VmaAllocator;
 typedef struct VmaAllocation_T *VmaAllocation;
@@ -19,6 +21,7 @@ typedef struct cpumesh cpumesh;
 typedef struct cgltf_mesh cgltf_mesh;
 typedef struct cputexture cputexture;
 typedef struct cgltf_texture cgltf_texture;
+typedef struct cgltf_material cgltf_material;
 
 typedef struct gpubuffer {
   VkBuffer buffer;
@@ -52,6 +55,26 @@ typedef struct gputexture {
   uint32_t format;
 } gputexture;
 
+#define MAX_MATERIAL_TEXTURES 8
+
+/*
+  TODO: Fiugre out how to best represent materials
+  For now I'm imagining that a material will be able to be implemented
+  mostly with 1 uniform buffer for parameters and up to 8 textures for
+  other resource bindings.
+*/
+typedef struct gpumaterial {
+  // All material parameters go into one uniform buffer
+  // The uniform buffer takes up location 0
+  size_t consts_size;
+  gpubuffer host_consts;
+  gpubuffer gpu_consts;
+
+  // textures take up locations 1-8 in the descriptor set
+  uint32_t texture_count;
+  gputexture *textures[MAX_MATERIAL_TEXTURES];
+} gpumaterial;
+
 int32_t create_gpubuffer(VmaAllocator allocator, uint64_t size,
                          int32_t mem_usage, int32_t buf_usage, gpubuffer *out);
 void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer);
@@ -83,3 +106,9 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator alloc,
                                 VmaPool up_pool, VmaPool tex_pool,
                                 gputexture *t);
 void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t);
+
+int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator alloc,
+                                 const cgltf_material *gltf, const uint8_t *bin,
+                                 gpumaterial *m);
+void destroy_material(VkDevice device, VmaAllocator alloc,
+                      const gpumaterial *m);

@@ -584,3 +584,13 @@ void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t) {
   destroy_gpuimage(alloc, &t->device);
   vkDestroyImageView(device, t->view, NULL);
 }
+
+int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator alloc,
+                                 const cgltf_material *gltf, const uint8_t *bin,
+                                 gpumaterial *m) {
+  VkResult err = VK_SUCCESS;
+
+  return err;
+}
+void destroy_material(VkDevice device, VmaAllocator alloc,
+                      const gpumaterial *m) {}

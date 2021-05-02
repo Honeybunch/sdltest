@@ -9,11 +9,13 @@ typedef struct VmaAllocator_T *VmaAllocator;
 typedef struct VmaPool_T *VmaPool;
 typedef struct gpumesh gpumesh;
 typedef struct gputexture gputexture;
+typedef struct gpumaterial gpumaterial;
 
 enum component_type {
   COMPONENT_TYPE_NONE = 0x00000000,
   COMPONENT_TYPE_TRANSFORM = 0x00000001,
   COMPONENT_TYPE_STATIC_MESH = 0x00000002,
+  COMPONENT_TYPE_MATERIAL = 0x00000004,
 };
 
 typedef struct scene_transform scene_transform;
@@ -42,6 +44,10 @@ typedef struct scene {
   uint32_t max_texture_count;
   uint32_t texture_count;
   gputexture *textures;
+
+  uint32_t max_material_count;
+  uint32_t material_count;
+  gpumaterial *materials;
 } scene;
 
 int32_t load_scene(VkDevice device, VmaAllocator alloc, VmaPool up_pool,

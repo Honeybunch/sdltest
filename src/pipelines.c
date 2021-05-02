@@ -13,7 +13,9 @@
 #include "uv_mesh_vert.h"
 
 #include <assert.h>
+#include <malloc.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 #include "volk.h"
 
@@ -540,55 +542,8 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
                               VkPipelineLayout layout, VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
 
-  // Create UV Mesh Pipeline
-  VkPipeline pipeline = VK_NULL_HANDLE;
+  VkPipeline *pipelines = VK_NULL_HANDLE;
   {
-    // Load Shaders
-    VkShaderModule vert_mod = VK_NULL_HANDLE;
-    VkShaderModule frag_mod = VK_NULL_HANDLE;
-    {
-      VkShaderModuleCreateInfo create_info = {0};
-      create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-      create_info.codeSize = sizeof(gltf_vert);
-      create_info.pCode = (const uint32_t *)gltf_vert;
-      err = vkCreateShaderModule(device, &create_info, NULL, &vert_mod);
-      assert(err == VK_SUCCESS);
-
-      create_info.codeSize = sizeof(gltf_frag);
-      create_info.pCode = (const uint32_t *)gltf_frag;
-      err = vkCreateShaderModule(device, &create_info, NULL, &frag_mod);
-      assert(err == VK_SUCCESS);
-    }
-
-    VkPipelineShaderStageCreateInfo vert_stage = {0};
-    vert_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    vert_stage.module = vert_mod;
-    vert_stage.pName = "vert";
-
-    VkSpecializationMapEntry map_entries[2] = {
-        {0, 0, sizeof(bool)},
-        {1, sizeof(bool), sizeof(bool)},
-    };
-
-    bool const_data[2] = {false, true};
-
-    VkSpecializationInfo frag_info = {
-        2,
-        map_entries,
-        sizeof(bool) * 2,
-        const_data,
-    };
-
-    VkPipelineShaderStageCreateInfo frag_stage = {0};
-    frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    frag_stage.module = frag_mod;
-    frag_stage.pSpecializationInfo = &frag_info;
-    frag_stage.pName = "frag";
-
-    VkPipelineShaderStageCreateInfo shader_stages[] = {vert_stage, frag_stage};
-
     VkVertexInputBindingDescription vert_bindings[3] = {
         {0, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
         {1, sizeof(float) * 3, VK_VERTEX_INPUT_RATE_VERTEX},
@@ -658,30 +613,108 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
         sizeof(dyn_states) / sizeof(VkDynamicState);
     dynamic_state.pDynamicStates = dyn_states;
 
-    VkGraphicsPipelineCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    create_info.stageCount =
-        sizeof(shader_stages) / sizeof(VkPipelineShaderStageCreateInfo);
-    create_info.pStages = shader_stages;
-    create_info.pVertexInputState = &vert_input_state;
-    create_info.pInputAssemblyState = &input_assembly_state;
-    create_info.pViewportState = &viewport_state;
-    create_info.pRasterizationState = &raster_state;
-    create_info.pMultisampleState = &multisample_state;
-    create_info.pDepthStencilState = &depth_state;
-    create_info.pColorBlendState = &color_blend_state;
-    create_info.pDynamicState = &dynamic_state;
-    create_info.layout = layout;
-    create_info.renderPass = pass;
-    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, NULL,
-                                    &pipeline);
+    VkGraphicsPipelineCreateInfo create_info_base = {0};
+    create_info_base.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    create_info_base.pVertexInputState = &vert_input_state;
+    create_info_base.pInputAssemblyState = &input_assembly_state;
+    create_info_base.pViewportState = &viewport_state;
+    create_info_base.pRasterizationState = &raster_state;
+    create_info_base.pMultisampleState = &multisample_state;
+    create_info_base.pDepthStencilState = &depth_state;
+    create_info_base.pColorBlendState = &color_blend_state;
+    create_info_base.pDynamicState = &dynamic_state;
+    create_info_base.layout = layout;
+    create_info_base.renderPass = pass;
+
+    // Calculate number of permuatations
+    uint32_t perm_count = 1 << GLTF_PERM_FLAG_COUNT;
+
+    // Load Shader Modules
+    VkShaderModule vert_mod = VK_NULL_HANDLE;
+    VkShaderModule frag_mod = VK_NULL_HANDLE;
+
+    VkShaderModuleCreateInfo shader_mod_create_info = {0};
+    shader_mod_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    shader_mod_create_info.codeSize = sizeof(gltf_vert);
+    shader_mod_create_info.pCode = (const uint32_t *)gltf_vert;
+    err =
+        vkCreateShaderModule(device, &shader_mod_create_info, NULL, &vert_mod);
     assert(err == VK_SUCCESS);
 
-    // Can destroy shaders
-    vkDestroyShaderModule(device, vert_mod, NULL);
-    vkDestroyShaderModule(device, frag_mod, NULL);
+    shader_mod_create_info.codeSize = sizeof(gltf_frag);
+    shader_mod_create_info.pCode = (const uint32_t *)gltf_frag;
+    err =
+        vkCreateShaderModule(device, &shader_mod_create_info, NULL, &frag_mod);
+    assert(err == VK_SUCCESS);
+
+    // Load Shaders for every permutation
+    VkGraphicsPipelineCreateInfo *pipe_create_info =
+        (VkGraphicsPipelineCreateInfo *)malloc(
+            sizeof(VkGraphicsPipelineCreateInfo) * perm_count);
+
+    pipelines = malloc(sizeof(VkPipeline) * perm_count);
+
+    uint32_t stage_count = perm_count * 2;
+    VkPipelineShaderStageCreateInfo *shader_stages =
+        (VkPipelineShaderStageCreateInfo *)malloc(
+            sizeof(VkPipelineShaderStageCreateInfo) * stage_count);
+
+    VkSpecializationMapEntry map_entries[1] = {
+        {0, 0, sizeof(uint32_t)},
+    };
+
+    VkSpecializationInfo *spec_info = (VkSpecializationInfo *)alloca(
+        sizeof(VkSpecializationInfo) * perm_count);
+    uint32_t *flags = (uint32_t *)alloca(sizeof(uint32_t) * perm_count);
+
+    for (uint32_t i = 0; i < perm_count; ++i) {
+      flags[i] = i;
+      spec_info[i] = (VkSpecializationInfo){
+          1,
+          map_entries,
+          sizeof(uint32_t),
+          &flags[i],
+      };
+
+      VkPipelineShaderStageCreateInfo vert_stage = {0};
+      vert_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+      vert_stage.stage = VK_SHADER_STAGE_VERTEX_BIT;
+      vert_stage.module = vert_mod;
+      vert_stage.pSpecializationInfo = &spec_info[i];
+      vert_stage.pName = "vert";
+
+      VkPipelineShaderStageCreateInfo frag_stage = {0};
+      frag_stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+      frag_stage.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+      frag_stage.module = frag_mod;
+      frag_stage.pSpecializationInfo = &spec_info[i];
+      frag_stage.pName = "frag";
+
+      uint32_t stage_idx = i * 2;
+      shader_stages[stage_idx + 0] = vert_stage;
+      shader_stages[stage_idx + 1] = frag_stage;
+
+      pipe_create_info[i] = create_info_base;
+      pipe_create_info[i].stageCount = 2;
+      pipe_create_info[i].pStages = &shader_stages[stage_idx];
+      pipe_create_info[i].basePipelineIndex = 0;
+    }
+
+    err = vkCreateGraphicsPipelines(device, cache, perm_count, pipe_create_info,
+                                    NULL, pipelines);
+    assert(err == VK_SUCCESS);
+
+    // Can destroy shader moduless
+    // vkDestroyShaderModule(device, vert_mod, NULL);
+    // vkDestroyShaderModule(device, frag_mod, NULL);
+
+    // Free up memory
+    free(pipe_create_info);
+    free(shader_stages);
   }
 
-  *pipe = pipeline;
+  *pipe = pipelines[0];
+
+  free(pipelines);
   return err;
 }

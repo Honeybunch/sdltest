@@ -15,6 +15,7 @@ typedef struct scene_alloc_info {
 
   uint32_t mesh_count;
   uint32_t texture_count;
+  uint32_t material_count;
 } scene_alloc_info;
 
 static scene *alloc_scene(const scene_alloc_info *info) {
@@ -142,6 +143,7 @@ int32_t load_scene(VkDevice device, VmaAllocator alloc, VmaPool up_pool,
   uint32_t entity_count = data->nodes_count;
   uint32_t mesh_count = data->meshes_count;
   uint32_t texture_count = data->images_count;
+  uint32_t material_count = data->materials_count;
 
   scene *s = NULL;
   {
@@ -149,6 +151,7 @@ int32_t load_scene(VkDevice device, VmaAllocator alloc, VmaPool up_pool,
     alloc_info.entity_count = entity_count;
     alloc_info.mesh_count = mesh_count;
     alloc_info.texture_count = texture_count;
+    alloc_info.material_count = material_count;
     alloc_info.child_counts =
         alloca(alloc_info.entity_count * sizeof(uint32_t));
     for (uint32_t i = 0; i < alloc_info.entity_count; ++i) {
@@ -173,6 +176,9 @@ int32_t load_scene(VkDevice device, VmaAllocator alloc, VmaPool up_pool,
     create_gputexture_cgltf(device, alloc, tex, data->bin, up_pool, tex_pool,
                             &s->textures[i]);
   }
+
+  // Parse Materials
+  s->material_count = material_count;
 
   // Parse scene
   s->entity_count = entity_count;
