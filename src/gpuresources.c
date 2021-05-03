@@ -585,6 +585,89 @@ void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t) {
   vkDestroyImageView(device, t->view, NULL);
 }
 
+gpupipeline *alloc_gpupipeline(uint32_t perm_count) {
+  size_t pipe_handles_size = sizeof(VkPipeline) * perm_count;
+  size_t flags_size = sizeof(uint32_t) * perm_count;
+  size_t pipeline_size = sizeof(gpupipeline);
+  size_t alloc_size = pipeline_size + pipe_handles_size + flags_size;
+  gpupipeline *p = (gpupipeline *)calloc(1, alloc_size);
+  uint8_t *mem = (uint8_t *)p;
+  assert(p);
+  p->pipeline_count = perm_count;
+
+  size_t offset = pipeline_size;
+
+  p->pipeline_flags = (uint32_t *)(mem + offset);
+  offset += flags_size;
+
+  p->pipelines = (VkPipeline *)(mem + offset);
+  offset += pipe_handles_size;
+
+  return p;
+}
+
+int32_t create_gpupipeline(VkDevice device, VkPipelineCache cache,
+                           uint32_t perm_count,
+                           VkGraphicsPipelineCreateInfo *create_info_base,
+                           gpupipeline **p) {
+  gpupipeline *pipe = alloc_gpupipeline(perm_count);
+  VkResult err = VK_SUCCESS;
+
+  VkGraphicsPipelineCreateInfo *pipe_create_info =
+      (VkGraphicsPipelineCreateInfo *)alloca(
+          sizeof(VkGraphicsPipelineCreateInfo) * perm_count);
+  assert(pipe_create_info);
+
+  uint32_t stage_count = create_info_base->stageCount;
+
+  uint32_t perm_stage_count = perm_count * stage_count;
+  VkPipelineShaderStageCreateInfo *pipe_stage_info =
+      (VkPipelineShaderStageCreateInfo *)alloca(
+          sizeof(VkPipelineShaderStageCreateInfo) * perm_stage_count);
+
+  VkSpecializationMapEntry map_entries[1] = {
+      {0, 0, sizeof(uint32_t)},
+  };
+
+  VkSpecializationInfo *spec_info =
+      (VkSpecializationInfo *)alloca(sizeof(VkSpecializationInfo) * perm_count);
+  uint32_t *flags = (uint32_t *)alloca(sizeof(uint32_t) * perm_count);
+
+  for (uint32_t i = 0; i < perm_count; ++i) {
+    pipe_create_info[i] = *create_info_base;
+
+    flags[i] = i;
+    spec_info[i] = (VkSpecializationInfo){
+        1,
+        map_entries,
+        sizeof(uint32_t),
+        &flags[i],
+    };
+
+    uint32_t stage_idx = i * stage_count;
+    for (uint32_t ii = 0; ii < stage_count; ++ii) {
+      VkPipelineShaderStageCreateInfo *stage = &pipe_stage_info[stage_idx + ii];
+      *stage = create_info_base->pStages[ii];
+      stage->pSpecializationInfo = &spec_info[i];
+    }
+    pipe_create_info[i].pStages = &pipe_stage_info[stage_idx];
+  }
+
+  err = vkCreateGraphicsPipelines(device, cache, perm_count, pipe_create_info,
+                                  NULL, pipe->pipelines);
+  assert(err == VK_SUCCESS);
+
+  *p = pipe;
+  return err;
+}
+
+void destroy_gpupipeline(VkDevice device, const gpupipeline *p) {
+  for (uint32_t i = 0; i < p->pipeline_count; ++i) {
+    vkDestroyPipeline(device, p->pipelines[i], NULL);
+  }
+  free((void *)p);
+}
+
 int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator alloc,
                                  const cgltf_material *gltf, const uint8_t *bin,
                                  gpumaterial *m) {

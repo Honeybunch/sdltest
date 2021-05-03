@@ -78,7 +78,7 @@ typedef struct demo {
 
   VkDescriptorSetLayout gltf_layout;
   VkPipelineLayout gltf_pipe_layout;
-  VkPipeline gltf_pipeline;
+  gpupipeline *gltf_pipeline;
 
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
@@ -811,7 +811,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   }
 
   // Create GLTF Pipeline
-  VkPipeline gltf_pipeline = VK_NULL_HANDLE;
+  gpupipeline *gltf_pipeline = NULL;
   err = create_gltf_pipeline(device, pipeline_cache, render_pass, width, height,
                              gltf_pipe_layout, &gltf_pipeline);
   assert(err == VK_SUCCESS);
@@ -1774,13 +1774,17 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
         // Draw Scene
         {
+          // HACK: Known desired permutations
+          uint32_t perm = GLTF_PERM_NONE;
+          VkPipelineLayout pipe_layout = d->gltf_pipe_layout;
+          VkPipeline pipe = d->gltf_pipeline->pipelines[perm];
+
           vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            d->gltf_pipeline);
-          vkCmdBindDescriptorSets(graphics_buffer,
-                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  d->gltf_pipe_layout, 0, 1,
-                                  &d->gltf_descriptor_sets[frame_idx], 0, NULL);
-          demo_render_scene(d->duck, graphics_buffer, d->gltf_pipe_layout,
+                            pipe);
+          vkCmdBindDescriptorSets(
+              graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe_layout, 0,
+              1, &d->gltf_descriptor_sets[frame_idx], 0, NULL);
+          demo_render_scene(d->duck, graphics_buffer, pipe_layout,
                             &d->push_constants, vp);
         }
 
@@ -1940,7 +1944,9 @@ static void demo_destroy(demo *d) {
   vkDestroyDescriptorSetLayout(device, d->material_layout, NULL);
   vkDestroyPipelineLayout(device, d->material_pipe_layout, NULL);
   vkDestroyPipelineLayout(device, d->simple_pipe_layout, NULL);
-  vkDestroyPipeline(device, d->gltf_pipeline, NULL);
+
+  destroy_gpupipeline(device, d->gltf_pipeline);
+
   vkDestroyPipeline(device, d->skybox_pipeline, NULL);
   vkDestroyPipeline(device, d->uv_mesh_pipeline, NULL);
   vkDestroyPipeline(device, d->color_mesh_pipeline, NULL);

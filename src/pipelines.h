@@ -8,6 +8,8 @@ typedef struct VkRenderPass_T *VkRenderPass;
 typedef struct VkPipelineLayout_T *VkPipelineLayout;
 typedef struct VkPipeline_T *VkPipeline;
 
+typedef struct gpupipeline gpupipeline;
+
 uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
                                  VkRenderPass pass, uint32_t w, uint32_t h,
                                  VkPipelineLayout layout, VkPipeline *pipe);
@@ -25,6 +27,7 @@ uint32_t create_skybox_pipeline(VkDevice device, VkPipelineCache cache,
                                 VkPipelineLayout layout, VkPipeline *pipe);
 
 enum GLTF_PERMUTATIONS {
+  GLTF_PERM_NONE = 0x00000000,
   GLTF_PERM_NORMAL_MAP = 0x00000001,
   GLTF_PERM_PBR_METALLIC_ROUGHNESS = 0x00000002,
   // GLTF_PERM_PBR_SPECULAR_GLOSSINESS = 0x00000004,
@@ -39,4 +42,4 @@ enum GLTF_PERMUTATIONS {
 
 uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
                               VkRenderPass pass, uint32_t w, uint32_t h,
-                              VkPipelineLayout layout, VkPipeline *pipe);
+                              VkPipelineLayout layout, gpupipeline **pipe);

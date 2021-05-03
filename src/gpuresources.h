@@ -9,12 +9,15 @@ typedef struct VkImage_T *VkImage;
 typedef struct VkImageView_T *VkImageView;
 typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
+typedef struct VkPipeline_T *VkPipeline;
+typedef struct VkPipelineCache_T *VkPipelineCache;
 
 typedef struct VmaAllocator_T *VmaAllocator;
 typedef struct VmaAllocation_T *VmaAllocation;
 typedef struct VmaPool_T *VmaPool;
 
 typedef struct VkImageCreateInfo VkImageCreateInfo;
+typedef struct VkGraphicsPipelineCreateInfo VkGraphicsPipelineCreateInfo;
 typedef struct VmaAllocationCreateInfo VmaAllocationCreateInfo;
 
 typedef struct cpumesh cpumesh;
@@ -54,6 +57,13 @@ typedef struct gputexture {
   uint32_t layer_count;
   uint32_t format;
 } gputexture;
+
+typedef struct gpupipeline {
+  uint32_t pipeline_id;
+  uint32_t pipeline_count;
+  uint32_t *pipeline_flags;
+  VkPipeline *pipelines;
+} gpupipeline;
 
 #define MAX_MATERIAL_TEXTURES 8
 
@@ -106,6 +116,12 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator alloc,
                                 VmaPool up_pool, VmaPool tex_pool,
                                 gputexture *t);
 void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t);
+
+int32_t create_gpupipeline(VkDevice device, VkPipelineCache cache,
+                           uint32_t perm_count,
+                           VkGraphicsPipelineCreateInfo *create_info_base,
+                           gpupipeline **p);
+void destroy_gpupipeline(VkDevice device, const gpupipeline *p);
 
 int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator alloc,
                                  const cgltf_material *gltf, const uint8_t *bin,
