@@ -585,7 +585,7 @@ void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t) {
   vkDestroyImageView(device, t->view, NULL);
 }
 
-gpupipeline *alloc_gpupipeline(uint32_t perm_count) {
+static gpupipeline *alloc_gpupipeline(uint32_t perm_count) {
   size_t pipe_handles_size = sizeof(VkPipeline) * perm_count;
   size_t flags_size = sizeof(uint32_t) * perm_count;
   size_t pipeline_size = sizeof(gpupipeline);
