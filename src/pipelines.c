@@ -684,3 +684,7 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
 
   return err;
 }
+
+uint32_t create_gltf_rt_pipeline(VkDevice device, VkPipelineCache cache,
+                                 VkRenderPass pass, uint32_t w, uint32_t h,
+                                 VkPipelineLayout layout, gpupipeline **pipe) {}

@@ -619,8 +619,9 @@ int32_t create_gpupipeline(VkDevice device, VkPipelineCache cache,
   assert(pipe_create_info);
 
   uint32_t stage_count = create_info_base->stageCount;
-
   uint32_t perm_stage_count = perm_count * stage_count;
+
+  // Every shader stage needs its own create info
   VkPipelineShaderStageCreateInfo *pipe_stage_info =
       (VkPipelineShaderStageCreateInfo *)alloca(
           sizeof(VkPipelineShaderStageCreateInfo) * perm_stage_count);
@@ -633,6 +634,7 @@ int32_t create_gpupipeline(VkDevice device, VkPipelineCache cache,
       (VkSpecializationInfo *)alloca(sizeof(VkSpecializationInfo) * perm_count);
   uint32_t *flags = (uint32_t *)alloca(sizeof(uint32_t) * perm_count);
 
+  // Insert specialization info to every shader stage
   for (uint32_t i = 0; i < perm_count; ++i) {
     pipe_create_info[i] = *create_info_base;
 

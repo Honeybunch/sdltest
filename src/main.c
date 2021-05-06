@@ -360,9 +360,41 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   uint32_t device_ext_count = 0;
   const char *device_ext_names[MAX_EXT_COUNT] = {0};
 
+  // Need a swapchain
   {
     assert(device_ext_count + 1 < MAX_EXT_COUNT);
     device_ext_names[device_ext_count++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
+  }
+
+  // TODO: Check for Raytracing Support
+  {
+    // Required for Spirv 1.4
+    assert(device_ext_count + 1 < MAX_EXT_COUNT);
+    device_ext_names[device_ext_count++] =
+        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME;
+
+    // Required for VK_KHR_ray_tracing_pipeline
+    assert(device_ext_count + 1 < MAX_EXT_COUNT);
+    device_ext_names[device_ext_count++] = VK_KHR_SPIRV_1_4_EXTENSION_NAME;
+
+    // Required for VK_KHR_acceleration_structure
+    assert(device_ext_count + 1 < MAX_EXT_COUNT);
+    device_ext_names[device_ext_count++] =
+        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME;
+    assert(device_ext_count + 1 < MAX_EXT_COUNT);
+    device_ext_names[device_ext_count++] =
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME;
+    assert(device_ext_count + 1 < MAX_EXT_COUNT);
+    device_ext_names[device_ext_count++] =
+        VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME;
+
+    // Required for raytracing
+    assert(device_ext_count + 1 < MAX_EXT_COUNT);
+    device_ext_names[device_ext_count++] =
+        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME;
+    assert(device_ext_count + 1 < MAX_EXT_COUNT);
+    device_ext_names[device_ext_count++] =
+        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME;
   }
 
   VkDevice device = create_device(gpu, graphics_queue_family_index,
