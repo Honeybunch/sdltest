@@ -81,6 +81,31 @@ foreach(shader ${shaders})
   )
   list(APPEND shader_headers ${out_paths})
 endforeach()
+
+file(GLOB rt_shaders "${CMAKE_CURRENT_LIST_DIR}/src/*.hlsl.rt")
+foreach(shader ${rt_shaders})
+  get_filename_component(filename ${shader} NAME_WLE)
+  get_filename_component(filename ${filename} NAME_WLE)
+  set(shader_out_path ${CMAKE_CFG_INTDIR}/shaders)
+
+  set(raygen_out_path "${shader_out_path}/${filename}_raygen.h")
+  set(miss_out_path "${shader_out_path}/${filename}_miss.h")
+  set(closehit_out_path "${shader_out_path}/${filename}_closehit.h")
+  set(out_paths "${raygen_out_path};${miss_out_path};${closehit_out_path}")
+
+  add_custom_command(
+      OUTPUT ${out_paths}
+      COMMAND ${CMAKE_COMMAND} -E make_directory ${shader_out_path}
+      COMMAND ${DXC} -T lib_6_4 -E raygen -Vn ${filename}_raygen $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${raygen_out_path}
+      COMMAND ${DXC} -T lib_6_4 -E miss -Vn ${filename}_miss $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${miss_out_path}
+      COMMAND ${DXC} -T lib_6_4 -E closehit -Vn ${filename}_closehit $<$<CONFIG:Debug>:-O0> $<$<CONFIG:Debug>:-Zi> $<$<CONFIG:Debug>:-Qembed_debug> -fspv-target-env=vulkan1.2 -spirv ${shader} -Fh ${closehit_out_path}
+      MAIN_DEPENDENCY ${shader}
+      DEPENDS ${shader_includes}
+  )
+  list(APPEND shader_headers ${out_paths})
+endforeach()
+
+
 add_custom_target(shaders ALL DEPENDS ${shader_headers})
 
 # Setup Main Executable

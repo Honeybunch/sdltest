@@ -13,6 +13,10 @@
 #include "uv_mesh_frag.h"
 #include "uv_mesh_vert.h"
 
+#include "gltf_closehit.h"
+#include "gltf_miss.h"
+#include "gltf_raygen.h"
+
 #include <assert.h>
 #include <malloc.h>
 #include <stdbool.h>
@@ -672,8 +676,8 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
 
   gpupipeline *p = NULL;
 
-  err = (VkResult)create_gpupipeline(device, cache, perm_count,
-                                     &create_info_base, &p);
+  err = (VkResult)create_gfx_pipeline(device, cache, perm_count,
+                                      &create_info_base, &p);
   assert(err == VK_SUCCESS);
 
   // Can destroy shader moduless
@@ -685,6 +689,123 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
   return err;
 }
 
-uint32_t create_gltf_rt_pipeline(VkDevice device, VkPipelineCache cache,
-                                 VkRenderPass pass, uint32_t w, uint32_t h,
-                                 VkPipelineLayout layout, gpupipeline **pipe) {}
+uint32_t create_gltf_rt_pipeline(
+    VkDevice device, VkPipelineCache cache,
+    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
+    VkRenderPass pass, uint32_t w, uint32_t h, VkPipelineLayout layout,
+    gpupipeline **pipe) {
+  VkResult err = VK_SUCCESS;
+
+  // Load shaders and setup groups
+  // Ray Gen
+  VkShaderModule raygen_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(gltf_raygen),
+        .pCode = (const uint32_t *)gltf_raygen,
+    };
+    err = vkCreateShaderModule(device, &create_info, NULL, &raygen_mod);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Miss
+  VkShaderModule miss_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(gltf_miss),
+        .pCode = (const uint32_t *)gltf_miss,
+    };
+    err = vkCreateShaderModule(device, &create_info, NULL, &miss_mod);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Closest Hit
+  VkShaderModule closehit_mod = VK_NULL_HANDLE;
+  {
+    VkShaderModuleCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = sizeof(gltf_closehit),
+        .pCode = (const uint32_t *)gltf_closehit,
+    };
+    err = vkCreateShaderModule(device, &create_info, NULL, &closehit_mod);
+    assert(err == VK_SUCCESS);
+  }
+
+  VkPipelineShaderStageCreateInfo shader_stages[3] = {
+      [0] =
+          (VkPipelineShaderStageCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+              .module = raygen_mod,
+              .pName = "raygen"},
+      [1] =
+          (VkPipelineShaderStageCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_MISS_BIT_KHR,
+              .module = miss_mod,
+              .pName = "miss"},
+      [2] =
+          (VkPipelineShaderStageCreateInfo){
+              .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+              .stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+              .module = closehit_mod,
+              .pName = "closehit"},
+
+  };
+  VkRayTracingShaderGroupCreateInfoKHR shader_group_info[3] = {
+      [0] =
+          (VkRayTracingShaderGroupCreateInfoKHR){
+              .sType =
+                  VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
+              .type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR,
+              .generalShader = 0,
+              .closestHitShader = VK_SHADER_UNUSED_KHR,
+              .anyHitShader = VK_SHADER_UNUSED_KHR,
+              .intersectionShader = VK_SHADER_UNUSED_KHR,
+          },
+      [1] =
+          (VkRayTracingShaderGroupCreateInfoKHR){
+              .sType =
+                  VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
+              .type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR,
+              .generalShader = 1,
+              .closestHitShader = VK_SHADER_UNUSED_KHR,
+              .anyHitShader = VK_SHADER_UNUSED_KHR,
+              .intersectionShader = VK_SHADER_UNUSED_KHR,
+          },
+      [2] =
+          (VkRayTracingShaderGroupCreateInfoKHR){
+              .sType =
+                  VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
+              .type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR,
+              .generalShader = VK_SHADER_UNUSED_KHR,
+              .closestHitShader = 2,
+              .anyHitShader = VK_SHADER_UNUSED_KHR,
+              .intersectionShader = VK_SHADER_UNUSED_KHR,
+          },
+  };
+
+  // Create Pipeline
+  VkRayTracingPipelineCreateInfoKHR create_info = {0};
+  create_info.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
+  create_info.stageCount = 3;
+  create_info.pStages = shader_stages;
+  create_info.groupCount = 3;
+  create_info.pGroups = shader_group_info;
+  create_info.maxPipelineRayRecursionDepth = 1;
+  create_info.layout = layout;
+
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  err = (VkResult)create_rt_pipeline(device, cache, vkCreateRayTracingPipelines,
+                                     1, &create_info, pipe);
+  assert(err == VK_SUCCESS);
+
+  // Cleanup modules
+  vkDestroyShaderModule(device, raygen_mod, NULL);
+  vkDestroyShaderModule(device, miss_mod, NULL);
+  vkDestroyShaderModule(device, closehit_mod, NULL);
+
+  return (uint32_t)err;
+}

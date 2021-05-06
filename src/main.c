@@ -210,14 +210,19 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   queues[0].pQueuePriorities = queue_priorities;
   queues[0].flags = 0;
 
+  VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipe_feature = {
+      .sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+      .rayTracingPipeline = VK_TRUE,
+  };
+
   VkDeviceCreateInfo create_info = {0};
   create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-  create_info.pNext = NULL, create_info.queueCreateInfoCount = 1;
+  create_info.pNext = (const void *)&rt_pipe_feature;
+  create_info.queueCreateInfoCount = 1;
   create_info.pQueueCreateInfos = queues;
   create_info.enabledExtensionCount = ext_count;
   create_info.ppEnabledExtensionNames = ext_names;
-  create_info.pEnabledFeatures =
-      NULL; // If specific features are required, pass them in here
 
   if (present_queue_family_index != graphics_queue_family_index) {
     queues[1].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -846,6 +851,54 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   gpupipeline *gltf_pipeline = NULL;
   err = create_gltf_pipeline(device, pipeline_cache, render_pass, width, height,
                              gltf_pipe_layout, &gltf_pipeline);
+  assert(err == VK_SUCCESS);
+
+  // Create GLTF RT Pipeline Layout
+  // Create GLTF Descriptor Set Layout
+  VkDescriptorSetLayout gltf_rt_layout = VK_NULL_HANDLE;
+  {
+    VkDescriptorSetLayoutBinding bindings[3] = {
+        {1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1,
+         VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+        {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1,
+         VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+        {3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
+         VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = 3;
+    create_info.pBindings = bindings;
+    err = vkCreateDescriptorSetLayout(device, &create_info, NULL,
+                                      &gltf_rt_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  VkPipelineLayout gltf_rt_pipe_layout = VK_NULL_HANDLE;
+  {
+    VkPipelineLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    create_info.setLayoutCount = 1;
+    create_info.pSetLayouts = &gltf_rt_layout;
+    create_info.pushConstantRangeCount = 1;
+    create_info.pPushConstantRanges = &const_range;
+
+    err = vkCreatePipelineLayout(device, &create_info, NULL,
+                                 &gltf_rt_pipe_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // HACK: Get this function here...
+  PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR =
+      (PFN_vkCreateRayTracingPipelinesKHR)vkGetDeviceProcAddr(
+          device, "vkCreateRayTracingPipelinesKHR");
+
+  // Create GLTF Ray Tracing Pipeline
+  gpupipeline *gltf_rt_pipeline = NULL;
+  err = create_gltf_rt_pipeline(
+      device, pipeline_cache, vkCreateRayTracingPipelinesKHR, render_pass,
+      width, height, gltf_rt_pipe_layout, &gltf_rt_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create a pool for host memory uploads
@@ -2078,7 +2131,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     app_info.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
     app_info.pEngineName = "SDL Test";
     app_info.engineVersion = VK_MAKE_VERSION(0, 0, 1);
-    app_info.apiVersion = VK_API_VERSION_1_1;
+    app_info.apiVersion = VK_API_VERSION_1_2;
 
     VkInstanceCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;

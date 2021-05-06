@@ -38,6 +38,10 @@
         "regex": "c",
         "stack": "c",
         "cmath": "c",
-        "xlocnum": "c"
+        "xlocnum": "c",
+        "gltf.hlsl_closehit.h": "c",
+        "gltf_closehit.h": "c",
+        "vulkan.h": "c",
+        "vulkan_core.h": "c"
     }
 }

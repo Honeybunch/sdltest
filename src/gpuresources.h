@@ -2,22 +2,13 @@
 
 #include <stdint.h>
 
-typedef struct VkBuffer_T *VkBuffer;
-typedef struct VkDevice_T *VkDevice;
-typedef struct VkFence_T *VkFence;
-typedef struct VkImage_T *VkImage;
-typedef struct VkImageView_T *VkImageView;
-typedef struct VkDescriptorSetLayout_T *VkDescriptorSetLayout;
-typedef struct VkDescriptorSet_T *VkDescriptorSet;
-typedef struct VkPipeline_T *VkPipeline;
-typedef struct VkPipelineCache_T *VkPipelineCache;
+#define VK_NO_PROTOTYPES
+#include <vulkan/vulkan.h>
 
 typedef struct VmaAllocator_T *VmaAllocator;
 typedef struct VmaAllocation_T *VmaAllocation;
 typedef struct VmaPool_T *VmaPool;
 
-typedef struct VkImageCreateInfo VkImageCreateInfo;
-typedef struct VkGraphicsPipelineCreateInfo VkGraphicsPipelineCreateInfo;
 typedef struct VmaAllocationCreateInfo VmaAllocationCreateInfo;
 
 typedef struct cpumesh cpumesh;
@@ -117,10 +108,15 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator alloc,
                                 gputexture *t);
 void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t);
 
-int32_t create_gpupipeline(VkDevice device, VkPipelineCache cache,
-                           uint32_t perm_count,
-                           VkGraphicsPipelineCreateInfo *create_info_base,
-                           gpupipeline **p);
+int32_t create_gfx_pipeline(VkDevice device, VkPipelineCache cache,
+                            uint32_t perm_count,
+                            VkGraphicsPipelineCreateInfo *create_info_base,
+                            gpupipeline **p);
+int32_t create_rt_pipeline(
+    VkDevice device, VkPipelineCache cache,
+    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
+    uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
+    gpupipeline **p);
 void destroy_gpupipeline(VkDevice device, const gpupipeline *p);
 
 int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator alloc,

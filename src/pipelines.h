@@ -2,11 +2,8 @@
 
 #include <stdint.h>
 
-typedef struct VkDevice_T *VkDevice;
-typedef struct VkPipelineCache_T *VkPipelineCache;
-typedef struct VkRenderPass_T *VkRenderPass;
-typedef struct VkPipelineLayout_T *VkPipelineLayout;
-typedef struct VkPipeline_T *VkPipeline;
+#define VK_NO_PROTOTYPES
+#include <vulkan/vulkan.h>
 
 typedef struct gpupipeline gpupipeline;
 
@@ -44,6 +41,8 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
                               VkRenderPass pass, uint32_t w, uint32_t h,
                               VkPipelineLayout layout, gpupipeline **pipe);
 
-uint32_t create_gltf_rt_pipeline(VkDevice device, VkPipelineCache cache,
-                                 VkRenderPass pass, uint32_t w, uint32_t h,
-                                 VkPipelineLayout layout, gpupipeline **pipe);
+uint32_t create_gltf_rt_pipeline(
+    VkDevice device, VkPipelineCache cache,
+    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
+    VkRenderPass pass, uint32_t w, uint32_t h, VkPipelineLayout layout,
+    gpupipeline **pipe);

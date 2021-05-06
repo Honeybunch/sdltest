@@ -606,10 +606,10 @@ static gpupipeline *alloc_gpupipeline(uint32_t perm_count) {
   return p;
 }
 
-int32_t create_gpupipeline(VkDevice device, VkPipelineCache cache,
-                           uint32_t perm_count,
-                           VkGraphicsPipelineCreateInfo *create_info_base,
-                           gpupipeline **p) {
+static int32_t
+create_gfx_pipeline(VkDevice device, VkPipelineCache cache, uint32_t perm_count,
+                    VkGraphicsPipelineCreateInfo *create_info_base,
+                    gpupipeline **p) {
   gpupipeline *pipe = alloc_gpupipeline(perm_count);
   VkResult err = VK_SUCCESS;
 
@@ -657,6 +657,64 @@ int32_t create_gpupipeline(VkDevice device, VkPipelineCache cache,
 
   err = vkCreateGraphicsPipelines(device, cache, perm_count, pipe_create_info,
                                   NULL, pipe->pipelines);
+  assert(err == VK_SUCCESS);
+
+  *p = pipe;
+  return err;
+}
+
+static int32_t create_rt_pipeline(
+    VkDevice device, VkPipelineCache cache,
+    PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
+    uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
+    gpupipeline **p) {
+  gpupipeline *pipe = alloc_gpupipeline(perm_count);
+  VkResult err = VK_SUCCESS;
+
+  VkRayTracingPipelineCreateInfoKHR *pipe_create_info =
+      (VkRayTracingPipelineCreateInfoKHR *)alloca(
+          sizeof(VkRayTracingPipelineCreateInfoKHR) * perm_count);
+  assert(pipe_create_info);
+
+  uint32_t stage_count = create_info_base->stageCount;
+  uint32_t perm_stage_count = perm_count * stage_count;
+
+  // Every shader stage needs its own create info
+  VkPipelineShaderStageCreateInfo *pipe_stage_info =
+      (VkPipelineShaderStageCreateInfo *)alloca(
+          sizeof(VkPipelineShaderStageCreateInfo) * perm_stage_count);
+
+  VkSpecializationMapEntry map_entries[1] = {
+      {0, 0, sizeof(uint32_t)},
+  };
+
+  VkSpecializationInfo *spec_info =
+      (VkSpecializationInfo *)alloca(sizeof(VkSpecializationInfo) * perm_count);
+  uint32_t *flags = (uint32_t *)alloca(sizeof(uint32_t) * perm_count);
+
+  // Insert specialization info to every shader stage
+  for (uint32_t i = 0; i < perm_count; ++i) {
+    pipe_create_info[i] = *create_info_base;
+
+    flags[i] = i;
+    spec_info[i] = (VkSpecializationInfo){
+        1,
+        map_entries,
+        sizeof(uint32_t),
+        &flags[i],
+    };
+
+    uint32_t stage_idx = i * stage_count;
+    for (uint32_t ii = 0; ii < stage_count; ++ii) {
+      VkPipelineShaderStageCreateInfo *stage = &pipe_stage_info[stage_idx + ii];
+      *stage = create_info_base->pStages[ii];
+      stage->pSpecializationInfo = &spec_info[i];
+    }
+    pipe_create_info[i].pStages = &pipe_stage_info[stage_idx];
+  }
+
+  err = vkCreateRayTracingPipelines(device, VK_NULL_HANDLE, cache, perm_count,
+                                    pipe_create_info, NULL, pipe->pipelines);
   assert(err == VK_SUCCESS);
 
   *p = pipe;
