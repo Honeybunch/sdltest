@@ -80,6 +80,10 @@ typedef struct demo {
   VkPipelineLayout gltf_pipe_layout;
   gpupipeline *gltf_pipeline;
 
+  VkDescriptorSetLayout gltf_rt_layout;
+  VkPipelineLayout gltf_rt_pipe_layout;
+  gpupipeline *gltf_rt_pipeline;
+
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
   VkFramebuffer swapchain_framebuffers[FRAME_LATENCY];
@@ -1054,6 +1058,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   d->gltf_layout = gltf_layout;
   d->gltf_pipe_layout = gltf_pipe_layout;
   d->gltf_pipeline = gltf_pipeline;
+  d->gltf_rt_layout = gltf_rt_layout;
+  d->gltf_rt_pipe_layout = gltf_rt_pipe_layout;
+  d->gltf_rt_pipeline = gltf_rt_pipeline;
   d->upload_mem_pool = upload_mem_pool;
   d->texture_mem_pool = texture_mem_pool;
   d->cube_gpu = cube;
@@ -2022,20 +2029,28 @@ static void demo_destroy(demo *d) {
 
   free(d->queue_props);
   vkDestroySampler(device, d->sampler, NULL);
-  vkDestroyDescriptorSetLayout(device, d->gltf_layout, NULL);
-  vkDestroyPipelineLayout(device, d->gltf_pipe_layout, NULL);
+
+  vkDestroyPipeline(device, d->fractal_pipeline, NULL);
+
   vkDestroyDescriptorSetLayout(device, d->skybox_layout, NULL);
   vkDestroyPipelineLayout(device, d->skybox_pipe_layout, NULL);
+  vkDestroyPipeline(device, d->skybox_pipeline, NULL);
+
   vkDestroyDescriptorSetLayout(device, d->material_layout, NULL);
   vkDestroyPipelineLayout(device, d->material_pipe_layout, NULL);
-  vkDestroyPipelineLayout(device, d->simple_pipe_layout, NULL);
+  vkDestroyPipeline(device, d->uv_mesh_pipeline, NULL);
 
+  vkDestroyPipelineLayout(device, d->simple_pipe_layout, NULL);
+  vkDestroyPipeline(device, d->color_mesh_pipeline, NULL);
+
+  vkDestroyDescriptorSetLayout(device, d->gltf_rt_layout, NULL);
+  vkDestroyPipelineLayout(device, d->gltf_rt_pipe_layout, NULL);
+  destroy_gpupipeline(device, d->gltf_rt_pipeline);
+
+  vkDestroyDescriptorSetLayout(device, d->gltf_layout, NULL);
+  vkDestroyPipelineLayout(device, d->gltf_pipe_layout, NULL);
   destroy_gpupipeline(device, d->gltf_pipeline);
 
-  vkDestroyPipeline(device, d->skybox_pipeline, NULL);
-  vkDestroyPipeline(device, d->uv_mesh_pipeline, NULL);
-  vkDestroyPipeline(device, d->color_mesh_pipeline, NULL);
-  vkDestroyPipeline(device, d->fractal_pipeline, NULL);
   vkDestroyPipelineCache(device, d->pipeline_cache, NULL);
   vkDestroyRenderPass(device, d->render_pass, NULL);
   vkDestroySwapchainKHR(device, d->swapchain, NULL);
