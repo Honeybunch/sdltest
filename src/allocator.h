@@ -26,6 +26,14 @@ typedef struct arena_allocator {
   bool grow;
 } arena_allocator;
 
-arena_allocator make_arena_allocator(size_t max_size);
+arena_allocator create_arena_allocator(size_t max_size);
 void reset_arena(arena_allocator a, bool allow_grow);
 void destroy_arena_allocator(arena_allocator a);
+
+typedef struct standard_allocator {
+  mi_heap_t *heap;
+  allocator alloc;
+} standard_allocator;
+
+standard_allocator create_standard_allocator();
+void destroy_standard_allocator(standard_allocator a);

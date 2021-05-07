@@ -24,8 +24,7 @@ void arena_free(void *user_data, void *ptr) {
   (void)ptr;
 }
 
-arena_allocator make_arena_allocator(size_t max_size) {
-
+arena_allocator create_arena_allocator(size_t max_size) {
   mi_heap_t *heap = mi_heap_new();
   assert(heap);
   void *data = mi_heap_calloc(heap, 1, max_size);
@@ -59,4 +58,27 @@ void reset_arena(arena_allocator a, bool allow_grow) {
 void destroy_arena_allocator(arena_allocator a) {
   mi_free(a.data);
   mi_heap_destroy(a.heap);
+}
+
+void *standard_alloc(void *user_data, size_t size) {
+  standard_allocator *alloc = (standard_allocator *)user_data;
+  return mi_heap_calloc(alloc->heap, 1, size);
+}
+
+void standard_free(void *user_data, void *ptr) {
+  (void)user_data;
+  mi_free(ptr);
+}
+
+standard_allocator create_standard_allocator() {
+  standard_allocator a = {.heap = mi_heap_new(),
+                          .alloc = {
+                              .alloc = standard_alloc,
+                              .free = standard_free,
+                              .user_data = &a,
+                          }};
+  return a;
+}
+void destroy_standard_allocator(standard_allocator a) {
+  mi_heap_delete(a.heap);
 }

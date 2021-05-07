@@ -2,6 +2,7 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_vulkan.h>
 #include <assert.h>
+#include <mimalloc.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <volk.h>
@@ -2061,12 +2062,47 @@ static void demo_destroy(demo *d) {
   *d = (demo){0};
 }
 
+static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
+                         VkSystemAllocationScope scope) {
+  (void)scope;
+  mi_heap_t *heap = (mi_heap_t *)pUserData;
+  return mi_heap_malloc_aligned(heap, size, alignment);
+}
+
+static void *vk_realloc_fn(void *pUserData, void *pOriginal, size_t size,
+                           size_t alignment, VkSystemAllocationScope scope) {
+  (void)scope;
+  mi_heap_t *heap = (mi_heap_t *)pUserData;
+  return mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
+}
+
+static void vk_free_fn(void *pUserData, void *pMemory) {
+  (void)pUserData;
+  mi_free(pMemory);
+}
+
+static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
+  VkAllocationCallbacks ret = {
+      .pUserData = heap,
+      .pfnAllocation = vk_alloc_fn,
+      .pfnReallocation = vk_realloc_fn,
+      .pfnFree = vk_free_fn,
+  };
+  return ret;
+}
+
 int32_t SDL_main(int32_t argc, char *argv[]) {
   static const float qtr_pi = 0.7853981625f;
 
   // Create Temporary Arena Allocator
   static const arena_alloc_size = 1024 * 1024;
-  arena_allocator arena = make_arena_allocator(arena_alloc_size);
+  arena_allocator arena = create_arena_allocator(arena_alloc_size);
+
+  mi_heap_t *vk_heap = mi_heap_new();
+  VkAllocationCallbacks vk_alloc = create_vulkan_allocator(vk_heap);
+  standard_allocator std_alloc = create_standard_allocator();
+
+  const VkAllocationCallbacks *vk_alloc_ptr = &vk_alloc;
 
   editor_camera_controller controller = {0};
   controller.move_speed = 10.0f;
@@ -2161,7 +2197,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     create_info.enabledExtensionCount = ext_count;
     create_info.ppEnabledExtensionNames = ext_names;
 
-    err = vkCreateInstance(&create_info, NULL, &instance);
+    err = vkCreateInstance(&create_info, vk_alloc_ptr, &instance);
     assert(err == VK_SUCCESS);
     volkLoadInstance(instance);
   }
@@ -2252,10 +2288,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   demo_destroy(&d);
 
-  vkDestroyInstance(instance, NULL);
+  vkDestroyInstance(instance, vk_alloc_ptr);
   instance = VK_NULL_HANDLE;
 
   destroy_arena_allocator(arena);
+  destroy_standard_allocator(std_alloc);
+  mi_heap_delete(vk_heap);
 
   return 0;
 }
