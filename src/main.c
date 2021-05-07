@@ -8,6 +8,7 @@
 
 #include <vk_mem_alloc.h>
 
+#include "allocator.h"
 #include "camera.h"
 #include "cpuresources.h"
 #include "cube.h"
@@ -2063,6 +2064,10 @@ static void demo_destroy(demo *d) {
 int32_t SDL_main(int32_t argc, char *argv[]) {
   static const float qtr_pi = 0.7853981625f;
 
+  // Create Temporary Arena Allocator
+  static const arena_alloc_size = 1024 * 1024;
+  arena_allocator arena = make_arena_allocator(arena_alloc_size);
+
   editor_camera_controller controller = {0};
   controller.move_speed = 10.0f;
   controller.look_speed = 1.0f;
@@ -2234,6 +2239,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     d.push_constants.view_pos = main_cam.transform.position;
 
     demo_render_frame(&d, &vp, &sky_vp);
+
+    // Reset the arena allocator
+    reset_arena(arena, true); // Just allow it to grow for now
   }
 
   SDL_DestroyWindow(window);
@@ -2246,6 +2254,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   vkDestroyInstance(instance, NULL);
   instance = VK_NULL_HANDLE;
+
+  destroy_arena_allocator(arena);
 
   return 0;
 }

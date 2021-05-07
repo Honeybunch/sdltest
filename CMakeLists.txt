@@ -50,9 +50,12 @@ find_package(SDL2 REQUIRED)
 find_package(sdl2-image CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
-find_program(DXC dxc REQUIRED)
-find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 find_package(imgui CONFIG REQUIRED)
+find_package(mimalloc 1.6 CONFIG REQUIRED)
+
+find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
+
+find_program(DXC dxc REQUIRED)
 find_program(BASISU basisu_tool REQUIRED)
 
 # Compile Shaders
@@ -109,7 +112,8 @@ endforeach()
 add_custom_target(shaders ALL DEPENDS ${shader_headers})
 
 # Setup Main Executable
-set(source "${CMAKE_CURRENT_LIST_DIR}/src/camera.c"
+set(source "${CMAKE_CURRENT_LIST_DIR}/src/allocator.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/camera.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/cgltf.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/cimgui.cpp"
            "${CMAKE_CURRENT_LIST_DIR}/src/cube.c"
@@ -143,7 +147,8 @@ target_link_libraries(sdltest PRIVATE
   volk::volk
   volk::volk_headers
   unofficial::vulkan-memory-allocator::vulkan-memory-allocator
-  imgui::imgui)
+  imgui::imgui
+  mimalloc mimalloc-static)
 if(STATIC)
   target_link_libraries(sdltest PRIVATE SDL2::SDL2-static)
 else()
