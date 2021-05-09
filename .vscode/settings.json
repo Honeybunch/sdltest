@@ -1,5 +1,6 @@
 {
     "files.associations": {
+        "*.rt": "hlsl",
         "sdl.h": "c",
         "algorithm": "c",
         "chrono": "c",
@@ -42,6 +43,18 @@
         "gltf.hlsl_closehit.h": "c",
         "gltf_closehit.h": "c",
         "vulkan.h": "c",
-        "vulkan_core.h": "c"
+        "vulkan_core.h": "c",
+        "functional": "c",
+        "future": "c",
+        "iosfwd": "c",
+        "locale": "c",
+        "map": "c",
+        "memory": "c",
+        "tuple": "c",
+        "unordered_map": "c",
+        "unordered_set": "c",
+        "xlocbuf": "c",
+        "xlocmes": "c",
+        "xlocmon": "c"
     }
 }

@@ -7,7 +7,7 @@
 void *arena_alloc(void *user_data, size_t size) {
   arena_allocator *arena = (arena_allocator *)user_data;
   size_t cur_size = arena->size;
-  if (cur_size + size < arena->max_size) {
+  if (cur_size + size >= arena->max_size) {
     arena->grow = true; // Signal that on the next reset we need to actually do
                         // a resize as the arena is unable to meet demand
     assert(false);

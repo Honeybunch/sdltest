@@ -8,8 +8,10 @@ typedef struct mi_heap_s mi_heap_t;
 typedef void *alloc_fn(void *user_data, size_t size);
 typedef void free_fn(void *user_data, void *ptr);
 
-#define hb_alloc(a, size) a.alloc(a.user_data, size)
-#define hb_free(a, ptr) a.free(a.user_data, ptr)
+#define hb_alloc(a, size) a.alloc(a.user_data, (size))
+#define hb_alloc_tp(a, T) (T *)a.alloc(a.user_data, sizeof(T))
+#define hb_alloc_nm_tp(a, n, T) (T *)a.alloc(a.user_data, n * sizeof(T))
+#define hb_free(a, ptr) a.free(a.user_data, (ptr))
 
 typedef struct allocator {
   void *user_data;

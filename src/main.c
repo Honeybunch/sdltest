@@ -35,6 +35,12 @@
 #define HEIGHT 900
 
 typedef struct demo {
+  allocator std_alloc;
+  allocator tmp_alloc;
+
+  const VkAllocationCallbacks *vk_alloc;
+  VmaAllocator vma_alloc;
+
   VkInstance instance;
 
   VkPhysicalDevice gpu;
@@ -52,8 +58,6 @@ typedef struct demo {
   VkDevice device;
   VkQueue present_queue;
   VkQueue graphics_queue;
-
-  VmaAllocator allocator;
 
   VkFormat swapchain_image_format;
   VkSwapchainKHR swapchain;
@@ -206,6 +210,7 @@ static VkDevice create_device(VkPhysicalDevice gpu,
                               uint32_t graphics_queue_family_index,
                               uint32_t present_queue_family_index,
                               uint32_t ext_count,
+                              const VkAllocationCallbacks *vk_alloc,
                               const char *const *ext_names) {
   float queue_priorities[1] = {0.0};
   VkDeviceQueueCreateInfo queues[2];
@@ -241,7 +246,7 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   }
 
   VkDevice device = VK_NULL_HANDLE;
-  VkResult err = vkCreateDevice(gpu, &create_info, NULL, &device);
+  VkResult err = vkCreateDevice(gpu, &create_info, vk_alloc, &device);
   assert(err == VK_SUCCESS);
 
   return device;
@@ -291,7 +296,9 @@ static void demo_upload_scene(demo *d, const scene *s) {
   }
 }
 
-static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
+static bool demo_init(SDL_Window *window, VkInstance instance,
+                      allocator std_alloc, allocator tmp_alloc,
+                      const VkAllocationCallbacks *vk_alloc, demo *d) {
   VkResult err = VK_SUCCESS;
 
   // Get the GPU we want to run on
@@ -308,7 +315,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_count, NULL);
 
   VkQueueFamilyProperties *queue_props =
-      malloc(queue_family_count * sizeof(VkQueueFamilyProperties));
+      hb_alloc_nm_tp(std_alloc, queue_family_count, VkQueueFamilyProperties);
   assert(queue_props);
   vkGetPhysicalDeviceQueueFamilyProperties(gpu, &queue_family_count,
                                            queue_props);
@@ -410,7 +417,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
   VkDevice device = create_device(gpu, graphics_queue_family_index,
                                   present_queue_family_index, device_ext_count,
-                                  device_ext_names);
+                                  vk_alloc, device_ext_names);
 
   VkQueue graphics_queue = VK_NULL_HANDLE;
   vkGetDeviceQueue(device, graphics_queue_family_index, 0, &graphics_queue);
@@ -423,7 +430,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   }
 
   // Create Allocator
-  VmaAllocator allocator = {0};
+  VmaAllocator vma_alloc = {0};
   {
     VmaVulkanFunctions volk_functions = {0};
     volk_functions.vkGetPhysicalDeviceProperties =
@@ -454,7 +461,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.pVulkanFunctions = &volk_functions;
     create_info.instance = instance;
     create_info.vulkanApiVersion = VK_API_VERSION_1_0;
-    err = vmaCreateAllocator(&create_info, &allocator);
+    err = vmaCreateAllocator(&create_info, &vma_alloc);
     assert(err == VK_SUCCESS);
   }
 
@@ -591,7 +598,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.preTransform = pre_transform;
     create_info.presentMode = present_mode;
 
-    vkCreateSwapchainKHR(device, &create_info, NULL, &swapchain);
+    vkCreateSwapchainKHR(device, &create_info, vk_alloc, &swapchain);
   }
 
   // Create Render Pass
@@ -649,7 +656,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.subpassCount = 1;
     create_info.pSubpasses = &subpass;
     create_info.pDependencies = &subpass_dep;
-    err = vkCreateRenderPass(device, &create_info, NULL, &render_pass);
+    err = vkCreateRenderPass(device, &create_info, vk_alloc, &render_pass);
     assert(err == VK_SUCCESS);
   }
 
@@ -678,7 +685,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
     create_info.initialDataSize = data_size;
     create_info.pInitialData = data;
-    err = vkCreatePipelineCache(device, &create_info, NULL, &pipeline_cache);
+    err =
+        vkCreatePipelineCache(device, &create_info, vk_alloc, &pipeline_cache);
     assert(err == VK_SUCCESS);
 
     if (data) {
@@ -699,20 +707,21 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &const_range;
-    err =
-        vkCreatePipelineLayout(device, &create_info, NULL, &simple_pipe_layout);
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                 &simple_pipe_layout);
     assert(err == VK_SUCCESS);
   }
 
   VkPipeline fractal_pipeline = VK_NULL_HANDLE;
-  err = create_fractal_pipeline(device, pipeline_cache, render_pass, width,
-                                height, simple_pipe_layout, &fractal_pipeline);
+  err = create_fractal_pipeline(device, vk_alloc, pipeline_cache, render_pass,
+                                width, height, simple_pipe_layout,
+                                &fractal_pipeline);
   assert(err == VK_SUCCESS);
 
   VkPipeline color_mesh_pipeline = VK_NULL_HANDLE;
-  err = create_color_mesh_pipeline(device, pipeline_cache, render_pass, width,
-                                   height, simple_pipe_layout,
-                                   &color_mesh_pipeline);
+  err = create_color_mesh_pipeline(device, vk_alloc, pipeline_cache,
+                                   render_pass, width, height,
+                                   simple_pipe_layout, &color_mesh_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create Immutable Sampler
@@ -730,7 +739,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.maxAnisotropy = 1.0f;
     create_info.maxLod = 14.0f; // Hack; known number of mips for 8k textures
     create_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
-    err = vkCreateSampler(device, &create_info, NULL, &sampler);
+    err = vkCreateSampler(device, &create_info, vk_alloc, &sampler);
     assert(err == VK_SUCCESS);
   }
 
@@ -752,7 +761,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     create_info.bindingCount = 5;
     create_info.pBindings = bindings;
-    err = vkCreateDescriptorSetLayout(device, &create_info, NULL,
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &material_layout);
     assert(err == VK_SUCCESS);
   }
@@ -767,16 +776,16 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &const_range;
 
-    err = vkCreatePipelineLayout(device, &create_info, NULL,
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &material_pipe_layout);
     assert(err == VK_SUCCESS);
   }
 
   // Create UV mesh pipeline
   VkPipeline uv_mesh_pipeline = VK_NULL_HANDLE;
-  err =
-      create_uv_mesh_pipeline(device, pipeline_cache, render_pass, width,
-                              height, material_pipe_layout, &uv_mesh_pipeline);
+  err = create_uv_mesh_pipeline(device, vk_alloc, pipeline_cache, render_pass,
+                                width, height, material_pipe_layout,
+                                &uv_mesh_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create Skybox Descriptor Set Layout
@@ -794,8 +803,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     create_info.bindingCount = 2;
     create_info.pBindings = bindings;
-    err =
-        vkCreateDescriptorSetLayout(device, &create_info, NULL, &skybox_layout);
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
+                                      &skybox_layout);
     assert(err == VK_SUCCESS);
   }
 
@@ -809,15 +818,16 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &const_range;
 
-    err =
-        vkCreatePipelineLayout(device, &create_info, NULL, &skybox_pipe_layout);
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                 &skybox_pipe_layout);
     assert(err == VK_SUCCESS);
   }
 
   // Create Skybox Pipeline
   VkPipeline skybox_pipeline = VK_NULL_HANDLE;
-  err = create_skybox_pipeline(device, pipeline_cache, render_pass, width,
-                               height, skybox_pipe_layout, &skybox_pipeline);
+  err = create_skybox_pipeline(device, vk_alloc, pipeline_cache, render_pass,
+                               width, height, skybox_pipe_layout,
+                               &skybox_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create GLTF Descriptor Set Layout
@@ -835,7 +845,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     create_info.bindingCount = 4;
     create_info.pBindings = bindings;
-    err = vkCreateDescriptorSetLayout(device, &create_info, NULL, &gltf_layout);
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
+                                      &gltf_layout);
     assert(err == VK_SUCCESS);
   }
 
@@ -849,14 +860,15 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &const_range;
 
-    err = vkCreatePipelineLayout(device, &create_info, NULL, &gltf_pipe_layout);
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                 &gltf_pipe_layout);
     assert(err == VK_SUCCESS);
   }
 
   // Create GLTF Pipeline
   gpupipeline *gltf_pipeline = NULL;
-  err = create_gltf_pipeline(device, pipeline_cache, render_pass, width, height,
-                             gltf_pipe_layout, &gltf_pipeline);
+  err = create_gltf_pipeline(device, vk_alloc, pipeline_cache, render_pass,
+                             width, height, gltf_pipe_layout, &gltf_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create GLTF RT Pipeline Layout
@@ -876,7 +888,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     create_info.bindingCount = 3;
     create_info.pBindings = bindings;
-    err = vkCreateDescriptorSetLayout(device, &create_info, NULL,
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_rt_layout);
     assert(err == VK_SUCCESS);
   }
@@ -890,7 +902,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &const_range;
 
-    err = vkCreatePipelineLayout(device, &create_info, NULL,
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &gltf_rt_pipe_layout);
     assert(err == VK_SUCCESS);
   }
@@ -903,8 +915,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
   // Create GLTF Ray Tracing Pipeline
   gpupipeline *gltf_rt_pipeline = NULL;
   err = create_gltf_rt_pipeline(
-      device, pipeline_cache, vkCreateRayTracingPipelinesKHR, render_pass,
-      width, height, gltf_rt_pipe_layout, &gltf_rt_pipeline);
+      device, vk_alloc, pipeline_cache, vkCreateRayTracingPipelinesKHR,
+      render_pass, width, height, gltf_rt_pipe_layout, &gltf_rt_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create a pool for host memory uploads
@@ -923,7 +935,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
     VmaPoolCreateInfo create_info = {0};
     create_info.memoryTypeIndex = mem_type_idx;
-    err = vmaCreatePool(allocator, &create_info, &upload_mem_pool);
+    err = vmaCreatePool(vma_alloc, &create_info, &upload_mem_pool);
     assert(err == VK_SUCCESS);
   }
 
@@ -948,7 +960,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.memoryTypeIndex = mem_type_idx;
     create_info.blockSize = block_size;
     create_info.minBlockCount = 4; // We know we will have at least 4 textures
-    err = vmaCreatePool(allocator, &create_info, &texture_mem_pool);
+    err = vmaCreatePool(vma_alloc, &create_info, &texture_mem_pool);
     assert(err == VK_SUCCESS);
   }
 
@@ -961,7 +973,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     memset(cube_cpu, 0, cube_size);
     create_cube(cube_cpu);
 
-    err = create_gpumesh(device, allocator, cube_cpu, &cube);
+    err = create_gpumesh(device, vma_alloc, cube_cpu, &cube);
     assert(err == VK_SUCCESS);
 
     free(cube_cpu);
@@ -977,7 +989,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     memset(plane_cpu, 0, plane_size);
     create_plane(plane_subdiv, plane_cpu);
 
-    err = create_gpumesh(device, allocator, plane_cpu, &plane);
+    err = create_gpumesh(device, vma_alloc, plane_cpu, &plane);
     assert(err == VK_SUCCESS);
 
     free(plane_cpu);
@@ -985,25 +997,28 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
   // Load Textures
   gputexture albedo = {0};
-  load_texture(device, allocator, "./assets/textures/shfsaida_8K_Albedo.png",
-               upload_mem_pool, texture_mem_pool, &albedo);
+  load_texture(device, vma_alloc, vk_alloc,
+               "./assets/textures/shfsaida_8K_Albedo.png", upload_mem_pool,
+               texture_mem_pool, &albedo);
 
   gputexture displacement = {0};
-  load_texture(device, allocator,
+  load_texture(device, vma_alloc, vk_alloc,
                "./assets/textures/shfsaida_8K_Displacement.png",
                upload_mem_pool, texture_mem_pool, &displacement);
 
   gputexture normal = {0};
-  load_texture(device, allocator, "./assets/textures/shfsaida_8K_Normal.png",
-               upload_mem_pool, texture_mem_pool, &normal);
+  load_texture(device, vma_alloc, vk_alloc,
+               "./assets/textures/shfsaida_8K_Normal.png", upload_mem_pool,
+               texture_mem_pool, &normal);
 
   gputexture roughness = {0};
-  load_texture(device, allocator, "./assets/textures/shfsaida_8K_Roughness.png",
-               upload_mem_pool, texture_mem_pool, &roughness);
+  load_texture(device, vma_alloc, vk_alloc,
+               "./assets/textures/shfsaida_8K_Roughness.png", upload_mem_pool,
+               texture_mem_pool, &roughness);
 
   // Load skybox
   gputexture skybox = {0};
-  load_skybox(device, allocator, "./assets/skybox", upload_mem_pool,
+  load_skybox(device, vma_alloc, vk_alloc, "./assets/skybox", upload_mem_pool,
               texture_mem_pool, &skybox);
 
   // Create procedural texture
@@ -1013,7 +1028,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     alloc_pattern(1024, 1024, &cpu_pattern);
     create_pattern(1024, 1024, cpu_pattern);
 
-    create_texture(device, allocator, cpu_pattern, upload_mem_pool,
+    create_texture(device, vma_alloc, vk_alloc, cpu_pattern, upload_mem_pool,
                    texture_mem_pool, &pattern);
 
     free(cpu_pattern);
@@ -1021,13 +1036,16 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
   // Load scene
   scene *duck = NULL;
-  load_scene(device, allocator, upload_mem_pool, texture_mem_pool,
+  load_scene(device, vk_alloc, vma_alloc, upload_mem_pool, texture_mem_pool,
              "./assets/scenes/duck.glb", &duck);
 
   // Apply to output var
+  d->tmp_alloc = tmp_alloc;
+  d->std_alloc = std_alloc;
+  d->vk_alloc = vk_alloc;
   d->instance = instance;
   d->gpu = gpu;
-  d->allocator = allocator;
+  d->vma_alloc = vma_alloc;
   d->gpu_props = gpu_props;
   d->gpu_mem_props = gpu_mem_props;
   d->queue_family_count = queue_family_count;
@@ -1091,16 +1109,16 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     VkSemaphoreCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      err = vkCreateSemaphore(device, &create_info, NULL,
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &d->upload_complete_sems[i]);
       assert(err == VK_SUCCESS);
-      err = vkCreateSemaphore(device, &create_info, NULL,
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &d->img_acquired_sems[i]);
       assert(err == VK_SUCCESS);
-      err = vkCreateSemaphore(device, &create_info, NULL,
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &d->swapchain_image_sems[i]);
       assert(err == VK_SUCCESS);
-      err = vkCreateSemaphore(device, &create_info, NULL,
+      err = vkCreateSemaphore(device, &create_info, vk_alloc,
                               &d->render_complete_sems[i]);
       assert(err == VK_SUCCESS);
     }
@@ -1131,7 +1149,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       create_info.image = d->swapchain_images[i];
-      err = vkCreateImageView(device, &create_info, NULL,
+      err = vkCreateImageView(device, &create_info, vk_alloc,
                               &d->swapchain_image_views[i]);
       assert(err == VK_SUCCESS);
     }
@@ -1154,7 +1172,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     alloc_info.flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
     alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     alloc_info.pUserData = (void *)("Depth Buffer Memory");
-    err = create_gpuimage(allocator, &create_info, &alloc_info,
+    err = create_gpuimage(vma_alloc, &create_info, &alloc_info,
                           &d->depth_buffers);
     assert(err == VK_SUCCESS);
   }
@@ -1178,7 +1196,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       create_info.subresourceRange.baseArrayLayer = i;
-      err = vkCreateImageView(device, &create_info, NULL,
+      err = vkCreateImageView(device, &create_info, vk_alloc,
                               &d->depth_buffer_views[i]);
       assert(err == VK_SUCCESS);
     }
@@ -1201,7 +1219,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
       };
 
       create_info.pAttachments = attachments;
-      err = vkCreateFramebuffer(device, &create_info, NULL,
+      err = vkCreateFramebuffer(device, &create_info, vk_alloc,
                                 &d->swapchain_framebuffers[i]);
       assert(err == VK_SUCCESS);
     }
@@ -1214,8 +1232,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.queueFamilyIndex = graphics_queue_family_index;
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      err =
-          vkCreateCommandPool(device, &create_info, NULL, &d->command_pools[i]);
+      err = vkCreateCommandPool(device, &create_info, vk_alloc,
+                                &d->command_pools[i]);
       assert(err == VK_SUCCESS);
     }
   }
@@ -1248,7 +1266,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.pPoolSizes = &pool_size;
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      err = vkCreateDescriptorPool(device, &create_info, NULL,
+      err = vkCreateDescriptorPool(device, &create_info, vk_alloc,
                                    &d->descriptor_pools[i]);
       assert(err == VK_SUCCESS);
     }
@@ -1424,7 +1442,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance, demo *d) {
     create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      err = vkCreateFence(device, &create_info, NULL, &d->fences[i]);
+      err = vkCreateFence(device, &create_info, vk_alloc, &d->fences[i]);
       assert(err == VK_SUCCESS);
     }
   }
@@ -1972,7 +1990,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
 static void demo_destroy(demo *d) {
   VkDevice device = d->device;
-  VmaAllocator allocator = d->allocator;
+  VmaAllocator vma_alloc = d->vma_alloc;
+  const VkAllocationCallbacks *vk_alloc = d->vk_alloc;
 
   vkDeviceWaitIdle(device);
 
@@ -1983,7 +2002,7 @@ static void demo_destroy(demo *d) {
     size_t cache_size = 0;
     err = vkGetPipelineCacheData(device, d->pipeline_cache, &cache_size, NULL);
     if (err == VK_SUCCESS) {
-      void *cache = malloc(cache_size);
+      void *cache = hb_alloc(d->tmp_alloc, cache_size);
       err =
           vkGetPipelineCacheData(device, d->pipeline_cache, &cache_size, cache);
       if (err == VK_SUCCESS) {
@@ -1996,69 +2015,68 @@ static void demo_destroy(demo *d) {
           fclose(cache_file);
         }
       }
-
-      free(cache);
     }
   }
 
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-    vkDestroyImageView(device, d->depth_buffer_views[i], NULL);
-    vkDestroyDescriptorPool(device, d->descriptor_pools[i], NULL);
-    vkDestroyFence(device, d->fences[i], NULL);
-    vkDestroySemaphore(device, d->upload_complete_sems[i], NULL);
-    vkDestroySemaphore(device, d->render_complete_sems[i], NULL);
-    vkDestroySemaphore(device, d->swapchain_image_sems[i], NULL);
-    vkDestroySemaphore(device, d->img_acquired_sems[i], NULL);
-    vkDestroyImageView(device, d->swapchain_image_views[i], NULL);
-    vkDestroyFramebuffer(device, d->swapchain_framebuffers[i], NULL);
-    vkDestroyCommandPool(device, d->command_pools[i], NULL);
+    vkDestroyImageView(device, d->depth_buffer_views[i], vk_alloc);
+    vkDestroyDescriptorPool(device, d->descriptor_pools[i], vk_alloc);
+    vkDestroyFence(device, d->fences[i], vk_alloc);
+    vkDestroySemaphore(device, d->upload_complete_sems[i], vk_alloc);
+    vkDestroySemaphore(device, d->render_complete_sems[i], vk_alloc);
+    vkDestroySemaphore(device, d->swapchain_image_sems[i], vk_alloc);
+    vkDestroySemaphore(device, d->img_acquired_sems[i], vk_alloc);
+    vkDestroyImageView(device, d->swapchain_image_views[i], vk_alloc);
+    vkDestroyFramebuffer(device, d->swapchain_framebuffers[i], vk_alloc);
+    vkDestroyCommandPool(device, d->command_pools[i], vk_alloc);
   }
 
-  destroy_gpuimage(allocator, &d->depth_buffers);
+  destroy_gpuimage(vma_alloc, &d->depth_buffers);
 
-  destroy_scene(device, allocator, d->duck);
-  destroy_texture(device, allocator, &d->pattern);
-  destroy_texture(device, allocator, &d->skybox);
-  destroy_texture(device, allocator, &d->roughness);
-  destroy_texture(device, allocator, &d->normal);
-  destroy_texture(device, allocator, &d->displacement);
-  destroy_texture(device, allocator, &d->albedo);
-  destroy_gpumesh(device, allocator, &d->plane_gpu);
-  destroy_gpumesh(device, allocator, &d->cube_gpu);
+  destroy_scene(device, vma_alloc, vk_alloc, d->duck);
+  destroy_texture(device, vma_alloc, vk_alloc, &d->pattern);
+  destroy_texture(device, vma_alloc, vk_alloc, &d->skybox);
+  destroy_texture(device, vma_alloc, vk_alloc, &d->roughness);
+  destroy_texture(device, vma_alloc, vk_alloc, &d->normal);
+  destroy_texture(device, vma_alloc, vk_alloc, &d->displacement);
+  destroy_texture(device, vma_alloc, vk_alloc, &d->albedo);
+  destroy_gpumesh(device, vma_alloc, &d->plane_gpu);
+  destroy_gpumesh(device, vma_alloc, &d->cube_gpu);
 
-  vmaDestroyPool(allocator, d->upload_mem_pool);
-  vmaDestroyPool(allocator, d->texture_mem_pool);
+  vmaDestroyPool(vma_alloc, d->upload_mem_pool);
+  vmaDestroyPool(vma_alloc, d->texture_mem_pool);
 
-  free(d->queue_props);
-  vkDestroySampler(device, d->sampler, NULL);
+  hb_free(d->std_alloc, d->queue_props);
+  vkDestroySampler(device, d->sampler, vk_alloc);
 
-  vkDestroyPipeline(device, d->fractal_pipeline, NULL);
+  vkDestroyPipeline(device, d->fractal_pipeline, vk_alloc);
 
-  vkDestroyDescriptorSetLayout(device, d->skybox_layout, NULL);
-  vkDestroyPipelineLayout(device, d->skybox_pipe_layout, NULL);
-  vkDestroyPipeline(device, d->skybox_pipeline, NULL);
+  vkDestroyDescriptorSetLayout(device, d->skybox_layout, vk_alloc);
+  vkDestroyPipelineLayout(device, d->skybox_pipe_layout, vk_alloc);
+  vkDestroyPipeline(device, d->skybox_pipeline, vk_alloc);
 
-  vkDestroyDescriptorSetLayout(device, d->material_layout, NULL);
-  vkDestroyPipelineLayout(device, d->material_pipe_layout, NULL);
-  vkDestroyPipeline(device, d->uv_mesh_pipeline, NULL);
+  vkDestroyDescriptorSetLayout(device, d->material_layout, vk_alloc);
+  vkDestroyPipelineLayout(device, d->material_pipe_layout, vk_alloc);
+  vkDestroyPipeline(device, d->uv_mesh_pipeline, vk_alloc);
 
-  vkDestroyPipelineLayout(device, d->simple_pipe_layout, NULL);
-  vkDestroyPipeline(device, d->color_mesh_pipeline, NULL);
+  vkDestroyPipelineLayout(device, d->simple_pipe_layout, vk_alloc);
+  vkDestroyPipeline(device, d->color_mesh_pipeline, vk_alloc);
 
-  vkDestroyDescriptorSetLayout(device, d->gltf_rt_layout, NULL);
-  vkDestroyPipelineLayout(device, d->gltf_rt_pipe_layout, NULL);
-  destroy_gpupipeline(device, d->gltf_rt_pipeline);
+  vkDestroyDescriptorSetLayout(device, d->gltf_rt_layout, vk_alloc);
+  vkDestroyPipelineLayout(device, d->gltf_rt_pipe_layout, vk_alloc);
+  destroy_gpupipeline(device, vk_alloc, d->gltf_rt_pipeline);
 
-  vkDestroyDescriptorSetLayout(device, d->gltf_layout, NULL);
-  vkDestroyPipelineLayout(device, d->gltf_pipe_layout, NULL);
-  destroy_gpupipeline(device, d->gltf_pipeline);
+  vkDestroyDescriptorSetLayout(device, d->gltf_layout, vk_alloc);
+  vkDestroyPipelineLayout(device, d->gltf_pipe_layout, vk_alloc);
+  destroy_gpupipeline(device, vk_alloc, d->gltf_pipeline);
 
-  vkDestroyPipelineCache(device, d->pipeline_cache, NULL);
-  vkDestroyRenderPass(device, d->render_pass, NULL);
-  vkDestroySwapchainKHR(device, d->swapchain, NULL);
-  vkDestroySurfaceKHR(d->instance, d->surface, NULL);
-  vmaDestroyAllocator(allocator);
-  vkDestroyDevice(device, NULL);
+  vkDestroyPipelineCache(device, d->pipeline_cache, vk_alloc);
+  vkDestroyRenderPass(device, d->render_pass, vk_alloc);
+  vkDestroySwapchainKHR(device, d->swapchain, vk_alloc);
+  vkDestroySurfaceKHR(d->instance, d->surface,
+                      NULL); // Surface is created by SDL
+  vmaDestroyAllocator(vma_alloc);
+  vkDestroyDevice(device, vk_alloc);
   *d = (demo){0};
 }
 
@@ -2095,7 +2113,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   static const float qtr_pi = 0.7853981625f;
 
   // Create Temporary Arena Allocator
-  static const arena_alloc_size = 1024 * 1024;
+  static const size_t arena_alloc_size = 1024 * 1024;
   arena_allocator arena = create_arena_allocator(arena_alloc_size);
 
   mi_heap_t *vk_heap = mi_heap_new();
@@ -2203,7 +2221,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   demo d = {0};
-  bool success = demo_init(window, instance, &d);
+  bool success = demo_init(window, instance, std_alloc.alloc, arena.alloc,
+                           vk_alloc_ptr, &d);
   assert(success);
 
   transform cube_transform = {0};

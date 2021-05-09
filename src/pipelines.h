@@ -7,21 +7,29 @@
 
 typedef struct gpupipeline gpupipeline;
 
-uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
-                                 VkRenderPass pass, uint32_t w, uint32_t h,
+uint32_t create_fractal_pipeline(VkDevice device,
+                                 const VkAllocationCallbacks *vk_alloc,
+                                 VkPipelineCache cache, VkRenderPass pass,
+                                 uint32_t w, uint32_t h,
                                  VkPipelineLayout layout, VkPipeline *pipe);
 
-uint32_t create_color_mesh_pipeline(VkDevice device, VkPipelineCache cache,
-                                    VkRenderPass pass, uint32_t w, uint32_t h,
+uint32_t create_color_mesh_pipeline(VkDevice device,
+                                    const VkAllocationCallbacks *vk_alloc,
+                                    VkPipelineCache cache, VkRenderPass pass,
+                                    uint32_t w, uint32_t h,
                                     VkPipelineLayout layout, VkPipeline *pipe);
 
-uint32_t create_uv_mesh_pipeline(VkDevice device, VkPipelineCache cache,
-                                 VkRenderPass pass, uint32_t w, uint32_t h,
+uint32_t create_uv_mesh_pipeline(VkDevice device,
+                                 const VkAllocationCallbacks *vk_alloc,
+                                 VkPipelineCache cache, VkRenderPass pass,
+                                 uint32_t w, uint32_t h,
                                  VkPipelineLayout layout, VkPipeline *pipe);
 
-uint32_t create_skybox_pipeline(VkDevice device, VkPipelineCache cache,
-                                VkRenderPass pass, uint32_t w, uint32_t h,
-                                VkPipelineLayout layout, VkPipeline *pipe);
+uint32_t create_skybox_pipeline(VkDevice device,
+                                const VkAllocationCallbacks *vk_alloc,
+                                VkPipelineCache cache, VkRenderPass pass,
+                                uint32_t w, uint32_t h, VkPipelineLayout layout,
+                                VkPipeline *pipe);
 
 enum GLTF_PERMUTATIONS {
   GLTF_PERM_NONE = 0x00000000,
@@ -37,12 +45,15 @@ enum GLTF_PERMUTATIONS {
   // GLTF_PERM_FLAG_COUNT = 8,
 };
 
-uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
-                              VkRenderPass pass, uint32_t w, uint32_t h,
-                              VkPipelineLayout layout, gpupipeline **pipe);
+uint32_t create_gltf_pipeline(VkDevice device,
+                              const VkAllocationCallbacks *vk_alloc,
+                              VkPipelineCache cache, VkRenderPass pass,
+                              uint32_t w, uint32_t h, VkPipelineLayout layout,
+                              gpupipeline **pipe);
 
 uint32_t create_gltf_rt_pipeline(
-    VkDevice device, VkPipelineCache cache,
+    VkDevice device, const VkAllocationCallbacks *vk_alloc,
+    VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     VkRenderPass pass, uint32_t w, uint32_t h, VkPipelineLayout layout,
     gpupipeline **pipe);

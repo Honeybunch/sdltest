@@ -10,6 +10,7 @@ typedef struct VmaPool_T *VmaPool;
 typedef struct gpumesh gpumesh;
 typedef struct gputexture gputexture;
 typedef struct gpumaterial gpumaterial;
+typedef struct VkAllocationCallbacks VkAllocationCallbacks;
 
 enum component_type {
   COMPONENT_TYPE_NONE = 0x00000000,
@@ -50,6 +51,8 @@ typedef struct scene {
   gpumaterial *materials;
 } scene;
 
-int32_t load_scene(VkDevice device, VmaAllocator alloc, VmaPool up_pool,
-                   VmaPool tex_pool, const char *filename, scene **scene);
-void destroy_scene(VkDevice device, VmaAllocator alloc, scene *s);
+int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
+                   VmaAllocator vma_alloc, VmaPool up_pool, VmaPool tex_pool,
+                   const char *filename, scene **scene);
+void destroy_scene(VkDevice device, VmaAllocator alloc,
+                   const VkAllocationCallbacks *vk_alloc, scene *s);

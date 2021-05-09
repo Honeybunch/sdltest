@@ -24,8 +24,10 @@
 
 #include "volk.h"
 
-uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
-                                 VkRenderPass pass, uint32_t w, uint32_t h,
+uint32_t create_fractal_pipeline(VkDevice device,
+                                 const VkAllocationCallbacks *vk_alloc,
+                                 VkPipelineCache cache, VkRenderPass pass,
+                                 uint32_t w, uint32_t h,
                                  VkPipelineLayout layout, VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
 
@@ -40,12 +42,12 @@ uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
       create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
       create_info.codeSize = sizeof(fractal_vert);
       create_info.pCode = (const uint32_t *)fractal_vert;
-      err = vkCreateShaderModule(device, &create_info, NULL, &vert_mod);
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
       assert(err == VK_SUCCESS);
 
       create_info.codeSize = sizeof(fractal_frag);
       create_info.pCode = (const uint32_t *)fractal_frag;
-      err = vkCreateShaderModule(device, &create_info, NULL, &frag_mod);
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
       assert(err == VK_SUCCESS);
     }
 
@@ -129,13 +131,13 @@ uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
     create_info.pDynamicState = &dynamic_state;
     create_info.layout = layout;
     create_info.renderPass = pass;
-    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, NULL,
+    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
                                     &fractal_pipeline);
     assert(err == VK_SUCCESS);
 
     // Can destroy shaders
-    vkDestroyShaderModule(device, vert_mod, NULL);
-    vkDestroyShaderModule(device, frag_mod, NULL);
+    vkDestroyShaderModule(device, vert_mod, vk_alloc);
+    vkDestroyShaderModule(device, frag_mod, vk_alloc);
   }
 
   *pipe = fractal_pipeline;
@@ -143,8 +145,10 @@ uint32_t create_fractal_pipeline(VkDevice device, VkPipelineCache cache,
   return err;
 }
 
-uint32_t create_color_mesh_pipeline(VkDevice device, VkPipelineCache cache,
-                                    VkRenderPass pass, uint32_t w, uint32_t h,
+uint32_t create_color_mesh_pipeline(VkDevice device,
+                                    const VkAllocationCallbacks *vk_alloc,
+                                    VkPipelineCache cache, VkRenderPass pass,
+                                    uint32_t w, uint32_t h,
                                     VkPipelineLayout layout, VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
 
@@ -159,12 +163,12 @@ uint32_t create_color_mesh_pipeline(VkDevice device, VkPipelineCache cache,
       create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
       create_info.codeSize = sizeof(color_mesh_vert);
       create_info.pCode = (const uint32_t *)color_mesh_vert;
-      err = vkCreateShaderModule(device, &create_info, NULL, &vert_mod);
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
       assert(err == VK_SUCCESS);
 
       create_info.codeSize = sizeof(color_mesh_frag);
       create_info.pCode = (const uint32_t *)color_mesh_frag;
-      err = vkCreateShaderModule(device, &create_info, NULL, &frag_mod);
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
       assert(err == VK_SUCCESS);
     }
 
@@ -268,21 +272,23 @@ uint32_t create_color_mesh_pipeline(VkDevice device, VkPipelineCache cache,
     create_info.pDynamicState = &dynamic_state;
     create_info.layout = layout;
     create_info.renderPass = pass;
-    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, NULL,
+    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
                                     &color_mesh_pipeline);
     assert(err == VK_SUCCESS);
 
     // Can destroy shaders
-    vkDestroyShaderModule(device, vert_mod, NULL);
-    vkDestroyShaderModule(device, frag_mod, NULL);
+    vkDestroyShaderModule(device, vert_mod, vk_alloc);
+    vkDestroyShaderModule(device, frag_mod, vk_alloc);
   }
 
   *pipe = color_mesh_pipeline;
   return err;
 }
 
-uint32_t create_uv_mesh_pipeline(VkDevice device, VkPipelineCache cache,
-                                 VkRenderPass pass, uint32_t w, uint32_t h,
+uint32_t create_uv_mesh_pipeline(VkDevice device,
+                                 const VkAllocationCallbacks *vk_alloc,
+                                 VkPipelineCache cache, VkRenderPass pass,
+                                 uint32_t w, uint32_t h,
                                  VkPipelineLayout layout, VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
 
@@ -297,12 +303,12 @@ uint32_t create_uv_mesh_pipeline(VkDevice device, VkPipelineCache cache,
       create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
       create_info.codeSize = sizeof(uv_mesh_vert);
       create_info.pCode = (const uint32_t *)uv_mesh_vert;
-      err = vkCreateShaderModule(device, &create_info, NULL, &vert_mod);
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
       assert(err == VK_SUCCESS);
 
       create_info.codeSize = sizeof(uv_mesh_frag);
       create_info.pCode = (const uint32_t *)uv_mesh_frag;
-      err = vkCreateShaderModule(device, &create_info, NULL, &frag_mod);
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
       assert(err == VK_SUCCESS);
     }
 
@@ -404,22 +410,24 @@ uint32_t create_uv_mesh_pipeline(VkDevice device, VkPipelineCache cache,
     create_info.pDynamicState = &dynamic_state;
     create_info.layout = layout;
     create_info.renderPass = pass;
-    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, NULL,
+    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
                                     &uv_mesh_pipeline);
     assert(err == VK_SUCCESS);
 
     // Can destroy shaders
-    vkDestroyShaderModule(device, vert_mod, NULL);
-    vkDestroyShaderModule(device, frag_mod, NULL);
+    vkDestroyShaderModule(device, vert_mod, vk_alloc);
+    vkDestroyShaderModule(device, frag_mod, vk_alloc);
   }
 
   *pipe = uv_mesh_pipeline;
   return err;
 }
 
-uint32_t create_skybox_pipeline(VkDevice device, VkPipelineCache cache,
-                                VkRenderPass pass, uint32_t w, uint32_t h,
-                                VkPipelineLayout layout, VkPipeline *pipe) {
+uint32_t create_skybox_pipeline(VkDevice device,
+                                const VkAllocationCallbacks *vk_alloc,
+                                VkPipelineCache cache, VkRenderPass pass,
+                                uint32_t w, uint32_t h, VkPipelineLayout layout,
+                                VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
 
   // Create UV Mesh Pipeline
@@ -433,12 +441,12 @@ uint32_t create_skybox_pipeline(VkDevice device, VkPipelineCache cache,
       create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
       create_info.codeSize = sizeof(skybox_vert);
       create_info.pCode = (const uint32_t *)skybox_vert;
-      err = vkCreateShaderModule(device, &create_info, NULL, &vert_mod);
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
       assert(err == VK_SUCCESS);
 
       create_info.codeSize = sizeof(skybox_frag);
       create_info.pCode = (const uint32_t *)skybox_frag;
-      err = vkCreateShaderModule(device, &create_info, NULL, &frag_mod);
+      err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
       assert(err == VK_SUCCESS);
     }
 
@@ -538,22 +546,24 @@ uint32_t create_skybox_pipeline(VkDevice device, VkPipelineCache cache,
     create_info.pDynamicState = &dynamic_state;
     create_info.layout = layout;
     create_info.renderPass = pass;
-    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, NULL,
+    err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
                                     &pipeline);
     assert(err == VK_SUCCESS);
 
     // Can destroy shaders
-    vkDestroyShaderModule(device, vert_mod, NULL);
-    vkDestroyShaderModule(device, frag_mod, NULL);
+    vkDestroyShaderModule(device, vert_mod, vk_alloc);
+    vkDestroyShaderModule(device, frag_mod, vk_alloc);
   }
 
   *pipe = pipeline;
   return err;
 }
 
-uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
-                              VkRenderPass pass, uint32_t w, uint32_t h,
-                              VkPipelineLayout layout, gpupipeline **pipe) {
+uint32_t create_gltf_pipeline(VkDevice device,
+                              const VkAllocationCallbacks *vk_alloc,
+                              VkPipelineCache cache, VkRenderPass pass,
+                              uint32_t w, uint32_t h, VkPipelineLayout layout,
+                              gpupipeline **pipe) {
   VkResult err = VK_SUCCESS;
 
   VkVertexInputBindingDescription vert_bindings[3] = {
@@ -634,12 +644,14 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
   shader_mod_create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   shader_mod_create_info.codeSize = sizeof(gltf_vert);
   shader_mod_create_info.pCode = (const uint32_t *)gltf_vert;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, NULL, &vert_mod);
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &vert_mod);
   assert(err == VK_SUCCESS);
 
   shader_mod_create_info.codeSize = sizeof(gltf_frag);
   shader_mod_create_info.pCode = (const uint32_t *)gltf_frag;
-  err = vkCreateShaderModule(device, &shader_mod_create_info, NULL, &frag_mod);
+  err = vkCreateShaderModule(device, &shader_mod_create_info, vk_alloc,
+                             &frag_mod);
   assert(err == VK_SUCCESS);
 
   VkPipelineShaderStageCreateInfo vert_stage = {0};
@@ -676,13 +688,13 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
 
   gpupipeline *p = NULL;
 
-  err = (VkResult)create_gfx_pipeline(device, cache, perm_count,
+  err = (VkResult)create_gfx_pipeline(device, vk_alloc, cache, perm_count,
                                       &create_info_base, &p);
   assert(err == VK_SUCCESS);
 
   // Can destroy shader moduless
-  vkDestroyShaderModule(device, vert_mod, NULL);
-  vkDestroyShaderModule(device, frag_mod, NULL);
+  vkDestroyShaderModule(device, vert_mod, vk_alloc);
+  vkDestroyShaderModule(device, frag_mod, vk_alloc);
 
   *pipe = p;
 
@@ -690,7 +702,8 @@ uint32_t create_gltf_pipeline(VkDevice device, VkPipelineCache cache,
 }
 
 uint32_t create_gltf_rt_pipeline(
-    VkDevice device, VkPipelineCache cache,
+    VkDevice device, const VkAllocationCallbacks *vk_alloc,
+    VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     VkRenderPass pass, uint32_t w, uint32_t h, VkPipelineLayout layout,
     gpupipeline **pipe) {
@@ -705,7 +718,7 @@ uint32_t create_gltf_rt_pipeline(
         .codeSize = sizeof(gltf_raygen),
         .pCode = (const uint32_t *)gltf_raygen,
     };
-    err = vkCreateShaderModule(device, &create_info, NULL, &raygen_mod);
+    err = vkCreateShaderModule(device, &create_info, vk_alloc, &raygen_mod);
     assert(err == VK_SUCCESS);
   }
 
@@ -717,7 +730,7 @@ uint32_t create_gltf_rt_pipeline(
         .codeSize = sizeof(gltf_miss),
         .pCode = (const uint32_t *)gltf_miss,
     };
-    err = vkCreateShaderModule(device, &create_info, NULL, &miss_mod);
+    err = vkCreateShaderModule(device, &create_info, vk_alloc, &miss_mod);
     assert(err == VK_SUCCESS);
   }
 
@@ -729,7 +742,7 @@ uint32_t create_gltf_rt_pipeline(
         .codeSize = sizeof(gltf_closehit),
         .pCode = (const uint32_t *)gltf_closehit,
     };
-    err = vkCreateShaderModule(device, &create_info, NULL, &closehit_mod);
+    err = vkCreateShaderModule(device, &create_info, vk_alloc, &closehit_mod);
     assert(err == VK_SUCCESS);
   }
 
@@ -798,14 +811,15 @@ uint32_t create_gltf_rt_pipeline(
   create_info.layout = layout;
 
   VkPipeline pipeline = VK_NULL_HANDLE;
-  err = (VkResult)create_rt_pipeline(device, cache, vkCreateRayTracingPipelines,
-                                     1, &create_info, pipe);
+  err = (VkResult)create_rt_pipeline(device, vk_alloc, cache,
+                                     vkCreateRayTracingPipelines, 1,
+                                     &create_info, pipe);
   assert(err == VK_SUCCESS);
 
   // Cleanup modules
-  vkDestroyShaderModule(device, raygen_mod, NULL);
-  vkDestroyShaderModule(device, miss_mod, NULL);
-  vkDestroyShaderModule(device, closehit_mod, NULL);
+  vkDestroyShaderModule(device, raygen_mod, vk_alloc);
+  vkDestroyShaderModule(device, miss_mod, vk_alloc);
+  vkDestroyShaderModule(device, closehit_mod, vk_alloc);
 
   return (uint32_t)err;
 }

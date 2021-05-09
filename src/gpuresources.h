@@ -87,40 +87,52 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator allocator,
 void destroy_gpumesh(VkDevice device, VmaAllocator allocator,
                      const gpumesh *mesh);
 
-int32_t create_gpuimage(VmaAllocator alloc,
+int32_t create_gpuimage(VmaAllocator vma_alloc,
                         const VkImageCreateInfo *img_create_info,
                         const VmaAllocationCreateInfo *alloc_create_info,
 
                         gpuimage *i);
 void destroy_gpuimage(VmaAllocator allocator, const gpuimage *image);
 
-int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
-                     VmaPool up_pool, VmaPool tex_pool, gputexture *t);
-int32_t load_skybox(VkDevice device, VmaAllocator alloc,
+int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
+                     const VkAllocationCallbacks *vk_alloc,
+                     const char *filename, VmaPool up_pool, VmaPool tex_pool,
+                     gputexture *t);
+int32_t load_skybox(VkDevice device, VmaAllocator vma_alloc,
+                    const VkAllocationCallbacks *vk_alloc,
                     const char *folder_path, VmaPool up_pool, VmaPool tex_pool,
                     gputexture *t);
-int32_t create_texture(VkDevice device, VmaAllocator alloc,
+int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
+                       const VkAllocationCallbacks *vk_alloc,
                        const cputexture *tex, VmaPool up_pool, VmaPool tex_pool,
                        gputexture *t);
-int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator alloc,
+int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
+                                const VkAllocationCallbacks *vk_alloc,
                                 const cgltf_texture *gltf, const uint8_t *bin,
                                 VmaPool up_pool, VmaPool tex_pool,
                                 gputexture *t);
-void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t);
+void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
+                     const VkAllocationCallbacks *vk_alloc,
+                     const gputexture *t);
 
-int32_t create_gfx_pipeline(VkDevice device, VkPipelineCache cache,
-                            uint32_t perm_count,
+int32_t create_gfx_pipeline(VkDevice device,
+                            const VkAllocationCallbacks *vk_alloc,
+                            VkPipelineCache cache, uint32_t perm_count,
                             VkGraphicsPipelineCreateInfo *create_info_base,
                             gpupipeline **p);
 int32_t create_rt_pipeline(
-    VkDevice device, VkPipelineCache cache,
+    VkDevice device, const VkAllocationCallbacks *vk_alloc,
+    VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
     gpupipeline **p);
-void destroy_gpupipeline(VkDevice device, const gpupipeline *p);
+void destroy_gpupipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
+                         const gpupipeline *p);
 
-int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator alloc,
+int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
+                                 const VkAllocationCallbacks *vk_alloc,
                                  const cgltf_material *gltf, const uint8_t *bin,
                                  gpumaterial *m);
-void destroy_material(VkDevice device, VmaAllocator alloc,
+void destroy_material(VkDevice device, VmaAllocator vma_alloc,
+                      const VkAllocationCallbacks *vk_alloc,
                       const gpumaterial *m);

@@ -171,7 +171,7 @@ void destroy_gpumesh(VkDevice device, VmaAllocator allocator,
   destroy_gpubuffer(allocator, &mesh->gpu);
 }
 
-int32_t create_gpuimage(VmaAllocator alloc,
+int32_t create_gpuimage(VmaAllocator vma_alloc,
                         const VkImageCreateInfo *img_create_info,
                         const VmaAllocationCreateInfo *alloc_create_info,
                         gpuimage *i) {
@@ -179,8 +179,8 @@ int32_t create_gpuimage(VmaAllocator alloc,
   gpuimage img = {0};
 
   VmaAllocationInfo alloc_info = {0};
-  err = vmaCreateImage(alloc, img_create_info, alloc_create_info, &img.image,
-                       &img.alloc, &alloc_info);
+  err = vmaCreateImage(vma_alloc, img_create_info, alloc_create_info,
+                       &img.image, &img.alloc, &alloc_info);
   assert(err == VK_SUCCESS);
 
   if (err == VK_SUCCESS) {
@@ -218,8 +218,10 @@ SDL_Surface *parse_and_transform_image(const uint8_t *data, size_t size) {
   return opt_img;
 }
 
-int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
-                     VmaPool up_pool, VmaPool tex_pool, gputexture *t) {
+int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
+                     const VkAllocationCallbacks *vk_alloc,
+                     const char *filename, VmaPool up_pool, VmaPool tex_pool,
+                     gputexture *t) {
   assert(filename);
   assert(t);
 
@@ -242,7 +244,7 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
     alloc_create_info.pool = up_pool;
     VmaAllocationInfo alloc_info = {0};
-    err = vmaCreateBuffer(alloc, &buffer_create_info, &alloc_create_info,
+    err = vmaCreateBuffer(vma_alloc, &buffer_create_info, &alloc_create_info,
                           &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
     assert(err == VK_SUCCESS);
   }
@@ -273,18 +275,18 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     VmaAllocationCreateInfo alloc_info = {0};
     alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     alloc_info.pool = tex_pool;
-    err = create_gpuimage(alloc, &img_info, &alloc_info, &device_image);
+    err = create_gpuimage(vma_alloc, &img_info, &alloc_info, &device_image);
     assert(err == VK_SUCCESS);
   }
 
   // Copy data to host buffer
   {
     uint8_t *data = NULL;
-    vmaMapMemory(alloc, host_buffer.alloc, (void **)&data);
+    vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
 
     memcpy_s(data, host_buffer_size, img->pixels, host_buffer_size);
 
-    vmaUnmapMemory(alloc, host_buffer.alloc);
+    vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
 
   // Create Image View
@@ -297,7 +299,7 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
     create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
     create_info.subresourceRange = (VkImageSubresourceRange){
         VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_levels, 0, 1};
-    err = vkCreateImageView(device, &create_info, NULL, &view);
+    err = vkCreateImageView(device, &create_info, vk_alloc, &view);
     assert(err == VK_SUCCESS);
   };
 
@@ -315,7 +317,8 @@ int32_t load_texture(VkDevice device, VmaAllocator alloc, const char *filename,
   return err;
 }
 
-int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator alloc,
+int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
+                                const VkAllocationCallbacks *vk_alloc,
                                 const cgltf_texture *gltf, const uint8_t *bin,
                                 VmaPool up_pool, VmaPool tex_pool,
                                 gputexture *t) {
@@ -351,10 +354,12 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator alloc,
   cputexture cpu_tex = {
       1, 1, &layer, image_size, image_pixels,
   };
-  return create_texture(device, alloc, &cpu_tex, up_pool, tex_pool, t);
+  return create_texture(device, vma_alloc, vk_alloc, &cpu_tex, up_pool,
+                        tex_pool, t);
 }
 
-int32_t load_skybox(VkDevice device, VmaAllocator alloc,
+int32_t load_skybox(VkDevice device, VmaAllocator vma_alloc,
+                    const VkAllocationCallbacks *vk_alloc,
                     const char *folder_path, VmaPool up_pool, VmaPool tex_pool,
                     gputexture *t) {
   assert(folder_path);
@@ -410,7 +415,7 @@ int32_t load_skybox(VkDevice device, VmaAllocator alloc,
     alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
     alloc_create_info.pool = up_pool;
     VmaAllocationInfo alloc_info = {0};
-    err = vmaCreateBuffer(alloc, &buffer_create_info, &alloc_create_info,
+    err = vmaCreateBuffer(vma_alloc, &buffer_create_info, &alloc_create_info,
                           &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
     assert(err == VK_SUCCESS);
   }
@@ -435,7 +440,7 @@ int32_t load_skybox(VkDevice device, VmaAllocator alloc,
     VmaAllocationCreateInfo alloc_info = {0};
     alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     alloc_info.pool = tex_pool;
-    err = create_gpuimage(alloc, &img_info, &alloc_info, &device_image);
+    err = create_gpuimage(vma_alloc, &img_info, &alloc_info, &device_image);
     assert(err == VK_SUCCESS);
   }
 
@@ -449,14 +454,14 @@ int32_t load_skybox(VkDevice device, VmaAllocator alloc,
     create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
     create_info.subresourceRange = (VkImageSubresourceRange){
         VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, skybox_side_count};
-    err = vkCreateImageView(device, &create_info, NULL, &view);
+    err = vkCreateImageView(device, &create_info, vk_alloc, &view);
     assert(err == VK_SUCCESS);
   };
 
   // Copy data to host buffer
   {
     uint8_t *data = NULL;
-    vmaMapMemory(alloc, host_buffer.alloc, (void **)&data);
+    vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
 
     uint32_t offset = 0;
     uint32_t img_size = 0;
@@ -467,7 +472,7 @@ int32_t load_skybox(VkDevice device, VmaAllocator alloc,
       memcpy_s(data + offset, img_size, img->pixels, img_size);
       offset += img_size;
     }
-    vmaUnmapMemory(alloc, host_buffer.alloc);
+    vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
 
   t->host = host_buffer;
@@ -487,7 +492,8 @@ int32_t load_skybox(VkDevice device, VmaAllocator alloc,
   return err;
 }
 
-int32_t create_texture(VkDevice device, VmaAllocator alloc,
+int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
+                       const VkAllocationCallbacks *vk_alloc,
                        const cputexture *tex, VmaPool up_pool, VmaPool tex_pool,
                        gputexture *t) {
   VkResult err = VK_SUCCESS;
@@ -510,7 +516,7 @@ int32_t create_texture(VkDevice device, VmaAllocator alloc,
     alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
     alloc_create_info.pool = up_pool;
     VmaAllocationInfo alloc_info = {0};
-    err = vmaCreateBuffer(alloc, &buffer_create_info, &alloc_create_info,
+    err = vmaCreateBuffer(vma_alloc, &buffer_create_info, &alloc_create_info,
                           &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
     assert(err == VK_SUCCESS);
   }
@@ -538,7 +544,7 @@ int32_t create_texture(VkDevice device, VmaAllocator alloc,
     VmaAllocationCreateInfo alloc_info = {0};
     alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     alloc_info.pool = tex_pool;
-    err = create_gpuimage(alloc, &img_info, &alloc_info, &device_image);
+    err = create_gpuimage(vma_alloc, &img_info, &alloc_info, &device_image);
     assert(err == VK_SUCCESS);
   }
 
@@ -552,19 +558,19 @@ int32_t create_texture(VkDevice device, VmaAllocator alloc,
     create_info.format = VK_FORMAT_R8G8B8A8_SRGB;
     create_info.subresourceRange = (VkImageSubresourceRange){
         VK_IMAGE_ASPECT_COLOR_BIT, 0, desired_mip_levels, 0, layer_count};
-    err = vkCreateImageView(device, &create_info, NULL, &view);
+    err = vkCreateImageView(device, &create_info, vk_alloc, &view);
     assert(err == VK_SUCCESS);
   };
 
   // Copy data to host buffer
   {
     uint8_t *data = NULL;
-    vmaMapMemory(alloc, host_buffer.alloc, (void **)&data);
+    vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
 
     uint64_t data_size = tex->data_size;
     memcpy_s(data, data_size, tex->data, data_size);
 
-    vmaUnmapMemory(alloc, host_buffer.alloc);
+    vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
 
   t->host = host_buffer;
@@ -579,10 +585,12 @@ int32_t create_texture(VkDevice device, VmaAllocator alloc,
   return err;
 }
 
-void destroy_texture(VkDevice device, VmaAllocator alloc, const gputexture *t) {
-  destroy_gpubuffer(alloc, &t->host);
-  destroy_gpuimage(alloc, &t->device);
-  vkDestroyImageView(device, t->view, NULL);
+void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
+                     const VkAllocationCallbacks *vk_alloc,
+                     const gputexture *t) {
+  destroy_gpubuffer(vma_alloc, &t->host);
+  destroy_gpuimage(vma_alloc, &t->device);
+  vkDestroyImageView(device, t->view, vk_alloc);
 }
 
 static gpupipeline *alloc_gpupipeline(uint32_t perm_count) {
@@ -607,7 +615,8 @@ static gpupipeline *alloc_gpupipeline(uint32_t perm_count) {
 }
 
 static int32_t
-create_gfx_pipeline(VkDevice device, VkPipelineCache cache, uint32_t perm_count,
+create_gfx_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
+                    VkPipelineCache cache, uint32_t perm_count,
                     VkGraphicsPipelineCreateInfo *create_info_base,
                     gpupipeline **p) {
   gpupipeline *pipe = alloc_gpupipeline(perm_count);
@@ -656,7 +665,7 @@ create_gfx_pipeline(VkDevice device, VkPipelineCache cache, uint32_t perm_count,
   }
 
   err = vkCreateGraphicsPipelines(device, cache, perm_count, pipe_create_info,
-                                  NULL, pipe->pipelines);
+                                  vk_alloc, pipe->pipelines);
   assert(err == VK_SUCCESS);
 
   *p = pipe;
@@ -664,7 +673,8 @@ create_gfx_pipeline(VkDevice device, VkPipelineCache cache, uint32_t perm_count,
 }
 
 static int32_t create_rt_pipeline(
-    VkDevice device, VkPipelineCache cache,
+    VkDevice device, const VkAllocationCallbacks *vk_alloc,
+    VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
     gpupipeline **p) {
@@ -713,27 +723,31 @@ static int32_t create_rt_pipeline(
     pipe_create_info[i].pStages = &pipe_stage_info[stage_idx];
   }
 
-  err = vkCreateRayTracingPipelines(device, VK_NULL_HANDLE, cache, perm_count,
-                                    pipe_create_info, NULL, pipe->pipelines);
+  err =
+      vkCreateRayTracingPipelines(device, VK_NULL_HANDLE, cache, perm_count,
+                                  pipe_create_info, vk_alloc, pipe->pipelines);
   assert(err == VK_SUCCESS);
 
   *p = pipe;
   return err;
 }
 
-void destroy_gpupipeline(VkDevice device, const gpupipeline *p) {
+void destroy_gpupipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
+                         const gpupipeline *p) {
   for (uint32_t i = 0; i < p->pipeline_count; ++i) {
-    vkDestroyPipeline(device, p->pipelines[i], NULL);
+    vkDestroyPipeline(device, p->pipelines[i], vk_alloc);
   }
   free((void *)p);
 }
 
-int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator alloc,
+int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,
+                                 const VkAllocationCallbacks *vk_alloc,
                                  const cgltf_material *gltf, const uint8_t *bin,
                                  gpumaterial *m) {
   VkResult err = VK_SUCCESS;
 
   return err;
 }
-void destroy_material(VkDevice device, VmaAllocator alloc,
+void destroy_material(VkDevice device, VmaAllocator vma_alloc,
+                      const VkAllocationCallbacks *vk_alloc,
                       const gpumaterial *m) {}

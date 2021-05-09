@@ -123,8 +123,9 @@ uint32_t parse_node(scene *s, cgltf_data *data, cgltf_node *node,
   return idx;
 }
 
-int32_t load_scene(VkDevice device, VmaAllocator alloc, VmaPool up_pool,
-                   VmaPool tex_pool, const char *filename, scene **out_scene) {
+int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
+                   VmaAllocator vma_alloc, VmaPool up_pool, VmaPool tex_pool,
+                   const char *filename, scene **out_scene) {
   // We really only want to handle glbs; gltfs should be pre-packed
   cgltf_options options = {.type = cgltf_file_type_glb};
   cgltf_data *data = NULL;
@@ -166,15 +167,15 @@ int32_t load_scene(VkDevice device, VmaAllocator alloc, VmaPool up_pool,
   s->mesh_count = mesh_count;
   for (uint32_t i = 0; i < mesh_count; ++i) {
     cgltf_mesh *mesh = &data->meshes[i];
-    create_gpumesh_cgltf(device, alloc, mesh, &s->meshes[i]);
+    create_gpumesh_cgltf(device, vma_alloc, mesh, &s->meshes[i]);
   }
 
   // Parse Textures
   s->texture_count = texture_count;
   for (uint32_t i = 0; i < texture_count; ++i) {
     cgltf_texture *tex = &data->textures[i];
-    create_gputexture_cgltf(device, alloc, tex, data->bin, up_pool, tex_pool,
-                            &s->textures[i]);
+    create_gputexture_cgltf(device, vma_alloc, vk_alloc, tex, data->bin,
+                            up_pool, tex_pool, &s->textures[i]);
   }
 
   // Parse Materials
@@ -199,13 +200,14 @@ int32_t load_scene(VkDevice device, VmaAllocator alloc, VmaPool up_pool,
   return (int32_t)res;
 }
 
-void destroy_scene(VkDevice device, VmaAllocator alloc, scene *s) {
+void destroy_scene(VkDevice device, VmaAllocator vma_alloc,
+                   const VkAllocationCallbacks *vk_alloc, scene *s) {
   for (uint32_t i = 0; i < s->mesh_count; i++) {
-    destroy_gpumesh(device, alloc, &s->meshes[i]);
+    destroy_gpumesh(device, vma_alloc, &s->meshes[i]);
   }
 
   for (uint32_t i = 0; i < s->texture_count; i++) {
-    destroy_texture(device, alloc, &s->textures[i]);
+    destroy_texture(device, vma_alloc, vk_alloc, &s->textures[i]);
   }
 
   free(s);
