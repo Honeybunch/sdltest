@@ -22,6 +22,13 @@ typedef struct gpubuffer {
   VmaAllocation alloc;
 } gpubuffer;
 
+typedef struct gpuconstbuffer {
+  size_t size;
+  gpubuffer host;
+  gpubuffer gpu;
+  VkSemaphore updated;
+} gpuconstbuffer;
+
 typedef struct gpumesh {
   size_t idx_count;
   size_t vtx_count;
@@ -79,6 +86,13 @@ typedef struct gpumaterial {
 int32_t create_gpubuffer(VmaAllocator allocator, uint64_t size,
                          int32_t mem_usage, int32_t buf_usage, gpubuffer *out);
 void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer);
+
+gpuconstbuffer create_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
+                                     const VkAllocationCallbacks *vk_alloc,
+                                     uint64_t size);
+void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
+                            const VkAllocationCallbacks *vk_alloc,
+                            gpuconstbuffer cb);
 
 int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
                        const cpumesh *src_mesh, gpumesh *dst_mesh);

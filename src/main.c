@@ -20,6 +20,7 @@
 #include "scene.h"
 #include "shadercommon.h"
 #include "simd.h"
+#include "skydome.h"
 
 #define MAX_LAYER_COUNT 16
 #define MAX_EXT_COUNT 16
@@ -78,9 +79,11 @@ typedef struct demo {
   VkPipelineLayout material_pipe_layout;
   VkPipeline uv_mesh_pipeline;
 
-  VkDescriptorSetLayout skybox_layout;
-  VkPipelineLayout skybox_pipe_layout;
-  VkPipeline skybox_pipeline;
+  VkDescriptorSetLayout skydome_layout;
+  VkPipelineLayout skydome_pipe_layout;
+  VkPipeline skydome_pipeline;
+  gpuconstbuffer sky_const_buffer;
+  sky_data sky_data;
 
   VkDescriptorSetLayout gltf_layout;
   VkPipelineLayout gltf_pipe_layout;
@@ -118,6 +121,7 @@ typedef struct demo {
 
   gpumesh cube_gpu;
   gpumesh plane_gpu;
+  gpumesh skydome_gpu;
 
   gputexture albedo;
   gputexture displacement;
@@ -129,7 +133,7 @@ typedef struct demo {
   scene *duck;
 
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
-  VkDescriptorSet skybox_descriptor_sets[FRAME_LATENCY];
+  VkDescriptorSet skydome_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet mesh_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet gltf_descriptor_sets[FRAME_LATENCY];
 
@@ -296,6 +300,21 @@ static void demo_upload_scene(demo *d, const scene *s) {
   }
 }
 
+static void demo_update_skydata(demo *d, gpuconstbuffer cb,
+                                const sky_data *data) {
+  VkDescriptorBufferInfo buffer_info = {.buffer = cb.gpu.buffer,
+                                        .range = cb.size};
+
+  VkWriteDescriptorSet const_buffer_write = {
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+      .pBufferInfo = &buffer_info,
+  };
+
+  vkUpdateDescriptorSets(d->device, 1, &const_buffer_write, 0, NULL);
+}
+
 static bool demo_init(SDL_Window *window, VkInstance instance,
                       allocator std_alloc, allocator tmp_alloc,
                       const VkAllocationCallbacks *vk_alloc, demo *d) {
@@ -385,6 +404,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   }
 
   // TODO: Check for Raytracing Support
+  /*
   {
     // Required for Spirv 1.4
     assert(device_ext_count + 1 < MAX_EXT_COUNT);
@@ -414,6 +434,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     device_ext_names[device_ext_count++] =
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME;
   }
+  */
 
   VkDevice device = create_device(gpu, graphics_queue_family_index,
                                   present_queue_family_index, device_ext_count,
@@ -788,46 +809,44 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
                                 &uv_mesh_pipeline);
   assert(err == VK_SUCCESS);
 
-  // Create Skybox Descriptor Set Layout
-  VkDescriptorSetLayout skybox_layout = VK_NULL_HANDLE;
+  // Create Skydome Descriptor Set Layout
+  VkDescriptorSetLayout skydome_layout = VK_NULL_HANDLE;
   {
     // Note: binding 1 is for the displacement map, which is useful only in the
     // vertex stage
-    VkDescriptorSetLayoutBinding bindings[2] = {
-        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-        {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
-         &sampler},
+    VkDescriptorSetLayoutBinding bindings[1] = {
+        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
     };
 
     VkDescriptorSetLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 2;
+    create_info.bindingCount = 1;
     create_info.pBindings = bindings;
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &skybox_layout);
+                                      &skydome_layout);
     assert(err == VK_SUCCESS);
   }
 
-  // Create Skybox Pipeline Layout
-  VkPipelineLayout skybox_pipe_layout = VK_NULL_HANDLE;
+  // Create Skydome Pipeline Layout
+  VkPipelineLayout skydome_pipe_layout = VK_NULL_HANDLE;
   {
     VkPipelineLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     create_info.setLayoutCount = 1;
-    create_info.pSetLayouts = &skybox_layout;
+    create_info.pSetLayouts = &skydome_layout;
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &const_range;
 
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
-                                 &skybox_pipe_layout);
+                                 &skydome_pipe_layout);
     assert(err == VK_SUCCESS);
   }
 
-  // Create Skybox Pipeline
-  VkPipeline skybox_pipeline = VK_NULL_HANDLE;
-  err = create_skybox_pipeline(device, vk_alloc, pipeline_cache, render_pass,
-                               width, height, skybox_pipe_layout,
-                               &skybox_pipeline);
+  // Create Skydome Pipeline
+  VkPipeline skydome_pipeline = VK_NULL_HANDLE;
+  err = create_skydome_pipeline(device, vk_alloc, pipeline_cache, render_pass,
+                                width, height, skydome_pipe_layout,
+                                &skydome_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create GLTF Descriptor Set Layout
@@ -913,11 +932,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
           device, "vkCreateRayTracingPipelinesKHR");
 
   // Create GLTF Ray Tracing Pipeline
-  gpupipeline *gltf_rt_pipeline = NULL;
-  err = create_gltf_rt_pipeline(
-      device, vk_alloc, pipeline_cache, vkCreateRayTracingPipelinesKHR,
-      render_pass, width, height, gltf_rt_pipe_layout, &gltf_rt_pipeline);
-  assert(err == VK_SUCCESS);
+  // gpupipeline *gltf_rt_pipeline = NULL;
+  // err = create_gltf_rt_pipeline(
+  //    device, vk_alloc, pipeline_cache, vkCreateRayTracingPipelinesKHR,
+  //    render_pass, width, height, gltf_rt_pipe_layout, &gltf_rt_pipeline);
+  // assert(err == VK_SUCCESS);
 
   // Create a pool for host memory uploads
   VmaPool upload_mem_pool = VK_NULL_HANDLE;
@@ -995,6 +1014,15 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     free(plane_cpu);
   }
 
+  // Create Skydome Mesh
+  gpumesh skydome = {0};
+  {
+    cpumesh *skydome_cpu = create_skydome(&tmp_alloc);
+
+    err = create_gpumesh(device, vma_alloc, skydome_cpu, &skydome);
+    assert(err == VK_SUCCESS);
+  }
+
   // Load Textures
   gputexture albedo = {0};
   load_texture(device, vma_alloc, vk_alloc,
@@ -1020,6 +1048,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   gputexture skybox = {0};
   load_skybox(device, vma_alloc, vk_alloc, "./assets/skybox", upload_mem_pool,
               texture_mem_pool, &skybox);
+
+  // Create Uniform buffer for sky data
+  gpuconstbuffer sky_const_buffer =
+      create_gpuconstbuffer(device, vma_alloc, vk_alloc, sizeof(sky_data));
 
   // Create procedural texture
   gputexture pattern = {0};
@@ -1072,19 +1104,21 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   d->material_layout = material_layout;
   d->material_pipe_layout = material_pipe_layout;
   d->uv_mesh_pipeline = uv_mesh_pipeline;
-  d->skybox_layout = skybox_layout;
-  d->skybox_pipe_layout = skybox_pipe_layout;
-  d->skybox_pipeline = skybox_pipeline;
+  d->skydome_layout = skydome_layout;
+  d->skydome_pipe_layout = skydome_pipe_layout;
+  d->skydome_pipeline = skydome_pipeline;
+  d->sky_const_buffer = sky_const_buffer;
   d->gltf_layout = gltf_layout;
   d->gltf_pipe_layout = gltf_pipe_layout;
   d->gltf_pipeline = gltf_pipeline;
   d->gltf_rt_layout = gltf_rt_layout;
   d->gltf_rt_pipe_layout = gltf_rt_pipe_layout;
-  d->gltf_rt_pipeline = gltf_rt_pipeline;
+  // d->gltf_rt_pipeline = gltf_rt_pipeline;
   d->upload_mem_pool = upload_mem_pool;
   d->texture_mem_pool = texture_mem_pool;
   d->cube_gpu = cube;
   d->plane_gpu = plane;
+  d->skydome_gpu = skydome;
   d->albedo = albedo;
   d->displacement = displacement;
   d->normal = normal;
@@ -1096,6 +1130,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
 
   demo_upload_mesh(d, &d->cube_gpu);
   demo_upload_mesh(d, &d->plane_gpu);
+  demo_upload_mesh(d, &d->skydome_gpu);
   demo_upload_texture(d, &d->albedo);
   demo_upload_texture(d, &d->displacement);
   demo_upload_texture(d, &d->normal);
@@ -1286,11 +1321,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
       assert(err == VK_SUCCESS);
     }
 
-    alloc_info.pSetLayouts = &skybox_layout;
+    alloc_info.pSetLayouts = &skydome_layout;
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       alloc_info.descriptorPool = d->descriptor_pools[i];
       err = vkAllocateDescriptorSets(device, &alloc_info,
-                                     &d->skybox_descriptor_sets[i]);
+                                     &d->skydome_descriptor_sets[i]);
       assert(err == VK_SUCCESS);
     }
 
@@ -1313,119 +1348,77 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
         NULL, normal.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorImageInfo roughness_info = {
         NULL, roughness.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkDescriptorImageInfo skybox_info = {
-        NULL, skybox.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkDescriptorBufferInfo skydome_info = {sky_const_buffer.gpu.buffer, 0,
+                                           sky_const_buffer.size};
     VkDescriptorImageInfo duck_info = {
         NULL, duck->textures[0].view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkWriteDescriptorSet writes[8] = {
         {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            &albedo_info,
-            NULL,
-            NULL,
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo = &albedo_info,
         },
         {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            0,
-            1,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            &displacement_info,
-            NULL,
-            NULL,
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo = &displacement_info,
         },
         {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            0,
-            2,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            &normal_info,
-            NULL,
-            NULL,
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 2,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo = &normal_info,
         },
         {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            0,
-            3,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            &roughness_info,
-            NULL,
-            NULL,
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 3,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo = &roughness_info,
         },
         {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            &skybox_info,
-            NULL,
-            NULL,
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &skydome_info,
         },
         {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            0,
-            0,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            &duck_info,
-            NULL,
-            NULL,
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo = &duck_info,
         },
         {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            0,
-            1,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            &normal_info,
-            NULL,
-            NULL,
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo = &normal_info,
         },
         {
-            VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            NULL,
-            0,
-            2,
-            0,
-            1,
-            VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            &roughness_info,
-            NULL,
-            NULL,
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 2,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo = &roughness_info,
         },
     };
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       VkDescriptorSet gltf_set = d->gltf_descriptor_sets[i];
       VkDescriptorSet mesh_set = d->mesh_descriptor_sets[i];
-      VkDescriptorSet skybox_set = d->skybox_descriptor_sets[i];
+      VkDescriptorSet skydome_set = d->skydome_descriptor_sets[i];
 
       writes[0].dstSet = mesh_set;
       writes[1].dstSet = mesh_set;
       writes[2].dstSet = mesh_set;
       writes[3].dstSet = mesh_set;
 
-      writes[4].dstSet = skybox_set;
+      writes[4].dstSet = skydome_set;
 
       writes[5].dstSet = gltf_set;
       writes[6].dstSet = gltf_set;
@@ -1702,6 +1695,11 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
           d->texture_upload_count = 0;
         }
 
+        // Issue Const Data Updates
+        {
+          // TODO: If sky data has changed only...
+        }
+
         err = vkEndCommandBuffer(upload_buffer);
 
         upload_sem = d->upload_complete_sems[frame_idx];
@@ -1789,34 +1787,33 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
         float4x4 mvp = d->push_constants.mvp;
 
-        // Draw Skybox Cube
+        // Draw Skydome
         // TODO: Figure out the best way to draw this last
         {
           // Another hack to fiddle with the matrix we send to the shader for
-          // the skybox
+          // the skydome
           d->push_constants.mvp = *sky_vp;
           vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
                              VK_SHADER_STAGE_ALL_GRAPHICS, 0,
                              sizeof(PushConstants),
                              (const void *)&d->push_constants);
 
-          uint32_t idx_count = d->cube_gpu.idx_count;
-          uint32_t vert_count = d->cube_gpu.vtx_count;
+          uint32_t idx_count = d->skydome_gpu.idx_count;
+          uint32_t vert_count = d->skydome_gpu.vtx_count;
 
           vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            d->skybox_pipeline);
+                            d->skydome_pipeline);
 
           vkCmdBindDescriptorSets(
               graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-              d->skybox_pipe_layout, 0, 1,
-              &d->skybox_descriptor_sets[frame_idx], 0, NULL);
+              d->skydome_pipe_layout, 0, 1,
+              &d->skydome_descriptor_sets[frame_idx], 0, NULL);
 
-          VkBuffer b = d->cube_gpu.gpu.buffer;
+          VkBuffer b = d->skydome_gpu.gpu.buffer;
 
           size_t idx_size =
-              idx_count * sizeof(uint16_t) >> d->cube_gpu.idx_type;
+              idx_count * sizeof(uint16_t) >> d->skydome_gpu.idx_type;
           size_t pos_size = sizeof(float3) * vert_count;
-          size_t colors_size = sizeof(float3) * vert_count;
 
           VkBuffer buffers[1] = {b};
           VkDeviceSize offsets[1] = {idx_size};
@@ -2040,6 +2037,8 @@ static void demo_destroy(demo *d) {
   destroy_texture(device, vma_alloc, vk_alloc, &d->normal);
   destroy_texture(device, vma_alloc, vk_alloc, &d->displacement);
   destroy_texture(device, vma_alloc, vk_alloc, &d->albedo);
+  destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
+  destroy_gpumesh(device, vma_alloc, &d->skydome_gpu);
   destroy_gpumesh(device, vma_alloc, &d->plane_gpu);
   destroy_gpumesh(device, vma_alloc, &d->cube_gpu);
 
@@ -2051,9 +2050,9 @@ static void demo_destroy(demo *d) {
 
   vkDestroyPipeline(device, d->fractal_pipeline, vk_alloc);
 
-  vkDestroyDescriptorSetLayout(device, d->skybox_layout, vk_alloc);
-  vkDestroyPipelineLayout(device, d->skybox_pipe_layout, vk_alloc);
-  vkDestroyPipeline(device, d->skybox_pipeline, vk_alloc);
+  vkDestroyDescriptorSetLayout(device, d->skydome_layout, vk_alloc);
+  vkDestroyPipelineLayout(device, d->skydome_pipe_layout, vk_alloc);
+  vkDestroyPipeline(device, d->skydome_pipeline, vk_alloc);
 
   vkDestroyDescriptorSetLayout(device, d->material_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->material_pipe_layout, vk_alloc);
@@ -2064,7 +2063,7 @@ static void demo_destroy(demo *d) {
 
   vkDestroyDescriptorSetLayout(device, d->gltf_rt_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->gltf_rt_pipe_layout, vk_alloc);
-  destroy_gpupipeline(device, vk_alloc, d->gltf_rt_pipeline);
+  // destroy_gpupipeline(device, vk_alloc, d->gltf_rt_pipeline);
 
   vkDestroyDescriptorSetLayout(device, d->gltf_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->gltf_pipe_layout, vk_alloc);

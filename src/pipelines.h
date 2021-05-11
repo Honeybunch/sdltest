@@ -25,11 +25,11 @@ uint32_t create_uv_mesh_pipeline(VkDevice device,
                                  uint32_t w, uint32_t h,
                                  VkPipelineLayout layout, VkPipeline *pipe);
 
-uint32_t create_skybox_pipeline(VkDevice device,
-                                const VkAllocationCallbacks *vk_alloc,
-                                VkPipelineCache cache, VkRenderPass pass,
-                                uint32_t w, uint32_t h, VkPipelineLayout layout,
-                                VkPipeline *pipe);
+uint32_t create_skydome_pipeline(VkDevice device,
+                                 const VkAllocationCallbacks *vk_alloc,
+                                 VkPipelineCache cache, VkRenderPass pass,
+                                 uint32_t w, uint32_t h,
+                                 VkPipelineLayout layout, VkPipeline *pipe);
 
 enum GLTF_PERMUTATIONS {
   GLTF_PERM_NONE = 0x00000000,

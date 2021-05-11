@@ -8,8 +8,8 @@
 #include "gltf_vert.h"
 #include "gpuresources.h"
 #include "shadercommon.h"
-#include "skybox_frag.h"
-#include "skybox_vert.h"
+#include "sky_frag.h"
+#include "sky_vert.h"
 #include "uv_mesh_frag.h"
 #include "uv_mesh_vert.h"
 
@@ -423,11 +423,11 @@ uint32_t create_uv_mesh_pipeline(VkDevice device,
   return err;
 }
 
-uint32_t create_skybox_pipeline(VkDevice device,
-                                const VkAllocationCallbacks *vk_alloc,
-                                VkPipelineCache cache, VkRenderPass pass,
-                                uint32_t w, uint32_t h, VkPipelineLayout layout,
-                                VkPipeline *pipe) {
+uint32_t create_skydome_pipeline(VkDevice device,
+                                 const VkAllocationCallbacks *vk_alloc,
+                                 VkPipelineCache cache, VkRenderPass pass,
+                                 uint32_t w, uint32_t h,
+                                 VkPipelineLayout layout, VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
 
   // Create UV Mesh Pipeline
@@ -439,13 +439,13 @@ uint32_t create_skybox_pipeline(VkDevice device,
     {
       VkShaderModuleCreateInfo create_info = {0};
       create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-      create_info.codeSize = sizeof(skybox_vert);
-      create_info.pCode = (const uint32_t *)skybox_vert;
+      create_info.codeSize = sizeof(sky_vert);
+      create_info.pCode = (const uint32_t *)sky_vert;
       err = vkCreateShaderModule(device, &create_info, vk_alloc, &vert_mod);
       assert(err == VK_SUCCESS);
 
-      create_info.codeSize = sizeof(skybox_frag);
-      create_info.pCode = (const uint32_t *)skybox_frag;
+      create_info.codeSize = sizeof(sky_frag);
+      create_info.pCode = (const uint32_t *)sky_frag;
       err = vkCreateShaderModule(device, &create_info, vk_alloc, &frag_mod);
       assert(err == VK_SUCCESS);
     }
@@ -498,7 +498,7 @@ uint32_t create_skybox_pipeline(VkDevice device,
     raster_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_state.polygonMode = VK_POLYGON_MODE_FILL;
-    raster_state.cullMode = VK_CULL_MODE_FRONT_BIT;
+    raster_state.cullMode = VK_CULL_MODE_BACK_BIT;
     raster_state.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster_state.lineWidth = 1.0f;
     VkPipelineMultisampleStateCreateInfo multisample_state = {0};

@@ -38,6 +38,48 @@ void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer) {
   vmaDestroyBuffer(allocator, buffer->buffer, buffer->alloc);
 }
 
+gpuconstbuffer create_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
+                                     const VkAllocationCallbacks *vk_alloc,
+                                     uint64_t size) {
+  gpubuffer host_buffer = {0};
+  VkResult err =
+      create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
+                       VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
+  assert(err == VK_SUCCESS);
+
+  gpubuffer device_buffer = {0};
+  err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
+                         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                         &device_buffer);
+  assert(err == VK_SUCCESS);
+
+  VkSemaphore sem = VK_NULL_HANDLE;
+  {
+    VkSemaphoreCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+    };
+    err = vkCreateSemaphore(device, &create_info, vk_alloc, &sem);
+    assert(err == VK_SUCCESS);
+  }
+
+  gpuconstbuffer cb = {
+      .size = size,
+      .host = host_buffer,
+      .gpu = device_buffer,
+      .updated = sem,
+  };
+  return cb;
+}
+
+void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
+                            const VkAllocationCallbacks *vk_alloc,
+                            gpuconstbuffer cb) {
+  destroy_gpubuffer(allocator, &cb.host);
+  destroy_gpubuffer(allocator, &cb.gpu);
+  vkDestroySemaphore(device, cb.updated, vk_alloc);
+}
+
 int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
                        const cpumesh *src_mesh, gpumesh *dst_mesh) {
   VkResult err = VK_SUCCESS;
