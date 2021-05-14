@@ -53,5 +53,5 @@ float4 frag(Interpolators i) : SV_TARGET
     float gamma = angle_of_dot(cos_gamma);
     float theta = angle_between(sample_dir, float3(0, 1, 0));
 
-    return float4(i.view_pos, 1);
+    return float4(gamma, theta, 0, 1);
 }

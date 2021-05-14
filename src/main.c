@@ -29,6 +29,7 @@
 #define VALIDATION
 #endif
 #define FRAME_LATENCY 3
+#define CONST_BUFFER_UPLOAD_QUEUE_SIZE 16
 #define MESH_UPLOAD_QUEUE_SIZE 16
 #define TEXTURE_UPLOAD_QUEUE_SIZE 16
 
@@ -136,6 +137,9 @@ typedef struct demo {
   VkDescriptorSet skydome_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet mesh_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet gltf_descriptor_sets[FRAME_LATENCY];
+
+  uint32_t const_buffer_upload_count;
+  gpuconstbuffer const_buffer_upload_queue[CONST_BUFFER_UPLOAD_QUEUE_SIZE];
 
   uint32_t mesh_upload_count;
   gpumesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
@@ -274,6 +278,13 @@ pick_surface_format(VkSurfaceFormatKHR *surface_formats,
 
   assert(format_count >= 1);
   return surface_formats[0];
+}
+
+static void demo_upload_const_buffer(demo *d, const gpuconstbuffer *buffer) {
+  uint32_t buffer_idx = d->const_buffer_upload_count;
+  assert(d->const_buffer_upload_count + 1 < CONST_BUFFER_UPLOAD_QUEUE_SIZE);
+  d->const_buffer_upload_queue[buffer_idx] = *buffer;
+  d->const_buffer_upload_count++;
 }
 
 static void demo_upload_mesh(demo *d, const gpumesh *mesh) {
@@ -1548,20 +1559,33 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
     // Record
     {
       // Upload
-      if (d->mesh_upload_count > 0 && d->texture_upload_count > 0) {
+      if (d->const_buffer_upload_count > 0 || d->mesh_upload_count > 0 ||
+          d->texture_upload_count > 0) {
         VkCommandBufferBeginInfo begin_info = {0};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         err = vkBeginCommandBuffer(upload_buffer, &begin_info);
         assert(err == VK_SUCCESS);
 
+        // Issue const buffer uploads
+        {
+          VkBufferCopy region = {0};
+          for (uint32_t i = 0; i < d->const_buffer_upload_count; ++i) {
+            gpuconstbuffer constbuffer = d->const_buffer_upload_queue[i];
+            region = (VkBufferCopy){0, 0, constbuffer.size};
+            vkCmdCopyBuffer(upload_buffer, constbuffer.host.buffer,
+                            constbuffer.gpu.buffer, 1, &region);
+          }
+          d->const_buffer_upload_count = 0;
+        }
+
         // Issue mesh uploads
         {
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
-            const gpumesh *mesh = &d->mesh_upload_queue[i];
-            region = (VkBufferCopy){0, 0, mesh->size};
-            vkCmdCopyBuffer(upload_buffer, mesh->host.buffer, mesh->gpu.buffer,
-                            1, &region);
+            gpumesh mesh = d->mesh_upload_queue[i];
+            region = (VkBufferCopy){0, 0, mesh.size};
+            vkCmdCopyBuffer(upload_buffer, mesh.host.buffer, mesh.gpu.buffer, 1,
+                            &region);
           }
           d->mesh_upload_count = 0;
         }
@@ -1577,13 +1601,13 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
           barrier.subresourceRange.baseArrayLayer = 0;
 
           for (uint32_t i = 0; i < d->texture_upload_count; ++i) {
-            const gputexture *tex = &d->texture_upload_queue[i];
+            gputexture tex = d->texture_upload_queue[i];
 
-            VkImage image = tex->device.image;
-            uint32_t img_width = tex->width;
-            uint32_t img_height = tex->height;
-            uint32_t mip_levels = tex->mip_levels;
-            uint32_t layer_count = tex->layer_count;
+            VkImage image = tex.device.image;
+            uint32_t img_width = tex.width;
+            uint32_t img_height = tex.height;
+            uint32_t mip_levels = tex.mip_levels;
+            uint32_t layer_count = tex.layer_count;
 
             // Transition all mips to transfer dst
             {
@@ -1611,7 +1635,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
             region.imageSubresource = (VkImageSubresourceLayers){
                 VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, layer_count};
             region.imageExtent = (VkExtent3D){img_width, img_height, 1};
-            vkCmdCopyBufferToImage(upload_buffer, tex->host.buffer, image,
+            vkCmdCopyBufferToImage(upload_buffer, tex.host.buffer, image,
                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                                    &region);
 
@@ -2232,6 +2256,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float4x4 cube_obj_mat = {0};
   float4x4 cube_mvp = {0};
 
+  SkyData sky_data = {
+      .sun_dir = {0, -1, 0},
+      .sun_size = 1,
+      .sun_color = {1, 1, 0},
+  };
+
   // Main loop
   bool running = true;
   float time_ms = 0;
@@ -2291,6 +2321,20 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     d.push_constants.mvp = cube_mvp;
     d.push_constants.m = cube_obj_mat;
     d.push_constants.view_pos = main_cam.transform.position;
+
+    // Update sky constant buffer
+    {
+      VmaAllocator vma_alloc = d.vma_alloc;
+      VkBuffer sky_host = d.sky_const_buffer.host.buffer;
+      VmaAllocation sky_host_alloc = d.sky_const_buffer.host.alloc;
+
+      uint8_t *data = NULL;
+      vmaMapMemory(vma_alloc, sky_host_alloc, (void **)&data);
+      memcpy_s(data, sizeof(SkyData), &sky_data, sizeof(SkyData));
+      vmaUnmapMemory(vma_alloc, sky_host_alloc);
+
+      demo_upload_const_buffer(&d, &d.sky_const_buffer);
+    }
 
     demo_render_frame(&d, &vp, &sky_vp);
 
