@@ -40,10 +40,9 @@ Android Studio is not used for the build process but the Android SDK, NDK and a 
 ### Vcpkg
 Make sure to bootstrap vcpkg with `./vcpkg/boostrap-vcpkg.bat`
 
-Install the following packages:
-* sdl2[vulkan]
-* volk
-* vulkan
+Install the necessary dependencies with `./install_deps.bat` this will
+invoke vcpkg for you for the `x64-windows` and `x64-windows-static` targets. 
+Add android manually if you want it.
 
 For the following triplets:
 
@@ -54,11 +53,6 @@ For the following triplets:
 
 #### Should-be-working vcpkg triplets
 * x64-android
-
-For example to build for Windows you would need to run:
-* `./vcpkg/vcpkg install vulkan:x64-windows`
-* `./vcpkg/vcpkg install volk:x64-windows`
-* `./vcpkg/vcpkg install sdl2[vulkan]:x64-windows`
 
 ### VSCode
 
