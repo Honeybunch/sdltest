@@ -3,19 +3,19 @@
 #include <stdint.h>
 
 typedef float __attribute__((vector_size(16))) float4;
-typedef float __attribute__((vector_size(12))) float3;
+typedef float __attribute__((vector_size(16))) float3;
 typedef float __attribute__((vector_size(8))) float2;
 
 typedef double __attribute__((vector_size(32))) double4;
-typedef double __attribute__((vector_size(24))) double3;
+typedef double __attribute__((vector_size(32))) double3;
 typedef double __attribute__((vector_size(16))) double2;
 
 typedef int32_t __attribute__((vector_size(16))) int4;
-typedef int32_t __attribute__((vector_size(12))) int3;
+typedef int32_t __attribute__((vector_size(16))) int3;
 typedef int32_t __attribute__((vector_size(8))) int2;
 
 typedef uint32_t __attribute__((vector_size(16))) uint4;
-typedef uint32_t __attribute__((vector_size(12))) uint3;
+typedef uint32_t __attribute__((vector_size(16))) uint3;
 typedef uint32_t __attribute__((vector_size(8))) uint2;
 
 typedef struct float4x4 {

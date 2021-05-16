@@ -2,6 +2,8 @@
 
 #include "simd.h"
 
+#include <stdalign.h>
+
 #define PUSH_CONSTANT_BYTES 256
 
 typedef struct PushConstants {
@@ -15,12 +17,18 @@ _Static_assert(sizeof(PushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 
 typedef struct SkyData {
-  float3 ground_albedo;
-  float3 sun_dir;
-  float3 sun_color;
-  float sun_size;
-  float turbidity;
-  float elevation;
-  float3 sky_tint;
-  float3 sun_tint;
+  alignas(4) float sun_size;
+  alignas(4) float turbidity;
+  alignas(4) float elevation;
+  alignas(4) float overcast;
+
+  alignas(16) float3 albedo_rgb;
+  alignas(16) float3 sun_dir;
+  alignas(16) float3 sun_color;
+  alignas(16) float3 sun_tint_rgb;
+  alignas(16) float3 radiance_xyz;
+
+  alignas(4) float hosek_coeffs_x[12];
+  alignas(4) float hosek_coeffs_y[12];
+  alignas(4) float hosek_coeffs_z[12];
 } SkyData;

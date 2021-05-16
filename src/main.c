@@ -20,6 +20,7 @@
 #include "scene.h"
 #include "shadercommon.h"
 #include "simd.h"
+#include "sky.h"
 #include "skydome.h"
 
 #define MAX_LAYER_COUNT 16
@@ -84,7 +85,6 @@ typedef struct demo {
   VkPipelineLayout skydome_pipe_layout;
   VkPipeline skydome_pipeline;
   gpuconstbuffer sky_const_buffer;
-  sky_data sky_data;
 
   VkDescriptorSetLayout gltf_layout;
   VkPipelineLayout gltf_pipe_layout;
@@ -311,8 +311,7 @@ static void demo_upload_scene(demo *d, const scene *s) {
   }
 }
 
-static void demo_update_skydata(demo *d, gpuconstbuffer cb,
-                                const sky_data *data) {
+static void demo_update_skydata(demo *d, gpuconstbuffer cb) {
   VkDescriptorBufferInfo buffer_info = {.buffer = cb.gpu.buffer,
                                         .range = cb.size};
 
@@ -1062,7 +1061,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
 
   // Create Uniform buffer for sky data
   gpuconstbuffer sky_const_buffer =
-      create_gpuconstbuffer(device, vma_alloc, vk_alloc, sizeof(sky_data));
+      create_gpuconstbuffer(device, vma_alloc, vk_alloc, sizeof(SkyData));
 
   // Create procedural texture
   gputexture pattern = {0};
@@ -2260,6 +2259,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .sun_dir = {0, -1, 0},
       .sun_size = 1,
       .sun_color = {1, 1, 0},
+      .sun_tint_rgb = {1, 1, 1},
   };
 
   // Main loop
@@ -2291,6 +2291,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     }
 
     editor_camera_control(delta_time_seconds, &e, &controller, &main_cam);
+
+    sky_data = update_sky(sky_data);
 
     // Spin cube
     cube_transform.rotation[1] += 1.0f * delta_time_seconds;
