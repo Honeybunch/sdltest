@@ -24,6 +24,11 @@ struct Interpolators {
   float3 view_pos : POSITION0;
 };
 
+struct FragmentOut {
+  float4 color : SV_TARGET;
+  float depth : SV_DEPTH;
+};
+
 Interpolators vert(VertexIn i) {
   Interpolators o;
   o.view_pos = i.local_pos;
@@ -160,7 +165,7 @@ float3 expose(float3 color, float exposure) {
 
 float angle_of_dot(float dot) { return acos(max(dot, 0.0000001f)); }
 
-float4 frag(Interpolators i) : SV_TARGET {
+FragmentOut frag(Interpolators i) {
   float3 sample_dir = i.view_pos;
   float3 sun_dir = sky_data.sun_dir;
 
@@ -177,6 +182,10 @@ float4 frag(Interpolators i) : SV_TARGET {
 
   float3 col = expose(RGB, 0.1);
   
-  return float4(col, 1.0);
+  FragmentOut o;
+  o.color = float4(col, 1.0);
+  o.depth = 0;
+
+  return o;
 }
 

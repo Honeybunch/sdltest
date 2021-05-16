@@ -1809,42 +1809,6 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
         float4x4 mvp = d->push_constants.mvp;
 
-        // Draw Skydome
-        // TODO: Figure out the best way to draw this last
-        {
-          // Another hack to fiddle with the matrix we send to the shader for
-          // the skydome
-          d->push_constants.mvp = *sky_vp;
-          vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
-                             VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                             sizeof(PushConstants),
-                             (const void *)&d->push_constants);
-
-          uint32_t idx_count = d->skydome_gpu.idx_count;
-          uint32_t vert_count = d->skydome_gpu.vtx_count;
-
-          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            d->skydome_pipeline);
-
-          vkCmdBindDescriptorSets(
-              graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-              d->skydome_pipe_layout, 0, 1,
-              &d->skydome_descriptor_sets[frame_idx], 0, NULL);
-
-          VkBuffer b = d->skydome_gpu.gpu.buffer;
-
-          size_t idx_size =
-              idx_count * sizeof(uint16_t) >> d->skydome_gpu.idx_type;
-          size_t pos_size = sizeof(float3) * vert_count;
-
-          VkBuffer buffers[1] = {b};
-          VkDeviceSize offsets[1] = {idx_size};
-
-          vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
-          vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
-          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
-        }
-
         // Draw Cube
         {
           d->push_constants.mvp = mvp;
@@ -1917,6 +1881,42 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
               1, &d->gltf_descriptor_sets[frame_idx], 0, NULL);
           demo_render_scene(d->duck, graphics_buffer, pipe_layout,
                             &d->push_constants, vp);
+        }
+
+        // Draw Skydome
+        // TODO: Figure out the best way to draw this last
+        {
+          // Another hack to fiddle with the matrix we send to the shader for
+          // the skydome
+          d->push_constants.mvp = *sky_vp;
+          vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+                             VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                             sizeof(PushConstants),
+                             (const void *)&d->push_constants);
+
+          uint32_t idx_count = d->skydome_gpu.idx_count;
+          uint32_t vert_count = d->skydome_gpu.vtx_count;
+
+          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            d->skydome_pipeline);
+
+          vkCmdBindDescriptorSets(
+              graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+              d->skydome_pipe_layout, 0, 1,
+              &d->skydome_descriptor_sets[frame_idx], 0, NULL);
+
+          VkBuffer b = d->skydome_gpu.gpu.buffer;
+
+          size_t idx_size =
+              idx_count * sizeof(uint16_t) >> d->skydome_gpu.idx_type;
+          size_t pos_size = sizeof(float3) * vert_count;
+
+          VkBuffer buffers[1] = {b};
+          VkDeviceSize offsets[1] = {idx_size};
+
+          vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+          vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
+          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
         }
 
         vkCmdEndRenderPass(graphics_buffer);
