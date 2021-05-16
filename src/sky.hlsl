@@ -184,7 +184,7 @@ FragmentOut frag(Interpolators i) {
   
   FragmentOut o;
   o.color = float4(col, 1.0);
-  o.depth = 0;
+  o.depth = 0; // The skybox has no depth no matter what the geometry says
 
   return o;
 }

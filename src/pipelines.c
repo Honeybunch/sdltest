@@ -510,7 +510,7 @@ uint32_t create_skydome_pipeline(VkDevice device,
         VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depth_state.depthTestEnable = VK_TRUE;
     depth_state.depthWriteEnable = VK_FALSE;
-    depth_state.depthCompareOp = VK_COMPARE_OP_GREATER_OR_EQUAL;
+    depth_state.depthCompareOp = VK_COMPARE_OP_EQUAL; // Equal to 0
     depth_state.maxDepthBounds = 1.0f;
 
     VkPipelineColorBlendAttachmentState attachment_state = {0};
