@@ -144,7 +144,7 @@ float angle(float z1, float a1, float z2, float a2) {
     cos(z1) * cos(z2));
 }
 
-float3 sample_sky2(float gamma, float theta, float albedo, float turbidity, float sun_zenith) {
+float3 sample_sky(float gamma, float theta, float albedo, float turbidity, float sun_zenith) {
   return spectral_radiance(theta, gamma, albedo, turbidity, sun_zenith) * mean_spectral_radiance(albedo, turbidity, sun_zenith);
 }
 
@@ -167,17 +167,24 @@ float angle_of_dot(float dot) { return acos(max(dot, 0.0000001f)); }
 
 FragmentOut frag(Interpolators i) {
   float3 sample_dir = i.view_pos;
-  float3 sun_dir = sky_data.sun_dir;
+  //float3 sun_dir = sky_data.sun_dir;
+
+  // Change sun direction over time
+  float seconds = consts.time[0];
+  float y = -abs(cos(seconds));
+  float z = sin(seconds);
+
+  float3 sun_dir = normalize(float3(0, -y, z));
 
   float cos_theta = dot(sample_dir, float3(0, 1, 0));
-  float cos_gamma = dot(sample_dir, sun_dir * -1);
+  float cos_gamma = dot(sample_dir, sun_dir);
 
   float gamma = angle_of_dot(cos_gamma);
   float theta = angle_of_dot(cos_theta);
 
-  float sun_zenith = 1;
+  float sun_zenith = -sun_dir.y + 1;
 
-  float3 XYZ = sample_sky2(gamma, theta, sky_data.albedo, sky_data.turbidity, sun_zenith);
+  float3 XYZ = sample_sky(gamma, theta, sky_data.albedo, sky_data.turbidity, sun_zenith);
   float3 RGB = XYZ_to_RGB(XYZ);
 
   float3 col = expose(RGB, 0.1);

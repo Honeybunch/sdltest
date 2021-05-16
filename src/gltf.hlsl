@@ -73,13 +73,13 @@ float4 frag(Interpolators i) : SV_TARGET
 
     // Change light direction over time
     float seconds = consts.time[0];
-    float x = (cos(seconds) + 0.5) * 0.5;
-    float z = (sin(seconds) + 0.5) * 0.5;
+    float y = -abs(cos(seconds));
+    float z = sin(seconds);
 
     float3 lightColor = float3(1, 1, 1);
 
     // Lighting calcs
-    float3 L = normalize(float3(x, -1, z));
+    float3 L = normalize(float3(0, y, z));
     
     // Calc ambient light
     float3 ambient = float3(0.01, 0.01, 0.01);
@@ -98,7 +98,7 @@ float4 frag(Interpolators i) : SV_TARGET
     specular *= lightColor;
 
     // Compose final lighting color
-    float3 color = ambient + (albedo * diffuse) + specular;
+    float3 color = (albedo * ambient) + (albedo * diffuse) + specular;
 
     return float4(color, 1);
 }
