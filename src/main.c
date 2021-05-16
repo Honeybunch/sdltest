@@ -20,7 +20,6 @@
 #include "scene.h"
 #include "shadercommon.h"
 #include "simd.h"
-#include "sky.h"
 #include "skydome.h"
 
 #define MAX_LAYER_COUNT 16
@@ -2257,9 +2256,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   SkyData sky_data = {
       .sun_dir = {0, -1, 0},
-      .sun_size = 1,
-      .sun_color = {1, 1, 0},
-      .sun_tint_rgb = {1, 1, 1},
+      .turbidity = 3,
+      .albedo = 1,
   };
 
   // Main loop
@@ -2291,8 +2289,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     }
 
     editor_camera_control(delta_time_seconds, &e, &controller, &main_cam);
-
-    sky_data = update_sky(sky_data);
 
     // Spin cube
     cube_transform.rotation[1] += 1.0f * delta_time_seconds;
