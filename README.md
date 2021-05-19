@@ -24,6 +24,8 @@ Make sure to have the following available on your path:
 * ninja
 * cmake 3.20
 * clang
+* dxc [via the Vulkan SDK](https://vulkan.lunarg.com/)
+* toktx [via KTX-Software](https://github.com/KhronosGroup/KTX-Software)
 
 You will need the VS2019 build tools, a Windows 10 Kit install and LLVM for Windows installed.
 

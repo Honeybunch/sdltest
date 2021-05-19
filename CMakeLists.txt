@@ -52,14 +52,16 @@ find_package(volk CONFIG REQUIRED)
 find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(mimalloc 1.6 CONFIG REQUIRED)
+find_package(zstd CONFIG REQUIRED)
+find_package(Ktx CONFIG REQUIRED)
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
 find_program(DXC dxc REQUIRED)
-find_program(BASISU basisu_tool REQUIRED)
+find_program(TOKTX toktx REQUIRED)
 
 # Compile Shaders
-set(shader_includes 
+set(shader_includes
     "${CMAKE_CURRENT_LIST_DIR}/src/common.hlsli"
     "${CMAKE_CURRENT_LIST_DIR}/src/fullscreenvert.hlsli"
     "${CMAKE_CURRENT_LIST_DIR}/src/healthbar.hlsli")
@@ -108,7 +110,6 @@ foreach(shader ${rt_shaders})
   list(APPEND shader_headers ${out_paths})
 endforeach()
 
-
 add_custom_target(shaders ALL DEPENDS ${shader_headers})
 
 # Setup Main Executable
@@ -149,7 +150,8 @@ target_link_libraries(sdltest PRIVATE
   volk::volk_headers
   unofficial::vulkan-memory-allocator::vulkan-memory-allocator
   imgui::imgui
-  mimalloc mimalloc-static)
+  mimalloc mimalloc-static
+  KTX::ktx)
 if(STATIC)
   target_link_libraries(sdltest PRIVATE SDL2::SDL2-static)
 else()
@@ -166,6 +168,28 @@ else()
           RUNTIME DESTINATION "${arch}/bin/$<CONFIG>"
           LIBRARY DESTINATION "${arch}/lib/$<CONFIG>")
 endif()
+
+# Compress Textures
+file(GLOB_RECURSE textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.png")
+
+set(UASTC_LEVEL $<$<CONFIG:Debug>:0>$<$<NOT:$<CONFIG:Debug>>:3>)
+foreach(texture ${textures})
+  file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${texture})
+  get_filename_component(relpath ${relpath} DIRECTORY)
+  get_filename_component(filename ${texture} NAME_WE)
+  set(ktx_texture ${CMAKE_CFG_INTDIR}/assets/textures/${filename}.ktx2)
+
+  add_custom_command(
+        OUTPUT ${ktx_texture}
+        COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
+        COMMAND ${TOKTX} --t2 --genmipmap --uastc ${UASTC_LEVEL} assets/${relpath}/${filename}.ktx2 ${texture}
+        MAIN_DEPENDENCY ${texture}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
+    )
+
+  list(APPEND ktx_textures ${ktx_texture})
+endforeach()
+add_custom_target(textures ALL DEPENDS ${ktx_textures})
 
 install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/assets
         DESTINATION .)
