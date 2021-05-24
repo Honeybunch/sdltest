@@ -1,9 +1,11 @@
 #include "gpuresources.h"
 
+#include "allocator.h"
 #include "cpuresources.h"
 
 #include <SDL2/SDL_image.h>
 #include <cgltf.h>
+#include <ktx.h>
 #include <volk.h>
 
 #include <vk_mem_alloc.h>
@@ -258,6 +260,47 @@ SDL_Surface *parse_and_transform_image(const uint8_t *data, size_t size) {
   SDL_FreeSurface(img);
 
   return opt_img;
+}
+
+gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
+                             allocator *tmp_alloc,
+                             const VkAllocationCallbacks *vk_alloc,
+                             const char *file_path, VmaPool up_pool,
+                             VmaPool tex_pool) {
+  gputexture t = {0};
+
+  uint8_t *mem = NULL;
+  size_t size = 0;
+  {
+    SDL_RWops *file = SDL_RWFromFile(file_path, "rb");
+    if (file == NULL) {
+      assert(0);
+      return t;
+    }
+
+    size = (size_t)file->size(file);
+    mem = hb_alloc(*tmp_alloc, size);
+    assert(mem);
+
+    // Read file into memory
+    if (file->read(file, mem, size, 1) == 0) {
+      file->close(file);
+      assert(0);
+      return t;
+    }
+    file->close(file);
+  }
+
+  ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
+  ktxTexture2 *ktx = NULL;
+  ktx_error_code_e err = ktxTexture2_CreateFromMemory(mem, size, flags, &ktx);
+  if (err != KTX_SUCCESS) {
+
+    assert(0);
+    return t;
+  }
+
+  return t;
 }
 
 int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,

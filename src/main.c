@@ -1032,6 +1032,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     assert(err == VK_SUCCESS);
   }
 
+  gputexture test =
+      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
+                        "./assets/textures/shfsaida_8K_Albedo.ktx2",
+                        upload_mem_pool, texture_mem_pool);
+
   // Load Textures
   gputexture albedo = {0};
   load_texture(device, vma_alloc, vk_alloc,
@@ -2134,7 +2139,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   static const float qtr_pi = 0.7853981625f;
 
   // Create Temporary Arena Allocator
-  static const size_t arena_alloc_size = 1024 * 1024;
+  static const size_t arena_alloc_size = 1024 * 1024 * 1024; // 1 MB
   arena_allocator arena = create_arena_allocator(arena_alloc_size);
 
   mi_heap_t *vk_heap = mi_heap_new();

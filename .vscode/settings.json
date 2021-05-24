@@ -55,6 +55,7 @@
         "unordered_set": "c",
         "xlocbuf": "c",
         "xlocmes": "c",
-        "xlocmon": "c"
+        "xlocmon": "c",
+        "ktx.h": "c"
     }
 }

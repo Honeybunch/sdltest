@@ -11,6 +11,7 @@ typedef struct VmaPool_T *VmaPool;
 
 typedef struct VmaAllocationCreateInfo VmaAllocationCreateInfo;
 
+typedef struct allocator allocator;
 typedef struct cpumesh cpumesh;
 typedef struct cgltf_mesh cgltf_mesh;
 typedef struct cputexture cputexture;
@@ -107,6 +108,12 @@ int32_t create_gpuimage(VmaAllocator vma_alloc,
 
                         gpuimage *i);
 void destroy_gpuimage(VmaAllocator allocator, const gpuimage *image);
+
+gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
+                             allocator *tmp_alloc,
+                             const VkAllocationCallbacks *vk_alloc,
+                             const char *file_path, VmaPool up_pool,
+                             VmaPool tex_pool);
 
 int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
                      const VkAllocationCallbacks *vk_alloc,
