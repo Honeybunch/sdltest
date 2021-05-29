@@ -166,6 +166,8 @@ function(vcpkg_internal_meson_generate_native_file_config _config) #https://meso
             set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${SCRIPTS}/toolchains/openbsd.cmake")
         elseif(VCPKG_TARGET_IS_MINGW)
             set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${SCRIPTS}/toolchains/mingw.cmake")
+        elseif(VCPKG_TARGET_IS_SWITCH)
+            set(VCPKG_CHAINLOAD_TOOLCHAIN_FILE "${SCRIPTS}/toolchains/switch.cmake")
         endif()
     endif()
 

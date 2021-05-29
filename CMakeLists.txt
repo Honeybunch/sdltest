@@ -15,17 +15,19 @@ target_architecture(arch)
 if(WIN32)
     set(platform "windows")
 elseif(APPLE)
-    if(IOS)
-        set(platform "ios")
-    else()
-        set(platform "macos")
-    endif()
+  if(IOS)
+    set(platform "ios")
+  else()
+    set(platform "macos")
+  endif()
 elseif(ANDROID)
-    set(platform "android")
+  set(platform "android")
 elseif(UNIX)
-    set(platform "linux")
+  set(platform "linux")
+elseif(SWITCH)
+  set(platform "switch")
 else()
-    message(FATAL_ERROR "Unknown platform")
+  message(FATAL_ERROR "Unknown platform")
 endif()
 
 # Set install prefix if not already overridden
@@ -36,10 +38,11 @@ else()
     set(sdltest_install ${CMAKE_INSTALL_PREFIX})
 endif()
 
-# Clang only for now
+# Clang & GNU only for now
 if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" AND
-   NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "AppleClang")
-  message(FATAL_ERROR "${CMAKE_CXX_COMPILER_ID} Unsupported - Clang only")
+   NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "AppleClang" AND
+   NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
+  message(FATAL_ERROR "${CMAKE_CXX_COMPILER_ID} Unsupported - Clang & GNU only")
 endif()
 
 if(${VCPKG_TARGET_TRIPLET} MATCHES static)
