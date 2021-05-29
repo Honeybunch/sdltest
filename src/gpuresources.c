@@ -262,6 +262,43 @@ SDL_Surface *parse_and_transform_image(const uint8_t *data, size_t size) {
   return opt_img;
 }
 
+static VkImageType get_ktx2_image_type(const ktxTexture2 *t) {
+  return (VkImageType)(t->numDimensions - 1);
+}
+
+static VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t) {
+  VkImageType img_type = get_ktx2_image_type(t);
+
+  bool cube = t->isCubemap;
+  bool array = t->isArray;
+
+  if (img_type == VK_IMAGE_TYPE_1D) {
+    if (array) {
+      return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
+    } else {
+      return VK_IMAGE_VIEW_TYPE_1D;
+    }
+  } else if (img_type == VK_IMAGE_TYPE_2D) {
+    if (array) {
+      return VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    } else {
+      return VK_IMAGE_VIEW_TYPE_2D;
+    }
+
+  } else if (img_type == VK_IMAGE_TYPE_3D) {
+    // No such thing as a 3D array
+    return VK_IMAGE_VIEW_TYPE_3D;
+  } else if (cube) {
+    if (array) {
+      return VK_IMAGE_VIEW_TYPE_CUBE_ARRAY;
+    }
+    return VK_IMAGE_VIEW_TYPE_CUBE;
+  }
+
+  assert(0);
+  return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+}
+
 gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
                              allocator *tmp_alloc,
                              const VkAllocationCallbacks *vk_alloc,
@@ -293,12 +330,111 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
 
   ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
   ktxTexture2 *ktx = NULL;
-  ktx_error_code_e err = ktxTexture2_CreateFromMemory(mem, size, flags, &ktx);
-  if (err != KTX_SUCCESS) {
+  {
+    ktx_error_code_e err = ktxTexture2_CreateFromMemory(mem, size, flags, &ktx);
+    if (err != KTX_SUCCESS) {
+      assert(0);
+      return t;
+    }
 
-    assert(0);
-    return t;
+    bool needs_transcoding = ktxTexture2_NeedsTranscoding(ktx);
+    if (needs_transcoding) {
+      // TODO: pre-calculate the best format for the platform
+      err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
+      if (err != KTX_SUCCESS) {
+        assert(0);
+        return t;
+      }
+    }
   }
+
+  VkResult err = VK_SUCCESS;
+
+  size_t host_buffer_size = ktx->dataSize;
+  uint32_t width = ktx->baseWidth;
+  uint32_t height = ktx->baseHeight;
+  uint32_t depth = ktx->baseDepth;
+  uint32_t layers = ktx->numLayers;
+  uint32_t mip_levels = ktx->numLevels;
+  VkFormat format = (VkFormat)ktx->vkFormat;
+  bool gen_mips = ktx->generateMipmaps;
+
+  gpubuffer host_buffer = {0};
+  {
+    VkBufferCreateInfo buffer_create_info = {0};
+    buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_create_info.size = host_buffer_size;
+    buffer_create_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateInfo alloc_create_info = {0};
+    alloc_create_info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    alloc_create_info.pool = up_pool;
+    VmaAllocationInfo alloc_info = {0};
+    err = vmaCreateBuffer(vma_alloc, &buffer_create_info, &alloc_create_info,
+                          &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
+    assert(err == VK_SUCCESS);
+  }
+
+  gpuimage device_image = {0};
+  {
+    VkImageUsageFlags usage =
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    // If we need to generate mips we'll need to mark the image as being able to
+    // be copied from
+    if (gen_mips) {
+      usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    }
+
+    VkImageCreateInfo img_info = {0};
+    img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    img_info.imageType = get_ktx2_image_type(ktx);
+    img_info.format = format;
+    img_info.extent = (VkExtent3D){width, height, depth};
+    img_info.mipLevels = mip_levels;
+    img_info.arrayLayers = layers;
+    img_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    img_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    img_info.usage = usage;
+    VmaAllocationCreateInfo alloc_info = {0};
+    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_info.pool = tex_pool;
+    err = create_gpuimage(vma_alloc, &img_info, &alloc_info, &device_image);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Copy data to host buffer
+  {
+    uint8_t *data = NULL;
+    vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
+
+    memcpy_s(data, host_buffer_size, ktx->pData, host_buffer_size);
+
+    vmaUnmapMemory(vma_alloc, host_buffer.alloc);
+  }
+
+  // Create Image View
+  VkImageView view = VK_NULL_HANDLE;
+  {
+    VkImageViewCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    create_info.image = device_image.image;
+    create_info.viewType = get_ktx2_image_view_type(ktx);
+    create_info.format = format;
+    create_info.subresourceRange = (VkImageSubresourceRange){
+        VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_levels, 0, layers};
+    err = vkCreateImageView(device, &create_info, vk_alloc, &view);
+    assert(err == VK_SUCCESS);
+  };
+
+  t.host = host_buffer;
+  t.device = device_image;
+  t.format = format;
+  t.width = width;
+  t.height = height;
+  t.mip_levels = mip_levels;
+  t.gen_mips = gen_mips;
+  t.layer_count = layers;
+  t.view = view;
 
   return t;
 }
@@ -394,6 +530,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
   t->width = img_width;
   t->height = img_height;
   t->mip_levels = mip_levels;
+  t->gen_mips = mip_levels > 1;
   t->layer_count = 1;
   t->view = view;
 
@@ -664,6 +801,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
   t->width = img_width;
   t->height = img_height;
   t->mip_levels = desired_mip_levels;
+  t->gen_mips = desired_mip_levels > 1;
   t->layer_count = tex->layer_count;
   t->view = view;
 

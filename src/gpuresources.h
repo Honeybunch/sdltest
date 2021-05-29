@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define VK_NO_PROTOTYPES
@@ -53,6 +54,7 @@ typedef struct gputexture {
   uint32_t width;
   uint32_t height;
   uint32_t mip_levels;
+  bool gen_mips;
   uint32_t layer_count;
   uint32_t format;
 } gputexture;

@@ -1032,10 +1032,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     assert(err == VK_SUCCESS);
   }
 
-  gputexture test =
-      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_8K_Albedo.ktx2",
-                        upload_mem_pool, texture_mem_pool);
+  // gputexture test =
+  //    load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
+  //                      "./assets/textures/shfsaida_8K_Albedo.ktx2",
+  //                      upload_mem_pool, texture_mem_pool);
 
   // Load Textures
   gputexture albedo = {0};
@@ -1643,7 +1643,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                                    &region);
 
             // Generate mipmaps
-            if (mip_levels > 1) {
+            if (tex.gen_mips) {
               uint32_t mip_width = img_width;
               uint32_t mip_height = img_height;
 
