@@ -138,9 +138,8 @@ void create_cube(cpumesh *cube) {
   cube->index_count = cube_index_count;
   cube->vertex_count = cube_vertex_count;
 
-  memcpy_s((void *)cube->indices, cube_index_size, cube_indices,
-           cube_index_size);
-  memcpy_s(pos, sizeof(cube_positions), cube_positions, sizeof(cube_positions));
-  memcpy_s(col, sizeof(cube_colors), cube_colors, sizeof(cube_colors));
-  memcpy_s(norm, sizeof(cube_normals), cube_normals, sizeof(cube_normals));
+  memcpy((void *)cube->indices, cube_indices, cube_index_size);
+  memcpy(pos, cube_positions, sizeof(cube_positions));
+  memcpy(col, cube_colors, sizeof(cube_colors));
+  memcpy(norm, cube_normals, sizeof(cube_normals));
 }

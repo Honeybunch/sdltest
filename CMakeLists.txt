@@ -57,6 +57,10 @@ find_package(imgui CONFIG REQUIRED)
 find_package(mimalloc 1.6 CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
+if(UNIX)
+  find_package(Threads REQUIRED)
+  add_library(zstd::zstd ALIAS zstd::libzstd_static)
+endif()
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
@@ -135,6 +139,16 @@ if(WIN32)
   target_link_options(sdltest PRIVATE -Wl,/subsystem:windows)
 elseif(ANDROID)
   add_library(sdltest SHARED ${source})
+elseif(UNIX)
+  if(APPLE)
+    if(IOS)
+    # iOS
+    else()
+    # macOS
+    endif()
+  else()
+    add_executable(sdltest ${source} "${CMAKE_CURRENT_LIST_DIR}/linux/src/entry.c")
+  endif()
 endif()
 
 add_dependencies(sdltest shaders)
@@ -146,6 +160,7 @@ else()
 endif()
 #set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 target_include_directories(sdltest PRIVATE "src/" "${CMAKE_CFG_INTDIR_ABS}/shaders" "${CGLTF_INCLUDE_DIRS}")
+
 target_link_libraries(sdltest PRIVATE
   SDL2::SDL2main
   SDL2::SDL2_image
@@ -155,11 +170,13 @@ target_link_libraries(sdltest PRIVATE
   imgui::imgui
   mimalloc mimalloc-static
   KTX::ktx)
+
 if(STATIC)
   target_link_libraries(sdltest PRIVATE SDL2::SDL2-static)
 else()
   target_link_libraries(sdltest PRIVATE SDL2::SDL2)
 endif()
+
 target_compile_features(sdltest PRIVATE c_std_11)
 
 if(ANDROID)

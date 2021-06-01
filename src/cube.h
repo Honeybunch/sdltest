@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stddef.h>
+
 typedef struct cpumesh cpumesh;
 
 // Assumes space for entire cube has been allocated

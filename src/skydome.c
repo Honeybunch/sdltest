@@ -4,6 +4,7 @@
 #include "cpuresources.h"
 
 #include <assert.h>
+#include <stddef.h>
 #include <string.h>
 
 static const uint16_t skydome_indices[] = {
@@ -386,13 +387,10 @@ cpumesh *create_skydome(allocator *a) {
   skydome->index_count = skydome_index_count;
   skydome->vertex_count = skydome_vertex_count;
 
-  memcpy_s((void *)skydome->indices, skydome_index_size, skydome_indices,
-           skydome_index_size);
-  memcpy_s(pos, sizeof(skydome_positions), skydome_positions,
-           sizeof(skydome_positions));
-  memcpy_s(norm, sizeof(skydome_normals), skydome_normals,
-           sizeof(skydome_normals));
-  memcpy_s(uv, sizeof(skydome_uvs), skydome_uvs, sizeof(skydome_uvs));
+  memcpy((void *)skydome->indices, skydome_indices, skydome_index_size);
+  memcpy(pos, skydome_positions, sizeof(skydome_positions));
+  memcpy(norm, skydome_normals, sizeof(skydome_normals));
+  memcpy(uv, skydome_uvs, sizeof(skydome_uvs));
 
   return skydome;
 }

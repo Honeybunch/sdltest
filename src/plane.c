@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <math.h>
+#include <stddef.h>
 
 uint32_t aligned(uint32_t size) { return ((size - 1) | 15) + 1; }
 

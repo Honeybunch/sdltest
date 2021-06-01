@@ -11,6 +11,7 @@
 #include <vk_mem_alloc.h>
 
 #include <assert.h>
+#include <stddef.h>
 #include <stdio.h>
 
 int32_t create_gpubuffer(VmaAllocator allocator, uint64_t size,
@@ -330,6 +331,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
 
   ktxTextureCreateFlags flags = KTX_TEXTURE_CREATE_LOAD_IMAGE_DATA_BIT;
   ktxTexture2 *ktx = NULL;
+  uint32_t component_count = 0;
   {
     ktx_error_code_e err = ktxTexture2_CreateFromMemory(mem, size, flags, &ktx);
     if (err != KTX_SUCCESS) {
@@ -407,7 +409,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     uint8_t *data = NULL;
     vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
 
-    memcpy_s(data, host_buffer_size, ktx->pData, host_buffer_size);
+    memcpy(data, ktx->pData, host_buffer_size);
 
     vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
@@ -470,7 +472,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
     assert(err == VK_SUCCESS);
   }
 
-  uint32_t mip_levels = floor(log2(max(img_width, img_height))) + 1;
+  uint32_t mip_levels = floor(log2(SDL_max(img_width, img_height))) + 1;
 
   gpuimage device_image = {0};
   {
@@ -505,7 +507,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
     uint8_t *data = NULL;
     vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
 
-    memcpy_s(data, host_buffer_size, img->pixels, host_buffer_size);
+    memcpy(data, img->pixels, host_buffer_size);
 
     vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
@@ -691,7 +693,7 @@ int32_t load_skybox(VkDevice device, VmaAllocator vma_alloc,
       SDL_Surface *img = skybox_imgs[i];
       img_size = (img->pitch * img->h);
 
-      memcpy_s(data + offset, img_size, img->pixels, img_size);
+      memcpy(data + offset, img->pixels, img_size);
       offset += img_size;
     }
     vmaUnmapMemory(vma_alloc, host_buffer.alloc);
@@ -743,7 +745,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
     assert(err == VK_SUCCESS);
   }
 
-  uint32_t desired_mip_levels = floor(log2(max(img_width, img_height))) + 1;
+  uint32_t desired_mip_levels = floor(log2(SDL_max(img_width, img_height))) + 1;
 
   // Allocate device image
   gpuimage device_image = {0};
@@ -790,7 +792,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
     vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
 
     uint64_t data_size = tex->data_size;
-    memcpy_s(data, data_size, tex->data, data_size);
+    memcpy(data, tex->data, data_size);
 
     vmaUnmapMemory(vma_alloc, host_buffer.alloc);
   }
@@ -837,11 +839,11 @@ static gpupipeline *alloc_gpupipeline(uint32_t perm_count) {
   return p;
 }
 
-static int32_t
-create_gfx_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
-                    VkPipelineCache cache, uint32_t perm_count,
-                    VkGraphicsPipelineCreateInfo *create_info_base,
-                    gpupipeline **p) {
+int32_t create_gfx_pipeline(VkDevice device,
+                            const VkAllocationCallbacks *vk_alloc,
+                            VkPipelineCache cache, uint32_t perm_count,
+                            VkGraphicsPipelineCreateInfo *create_info_base,
+                            gpupipeline **p) {
   gpupipeline *pipe = alloc_gpupipeline(perm_count);
   VkResult err = VK_SUCCESS;
 
@@ -895,7 +897,7 @@ create_gfx_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
   return err;
 }
 
-static int32_t create_rt_pipeline(
+int32_t create_rt_pipeline(
     VkDevice device, const VkAllocationCallbacks *vk_alloc,
     VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,

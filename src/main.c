@@ -697,18 +697,15 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     void *data = NULL;
 
     // If an existing pipeline cache exists, load it
-    FILE *cache_file = NULL;
-    errno_t e = fopen_s(&cache_file, "./pipeline.cache", "rb");
-    bool cache_open = cache_file && e == 0;
-    if (cache_open) {
-      fseek(cache_file, 0, SEEK_END);
-      data_size = ftell(cache_file);
-      rewind(cache_file);
+    SDL_RWops *cache_file = SDL_RWFromFile("./pipeline.cache", "rb");
+    if (cache_file != NULL) {
+      data_size = (size_t)SDL_RWsize(cache_file);
 
-      data = malloc(data_size);
+      data = mi_malloc(data_size);
 
-      fread(data, data_size, 1, cache_file);
-      fclose(cache_file);
+      SDL_RWread(cache_file, data, data_size, 1);
+
+      SDL_RWclose(cache_file);
     }
 
     VkPipelineCacheCreateInfo create_info = {0};
@@ -720,7 +717,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     assert(err == VK_SUCCESS);
 
     if (data) {
-      free(data);
+      mi_free(data);
     }
   }
 
@@ -1032,10 +1029,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     assert(err == VK_SUCCESS);
   }
 
-  // gputexture test =
-  //    load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-  //                      "./assets/textures/shfsaida_8K_Albedo.ktx2",
-  //                      upload_mem_pool, texture_mem_pool);
+  gputexture test =
+      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
+                        "./assets/textures/shfsaida_8K_Albedo.ktx2",
+                        upload_mem_pool, texture_mem_pool);
 
   // Load Textures
   gputexture albedo = {0};
@@ -1151,6 +1148,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   demo_upload_texture(d, &d->roughness);
   demo_upload_texture(d, &d->skybox);
   demo_upload_texture(d, &d->pattern);
+  demo_upload_texture(d, &test);
   demo_upload_scene(d, d->duck);
 
   // Create Semaphores
@@ -2031,12 +2029,10 @@ static void demo_destroy(demo *d) {
           vkGetPipelineCacheData(device, d->pipeline_cache, &cache_size, cache);
       if (err == VK_SUCCESS) {
 
-        FILE *cache_file = NULL;
-        errno_t e = fopen_s(&cache_file, "./pipeline.cache", "wb");
-        bool cache_open = cache_file && e == 0;
-        if (cache_open) {
-          fwrite(cache, cache_size, 1, cache_file);
-          fclose(cache_file);
+        SDL_RWops *cache_file = SDL_RWFromFile("./pipeline.cache", "wb");
+        if (cache_file != NULL) {
+          SDL_RWwrite(cache_file, cache, cache_size, 1);
+          SDL_RWclose(cache_file);
         }
       }
     }
@@ -2333,7 +2329,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       uint8_t *data = NULL;
       vmaMapMemory(vma_alloc, sky_host_alloc, (void **)&data);
-      memcpy_s(data, sizeof(SkyData), &sky_data, sizeof(SkyData));
+      memcpy(data, &sky_data, sizeof(SkyData));
       vmaUnmapMemory(vma_alloc, sky_host_alloc);
 
       demo_upload_const_buffer(&d, &d.sky_const_buffer);
