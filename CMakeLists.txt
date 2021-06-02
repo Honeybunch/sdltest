@@ -57,6 +57,7 @@ find_package(imgui CONFIG REQUIRED)
 find_package(mimalloc 1.6 CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
+find_package(Optick CONFIG REQUIRED)
 if(UNIX)
   find_package(Threads REQUIRED)
   add_library(zstd::zstd ALIAS zstd::libzstd_static)
@@ -168,6 +169,7 @@ target_link_libraries(sdltest PRIVATE
   volk::volk_headers
   unofficial::vulkan-memory-allocator::vulkan-memory-allocator
   imgui::imgui
+  Optick::OptickCore
   mimalloc mimalloc-static
   KTX::ktx)
 
