@@ -56,6 +56,7 @@
         "xlocbuf": "c",
         "xlocmes": "c",
         "xlocmon": "c",
-        "ktx.h": "c"
+        "ktx.h": "c",
+        "optick_capi.h": "c"
     }
 }

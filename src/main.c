@@ -3,6 +3,7 @@
 #include <SDL2/SDL_vulkan.h>
 #include <assert.h>
 #include <mimalloc.h>
+#include <optick_capi.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <volk.h>
@@ -1506,6 +1507,9 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
 
 static void demo_render_frame(demo *d, const float4x4 *vp,
                               const float4x4 *sky_vp) {
+  OPTICK_C_PUSH(demo_render_frame_event, "demo_render_frame",
+                OptickAPI_Category_Rendering)
+
   VkResult err = VK_SUCCESS;
 
   VkDevice device = d->device;
@@ -1549,6 +1553,9 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
   // Render
   {
+    OPTICK_C_PUSH(demo_render_frame_render_event, "demo_render_frame render",
+                  OptickAPI_Category_Rendering);
+
     VkCommandPool command_pool = d->command_pools[frame_idx];
     vkResetCommandPool(device, command_pool, 0);
 
@@ -1931,6 +1938,9 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
     // Submit
     {
+      OPTICK_C_PUSH(demo_render_frame_submit_event, "demo_render_frame submit",
+                    OptickAPI_Category_Rendering);
+
       uint32_t wait_sem_count = 0;
       VkSemaphore wait_sems[16] = {0};
       VkPipelineStageFlags wait_stage_flags[16] = {0};
@@ -1956,11 +1966,18 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
       submit_info.pSignalSemaphores = &render_complete_sem;
       err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_idx]);
       assert(err == VK_SUCCESS);
+
+      OptickAPI_PopEvent(demo_render_frame_submit_event);
     }
+
+    OptickAPI_PopEvent(demo_render_frame_render_event);
   }
 
   // Present
   {
+    OPTICK_C_PUSH(demo_render_frame_present_event, "demo_render_frame present",
+                  OptickAPI_Category_Rendering);
+
     VkSemaphore wait_sem = render_complete_sem;
     if (d->separate_present_queue) {
       VkSemaphore swapchain_sem = d->swapchain_image_sems[frame_idx];
@@ -2007,7 +2024,11 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
     } else {
       assert(err == VK_SUCCESS);
     }
+
+    OptickAPI_PopEvent(demo_render_frame_present_event);
   }
+
+  OptickAPI_PopEvent(demo_render_frame_event);
 }
 
 static void demo_destroy(demo *d) {
@@ -2131,7 +2152,16 @@ static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
   return ret;
 }
 
+void optick_init_thread_cb() {}
+
 int32_t SDL_main(int32_t argc, char *argv[]) {
+
+  OptickAPI_SetAllocator(mi_malloc, mi_free, optick_init_thread_cb);
+
+  static const char thread_name[] = "Main Thread";
+  OptickAPI_RegisterThread(thread_name, sizeof(thread_name));
+
+  OptickAPI_StartCapture();
 
   static const float qtr_pi = 0.7853981625f;
 
@@ -2273,6 +2303,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float delta_time_ms = 0;
   float delta_time_seconds = 0;
   while (running) {
+    OptickAPI_NextFrame();
+
     // Crunch some numbers
     last_time_ms = time_ms;
     time_ms = (float)SDL_GetTicks();
@@ -2324,6 +2356,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Update sky constant buffer
     {
+      OPTICK_C_PUSH(update_sky_event, "Update Sky",
+                    OptickAPI_Category_Rendering)
+
       VmaAllocator vma_alloc = d.vma_alloc;
       VkBuffer sky_host = d.sky_const_buffer.host.buffer;
       VmaAllocation sky_host_alloc = d.sky_const_buffer.host.alloc;
@@ -2334,6 +2369,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       vmaUnmapMemory(vma_alloc, sky_host_alloc);
 
       demo_upload_const_buffer(&d, &d.sky_const_buffer);
+      OptickAPI_PopEvent(update_sky_event);
     }
 
     demo_render_frame(&d, &vp, &sky_vp);
@@ -2341,6 +2377,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Reset the arena allocator
     reset_arena(arena, true); // Just allow it to grow for now
   }
+
+  OptickAPI_Shutdown();
 
   SDL_DestroyWindow(window);
   window = NULL;
