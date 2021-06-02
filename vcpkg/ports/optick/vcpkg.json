@@ -1,0 +1,10 @@
+{
+  "name": "optick",
+  "version-string": "capi",
+  "port-version": 1,
+  "description": "C++ Profiler For Games",
+  "homepage": "https://github.com/Honeybunch/optick",
+  "supports": "!(uwp | x86)",
+  "dependencies": [],
+  "features": {}
+}
