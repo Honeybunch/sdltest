@@ -328,6 +328,7 @@ static void demo_update_skydata(demo *d, gpuconstbuffer cb) {
 static bool demo_init(SDL_Window *window, VkInstance instance,
                       allocator std_alloc, allocator tmp_alloc,
                       const VkAllocationCallbacks *vk_alloc, demo *d) {
+  OPTICK_C_PUSH(optick_e, "demo_init", OptickAPI_Category_None);
   VkResult err = VK_SUCCESS;
 
   // Get the GPU we want to run on
@@ -1453,6 +1454,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     }
   }
 
+  OptickAPI_PopEvent(optick_e);
+
   return true;
 }
 
@@ -1460,7 +1463,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
                               VkPipelineLayout layout,
                               PushConstants *push_constants,
                               const float4x4 *vp) {
-
+  OPTICK_C_PUSH(optick_e, "demo_render_scene", OptickAPI_Category_Rendering);
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     uint64_t components = s->components[i];
     scene_transform *scene_transform = &s->transforms[i];
@@ -1503,6 +1506,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
     }
   }
+  OptickAPI_PopEvent(optick_e);
 }
 
 static void demo_render_frame(demo *d, const float4x4 *vp,
@@ -1525,29 +1529,41 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
   VkSemaphore render_complete_sem = d->render_complete_sems[frame_idx];
 
   // Ensure no more than FRAME_LATENCY renderings are outstanding
-  vkWaitForFences(device, 1, &fences[frame_idx], VK_TRUE, UINT64_MAX);
-  vkResetFences(device, 1, &fences[frame_idx]);
+  {
+    OPTICK_C_PUSH(fence_wait_event, "demo_render_frame wait for fence",
+                  OptickAPI_Category_Wait);
+    vkWaitForFences(device, 1, &fences[frame_idx], VK_TRUE, UINT64_MAX);
+    OptickAPI_PopEvent(fence_wait_event);
+
+    vkResetFences(device, 1, &fences[frame_idx]);
+  }
 
   // Acquire Image
-  do {
-    err = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, img_acquired_sem,
+  {
+    OPTICK_C_PUSH(optick_e, "demo_render_frame acquire next image",
+                  OptickAPI_Category_Rendering);
+    do {
+      err =
+          vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, img_acquired_sem,
                                 VK_NULL_HANDLE, &d->swap_img_idx);
-    if (err == VK_ERROR_OUT_OF_DATE_KHR) {
-      // demo->swapchain is out of date (e.g. the window was resized) and
-      // must be recreated:
-      // resize(d);
-    } else if (err == VK_SUBOPTIMAL_KHR) {
-      // demo->swapchain is not as optimal as it could be, but the platform's
-      // presentation engine will still present the image correctly.
-      break;
-    } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
-      // If the surface was lost we could re-create it.
-      // But the surface is owned by SDL2
-      assert(err == VK_SUCCESS);
-    } else {
-      assert(err == VK_SUCCESS);
-    }
-  } while (err != VK_SUCCESS);
+      if (err == VK_ERROR_OUT_OF_DATE_KHR) {
+        // demo->swapchain is out of date (e.g. the window was resized) and
+        // must be recreated:
+        // resize(d);
+      } else if (err == VK_SUBOPTIMAL_KHR) {
+        // demo->swapchain is not as optimal as it could be, but the platform's
+        // presentation engine will still present the image correctly.
+        break;
+      } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
+        // If the surface was lost we could re-create it.
+        // But the surface is owned by SDL2
+        assert(err == VK_SUCCESS);
+      } else {
+        assert(err == VK_SUCCESS);
+      }
+    } while (err != VK_SUCCESS);
+    OptickAPI_PopEvent(optick_e);
+  }
 
   uint32_t swap_img_idx = d->swap_img_idx;
 
@@ -1566,6 +1582,10 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
     // Record
     {
+      OPTICK_C_PUSH(record_upload_event,
+                    "demo_render_frame record upload commands",
+                    OptickAPI_Category_Rendering);
+
       // Upload
       if (d->const_buffer_upload_count > 0 || d->mesh_upload_count > 0 ||
           d->texture_upload_count > 0) {
@@ -1746,6 +1766,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
         submit_info.pSignalSemaphores = &upload_sem;
         err = vkQueueSubmit(d->graphics_queue, 1, &submit_info, NULL);
         assert(err == VK_SUCCESS);
+
+        OptickAPI_PopEvent(record_upload_event);
       }
 
       VkCommandBufferBeginInfo begin_info = {0};
@@ -1813,9 +1835,9 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                            (const void *)&d->push_constants);
 
         // Draw Fullscreen Fractal
-        vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                          d->fractal_pipeline);
-        vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
+        // vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        //                    d->fractal_pipeline);
+        // vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
 
         float4x4 mvp = d->push_constants.mvp;
 
@@ -2032,6 +2054,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 }
 
 static void demo_destroy(demo *d) {
+  OPTICK_C_PUSH(optick_e, "demo_destroy", OptickAPI_Category_None);
+
   VkDevice device = d->device;
   VmaAllocator vma_alloc = d->vma_alloc;
   const VkAllocationCallbacks *vk_alloc = d->vk_alloc;
@@ -2121,6 +2145,8 @@ static void demo_destroy(demo *d) {
   vmaDestroyAllocator(vma_alloc);
   vkDestroyDevice(device, vk_alloc);
   *d = (demo){0};
+
+  OptickAPI_PopEvent(optick_e);
 }
 
 static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,

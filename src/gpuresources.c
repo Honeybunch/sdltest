@@ -6,6 +6,7 @@
 #include <SDL2/SDL_image.h>
 #include <cgltf.h>
 #include <ktx.h>
+#include <optick_capi.h>
 #include <volk.h>
 
 #include <vk_mem_alloc.h>
@@ -445,6 +446,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
                      const VkAllocationCallbacks *vk_alloc,
                      const char *filename, VmaPool up_pool, VmaPool tex_pool,
                      gputexture *t) {
+  OPTICK_C_PUSH(optick_e, "load_texture", OptickAPI_Category_None);
   assert(filename);
   assert(t);
 
@@ -537,6 +539,8 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
   t->view = view;
 
   SDL_FreeSurface(img);
+
+  OptickAPI_PopEvent(optick_e);
 
   return err;
 }
