@@ -12,6 +12,7 @@
 
 #include "allocator.h"
 #include "camera.h"
+#include "config.h"
 #include "cpuresources.h"
 #include "cube.h"
 #include "gpuresources.h"
@@ -105,6 +106,7 @@ typedef struct demo {
   VkCommandPool command_pools[FRAME_LATENCY];
   VkCommandBuffer upload_buffers[FRAME_LATENCY];
   VkCommandBuffer graphics_buffers[FRAME_LATENCY];
+  VkCommandBuffer screenshot_buffers[FRAME_LATENCY];
 
   // For allowing the currently processed frame to access
   // resources being uploaded this frame
@@ -132,6 +134,9 @@ typedef struct demo {
   gputexture pattern;
 
   scene *duck;
+
+  gpuimage screenshot_image;
+  VkFence screenshot_fence;
 
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
   VkDescriptorSet skydome_descriptor_sets[FRAME_LATENCY];
@@ -1084,6 +1089,39 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   load_scene(device, vk_alloc, vma_alloc, upload_mem_pool, texture_mem_pool,
              "./assets/scenes/duck.glb", &duck);
 
+  // Create resources for screenshots
+  gpuimage screenshot_image = {0};
+  {
+    VkImageCreateInfo image_info = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = VK_FORMAT_R8G8B8A8_UNORM,
+        .extent = {width, height, 1},
+        .mipLevels = 1,
+        .arrayLayers = 1,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .tiling = VK_IMAGE_TILING_LINEAR,
+        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    };
+    VmaAllocationCreateInfo alloc_info = {
+        .usage = VMA_MEMORY_USAGE_GPU_TO_CPU,
+        .pool = upload_mem_pool,
+        .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+    };
+    err =
+        create_gpuimage(vma_alloc, &image_info, &alloc_info, &screenshot_image);
+    assert(err == VK_SUCCESS);
+  }
+
+  VkFence screenshot_fence = VK_NULL_HANDLE;
+  {
+    VkFenceCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+    };
+    err = vkCreateFence(device, &create_info, vk_alloc, &screenshot_fence);
+    assert(err == VK_SUCCESS);
+  }
+
   // Apply to output var
   d->tmp_alloc = tmp_alloc;
   d->std_alloc = std_alloc;
@@ -1139,6 +1177,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   d->skybox = skybox;
   d->pattern = pattern;
   d->duck = duck;
+  d->screenshot_image = screenshot_image;
+  d->screenshot_fence = screenshot_fence;
   d->frame_idx = 0;
 
   demo_upload_mesh(d, &d->cube_gpu);
@@ -1302,6 +1342,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
       err =
           vkAllocateCommandBuffers(device, &alloc_info, &d->upload_buffers[i]);
       assert(err == VK_SUCCESS);
+      err = vkAllocateCommandBuffers(device, &alloc_info,
+                                     &d->screenshot_buffers[i]);
+      assert(err == VK_SUCCESS);
     }
   }
 
@@ -1444,9 +1487,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
 
   // Create Fences
   {
-    VkFenceCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-    create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+    VkFenceCreateInfo create_info = {
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+    };
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       err = vkCreateFence(device, &create_info, vk_alloc, &d->fences[i]);
@@ -1589,8 +1633,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
       // Upload
       if (d->const_buffer_upload_count > 0 || d->mesh_upload_count > 0 ||
           d->texture_upload_count > 0) {
-        VkCommandBufferBeginInfo begin_info = {0};
-        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        VkCommandBufferBeginInfo begin_info = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
         err = vkBeginCommandBuffer(upload_buffer, &begin_info);
         assert(err == VK_SUCCESS);
 
@@ -1770,8 +1814,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
         OptickAPI_PopEvent(record_upload_event);
       }
 
-      VkCommandBufferBeginInfo begin_info = {0};
-      begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+      VkCommandBufferBeginInfo begin_info = {
+          .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
       err = vkBeginCommandBuffer(graphics_buffer, &begin_info);
       assert(err == VK_SUCCESS);
 
@@ -2053,6 +2097,216 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
   OptickAPI_PopEvent(demo_render_frame_event);
 }
 
+static bool demo_screenshot(demo *d, allocator std_alloc,
+                            uint8_t **screenshot_bytes,
+                            uint32_t *screenshot_size) {
+  OPTICK_C_PUSH(optick_e, "demo_screenshot", OptickAPI_Category_Rendering);
+  VkResult err = VK_SUCCESS;
+
+  VkDevice device = d->device;
+  uint32_t frame_idx = d->frame_idx;
+  VkFence prev_frame_fence = d->fences[frame_idx];
+  VmaAllocator vma_alloc = d->vma_alloc;
+  gpuimage screenshot_image = d->screenshot_image;
+  VkImage swap_image = d->swapchain_images[frame_idx];
+  VkFence swap_fence = d->fences[frame_idx];
+
+  VkQueue queue = d->graphics_queue;
+
+  VkFence screenshot_fence = d->screenshot_fence;
+  VkCommandBuffer screenshot_cmd = d->screenshot_buffers[frame_idx];
+
+  /*
+    Only need to wait for this fence if we know it hasn't been signaled.
+    As such we don't need to reset the fence, that will be done by another
+    waiter.
+  */
+  VkResult status = vkGetFenceStatus(device, swap_fence);
+  if (status == VK_NOT_READY) {
+    err = vkWaitForFences(device, 1, &swap_fence, VK_TRUE, ~0ULL);
+    if (err != VK_SUCCESS) {
+      OptickAPI_PopEvent(optick_e);
+      assert(0);
+      return false;
+    }
+  }
+
+  VkCommandBufferBeginInfo begin_info = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+  err = vkBeginCommandBuffer(screenshot_cmd, &begin_info);
+  if (err != VK_SUCCESS) {
+    OptickAPI_PopEvent(optick_e);
+    assert(0);
+    return false;
+  }
+
+  // Issue necessary memory barriers
+  VkImageMemoryBarrier barrier = {0};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.subresourceRange =
+      (VkImageSubresourceRange){.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                                .levelCount = 1,
+                                .layerCount = 1};
+  {
+    // Transition swap image from Present to Transfer Src
+    barrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.image = swap_image;
+
+    vkCmdPipelineBarrier(screenshot_cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1,
+                         &barrier);
+
+    VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    VkAccessFlagBits src_access = 0;
+    // If screenshot_bytes points to something not-null that means we've
+    // made a screenshot before and can assume the old layout
+    if ((*screenshot_bytes) != NULL) {
+      old_layout = VK_IMAGE_LAYOUT_GENERAL;
+      src_access = VK_ACCESS_MEMORY_READ_BIT;
+    }
+
+    // Transition screenshot image from General (or Undefined) to Transfer Dst
+    barrier.oldLayout = old_layout;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.srcAccessMask = src_access;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.image = screenshot_image.image;
+
+    vkCmdPipelineBarrier(screenshot_cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1,
+                         &barrier);
+  }
+
+  // Copy the swapchain image to a GPU to CPU image of a known format
+  VkImageCopy image_copy = {
+      .srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                         .layerCount = 1},
+      .srcOffset = {0, 0, 0},
+      .dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                         .layerCount = 1},
+      .dstOffset = {0, 0, 0},
+      .extent = {d->swap_width, d->swap_height, 1},
+  };
+  vkCmdCopyImage(screenshot_cmd, swap_image,
+                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, screenshot_image.image,
+                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
+
+  // Issue necessary memory barriers back to original formats
+
+  {
+    // Transition swap image from to Transfer Src to Present
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+    barrier.image = swap_image;
+
+    vkCmdPipelineBarrier(screenshot_cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1,
+                         &barrier);
+
+    // Transition screenshot image from Transfer Dst to General
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+    barrier.image = screenshot_image.image;
+
+    vkCmdPipelineBarrier(screenshot_cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL, 0, NULL, 1,
+                         &barrier);
+  }
+
+  err = vkEndCommandBuffer(screenshot_cmd);
+  if (err != VK_SUCCESS) {
+    OptickAPI_PopEvent(optick_e);
+    assert(0);
+    return false;
+  }
+
+  VkPipelineStageFlags wait_mask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+  VkSubmitInfo submit_info = {
+      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+      .commandBufferCount = 1,
+      .pCommandBuffers = &screenshot_cmd,
+  };
+  err = vkQueueSubmit(queue, 1, &submit_info, screenshot_fence);
+  if (err != VK_SUCCESS) {
+    OptickAPI_PopEvent(optick_e);
+    assert(0);
+    return false;
+  }
+
+  // Could move this to another place later on as it will take time for this
+  // command to finish
+
+  err = vkWaitForFences(device, 1, &screenshot_fence, VK_TRUE, ~0ULL);
+  if (err != VK_SUCCESS) {
+    OptickAPI_PopEvent(optick_e);
+    assert(0);
+    return false;
+  }
+  vkResetFences(device, 1, &screenshot_fence);
+
+  uint8_t *screenshot_mem = NULL;
+  err =
+      vmaMapMemory(vma_alloc, screenshot_image.alloc, (void **)&screenshot_mem);
+  if (err != VK_SUCCESS) {
+    OptickAPI_PopEvent(optick_e);
+    assert(0);
+    return false;
+  }
+
+  VmaAllocationInfo alloc_info = {0};
+  vmaGetAllocationInfo(vma_alloc, screenshot_image.alloc, &alloc_info);
+
+  if (alloc_info.size > (*screenshot_size)) {
+    (*screenshot_bytes) =
+        hb_realloc(std_alloc, (*screenshot_bytes), alloc_info.size);
+    (*screenshot_size) = alloc_info.size;
+  }
+
+  // Use SDL to transform raw bytes into a png bytestream
+  {
+    // Set up the pixel format color masks for RGB(A) byte arrays.
+    // Only STBI_rgb (3) and STBI_rgb_alpha (4) are supported here!
+    uint32_t rmask, gmask, bmask, amask;
+#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+    rmask = 0xff000000;
+    gmask = 0x00ff0000;
+    bmask = 0x0000ff00;
+    amask = 0x000000ff;
+#else // little endian, like x86
+    rmask = 0x000000ff;
+    gmask = 0x0000ff00;
+    bmask = 0x00ff0000;
+    amask = 0xff000000;
+#endif
+
+    int32_t pitch = alloc_info.size / d->swap_height;
+    SDL_Surface *img = SDL_CreateRGBSurfaceFrom(
+        (screenshot_mem + alloc_info.offset), d->swap_width, d->swap_height, 1,
+        pitch, rmask, gmask, bmask, amask);
+    assert(img);
+
+    SDL_RWops *ops =
+        SDL_RWFromMem((void *)(*screenshot_bytes), alloc_info.size);
+    IMG_SavePNG_RW(img, ops, 0);
+
+    SDL_FreeSurface(img);
+  }
+
+  vmaUnmapMemory(vma_alloc, screenshot_image.alloc);
+
+  OptickAPI_PopEvent(optick_e);
+  return true;
+}
+
 static void demo_destroy(demo *d) {
   OPTICK_C_PUSH(optick_e, "demo_destroy", OptickAPI_Category_None);
 
@@ -2137,6 +2391,9 @@ static void demo_destroy(demo *d) {
   vkDestroyPipelineLayout(device, d->gltf_pipe_layout, vk_alloc);
   destroy_gpupipeline(device, vk_alloc, d->gltf_pipeline);
 
+  vkDestroyFence(device, d->screenshot_fence, vk_alloc);
+  destroy_gpuimage(vma_alloc, &d->screenshot_image);
+
   vkDestroyPipelineCache(device, d->pipeline_cache, vk_alloc);
   vkDestroyRenderPass(device, d->render_pass, vk_alloc);
   vkDestroySwapchainKHR(device, d->swapchain, vk_alloc);
@@ -2180,12 +2437,48 @@ static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
 
 void optick_init_thread_cb() {}
 
+// The intent is that g_screenshot_bytes will be allocated on a heap by the
+// renderer.
+static uint8_t *g_screenshot_bytes = NULL;
+static uint32_t g_screenshot_size = 0;
+static bool g_taking_screenshot = false;
+
+bool optick_state_changed_callback(OptickAPI_State state) {
+  if (state == STOP_CAPTURE) {
+    // Request that we take a screenshot and store it in g_screenshot_bytes
+    g_taking_screenshot = true;
+  } else if (state == DUMP_CAPTURE) {
+    // Return false so optick knows that we *didn't* dump a capture
+    // In this case because we're waiting for the renderer to get a screenshot
+    // captured.
+    // Optick will consider the caputre un-dumped and will attempt to call this
+    // again
+    if (g_taking_screenshot) {
+      return false;
+    }
+    OptickAPI_AttachSummary("Engine", "SDLTest");
+    OptickAPI_AttachSummary("Author", "Honeybunch");
+    OptickAPI_AttachSummary("Version", HB_VERSION);
+    OptickAPI_AttachSummary("Configuration", HB_CONFIG);
+    OptickAPI_AttachSummary("Arch", HB_ARCH);
+    // OptickAPI_AttachSummary("GPU Manufacturer", "TODO");
+    // OptickAPI_AttachSummary("ISA Vulkan Version", "TODO");
+    // OptickAPI_AttachSummary("GPU Driver Version", "TODO");
+
+    OptickAPI_AttachFile(OPTICK_IMAGE, "Screenshot.png", g_screenshot_bytes,
+                         g_screenshot_size);
+  }
+  return true;
+}
+
 int32_t SDL_main(int32_t argc, char *argv[]) {
 
   OptickAPI_SetAllocator(mi_malloc, mi_free, optick_init_thread_cb);
 
   static const char thread_name[] = "Main Thread";
   OptickAPI_RegisterThread(thread_name, sizeof(thread_name));
+
+  OptickAPI_SetStateChangedCallback(optick_state_changed_callback);
 
   OptickAPI_StartCapture();
 
@@ -2390,7 +2683,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       VmaAllocation sky_host_alloc = d.sky_const_buffer.host.alloc;
 
       uint8_t *data = NULL;
-      vmaMapMemory(vma_alloc, sky_host_alloc, (void **)&data);
+      err = vmaMapMemory(vma_alloc, sky_host_alloc, (void **)&data);
+      if (err != VK_SUCCESS) {
+        assert(0);
+        return false;
+      }
       memcpy(data, &sky_data, sizeof(SkyData));
       vmaUnmapMemory(vma_alloc, sky_host_alloc);
 
@@ -2400,11 +2697,22 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     demo_render_frame(&d, &vp, &sky_vp);
 
+    if (g_taking_screenshot) {
+      g_taking_screenshot = !demo_screenshot(
+          &d, std_alloc.alloc, &g_screenshot_bytes, &g_screenshot_size);
+    }
+
     // Reset the arena allocator
     reset_arena(arena, true); // Just allow it to grow for now
   }
 
   OptickAPI_Shutdown();
+
+  if (g_screenshot_bytes != NULL) {
+    hb_free(std_alloc.alloc, g_screenshot_bytes);
+    g_screenshot_bytes = NULL;
+    g_screenshot_size = 0;
+  }
 
   SDL_DestroyWindow(window);
   window = NULL;

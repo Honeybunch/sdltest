@@ -173,6 +173,8 @@ target_link_libraries(sdltest PRIVATE
   mimalloc mimalloc-static
   KTX::ktx)
 
+target_compile_definitions(sdltest PRIVATE HB_PLATFORM="${platform}" HB_ARCH="${arch}" HB_CONFIG="$<CONFIG>" HB_VERSION="0.0.0")
+
 if(STATIC)
   target_link_libraries(sdltest PRIVATE SDL2::SDL2-static)
 else()

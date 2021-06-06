@@ -18,6 +18,22 @@ void *arena_alloc(void *user_data, size_t size) {
   return ptr;
 }
 
+void *arena_realloc(void *user_data, void *original, size_t size) {
+  // In the arena allocator we're not going to bother to really implement
+  // realloc for now...
+  (void)original;
+  return arena_alloc(user_data, size);
+}
+
+void *arena_realloc_aligned(void *user_data, void *original, size_t size,
+                            size_t alignment) {
+  // In the arena allocator we're not going to bother to really implement
+  // realloc for now...
+  (void)original;
+  (void)alignment;
+  return arena_alloc(user_data, size);
+}
+
 void arena_free(void *user_data, void *ptr) {
   // Do nothing, the arena will reset
   (void)user_data;
@@ -37,6 +53,8 @@ arena_allocator create_arena_allocator(size_t max_size) {
       .alloc =
           (allocator){
               .alloc = arena_alloc,
+              .realloc = arena_realloc,
+              .realloc_aligned = arena_realloc_aligned,
               .free = arena_free,
               .user_data = &a,
           },
@@ -65,6 +83,17 @@ void *standard_alloc(void *user_data, size_t size) {
   return mi_heap_calloc(alloc->heap, 1, size);
 }
 
+void *standard_realloc(void *user_data, void *original, size_t size) {
+  standard_allocator *alloc = (standard_allocator *)user_data;
+  return mi_heap_recalloc(alloc->heap, original, 1, size);
+}
+
+void *standard_realloc_aligned(void *user_data, void *original, size_t size,
+                               size_t alignment) {
+  standard_allocator *alloc = (standard_allocator *)user_data;
+  return mi_heap_recalloc_aligned(alloc->heap, original, 1, size, alignment);
+}
+
 void standard_free(void *user_data, void *ptr) {
   (void)user_data;
   mi_free(ptr);
@@ -74,6 +103,8 @@ standard_allocator create_standard_allocator() {
   standard_allocator a = {.heap = mi_heap_new(),
                           .alloc = {
                               .alloc = standard_alloc,
+                              .realloc = standard_realloc,
+                              .realloc_aligned = standard_realloc_aligned,
                               .free = standard_free,
                               .user_data = &a,
                           }};

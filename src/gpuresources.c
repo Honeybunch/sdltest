@@ -374,7 +374,10 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     VmaAllocationInfo alloc_info = {0};
     err = vmaCreateBuffer(vma_alloc, &buffer_create_info, &alloc_create_info,
                           &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
-    assert(err == VK_SUCCESS);
+    if (err != VK_SUCCESS) {
+      assert(0);
+      return t;
+    }
   }
 
   gpuimage device_image = {0};
@@ -402,13 +405,20 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     alloc_info.pool = tex_pool;
     err = create_gpuimage(vma_alloc, &img_info, &alloc_info, &device_image);
-    assert(err == VK_SUCCESS);
+    if (err != VK_SUCCESS) {
+      assert(0);
+      return t;
+    }
   }
 
   // Copy data to host buffer
   {
     uint8_t *data = NULL;
-    vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
+    err = vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
+    if (err != VK_SUCCESS) {
+      assert(0);
+      return t;
+    }
 
     memcpy(data, ktx->pData, host_buffer_size);
 
@@ -426,7 +436,10 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     create_info.subresourceRange = (VkImageSubresourceRange){
         VK_IMAGE_ASPECT_COLOR_BIT, 0, mip_levels, 0, layers};
     err = vkCreateImageView(device, &create_info, vk_alloc, &view);
-    assert(err == VK_SUCCESS);
+    if (err != VK_SUCCESS) {
+      assert(0);
+      return t;
+    }
   };
 
   t.host = host_buffer;
