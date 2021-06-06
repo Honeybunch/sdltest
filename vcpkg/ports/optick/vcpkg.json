@@ -6,5 +6,12 @@
   "homepage": "https://github.com/Honeybunch/optick",
   "supports": "!(uwp | x86)",
   "dependencies": [],
-  "features": {}
+  "features": {
+    "vulkan": {
+      "description": "Build Vulkan Support"
+    },
+    "d3d12": {
+      "description": "Build DirectX 12 Support"
+    }
+  }
 }

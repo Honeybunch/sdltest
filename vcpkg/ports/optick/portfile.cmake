@@ -6,9 +6,17 @@ vcpkg_from_github(
     HEAD_REF master
 )
 
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        vulkan OPTICK_USE_VULKAN
+        d3d12 OPTICK_USE_D3D12
+)
+
 vcpkg_configure_cmake(
     SOURCE_PATH ${SOURCE_PATH}
     PREFER_NINJA
+    OPTIONS
+        ${FEATURE_OPTIONS}
 )
 
 vcpkg_install_cmake()

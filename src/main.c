@@ -1036,10 +1036,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     assert(err == VK_SUCCESS);
   }
 
-  gputexture test =
-      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_8K_Albedo.ktx2",
-                        upload_mem_pool, texture_mem_pool);
+  // gputexture test =
+  //    load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
+  //                      "./assets/textures/shfsaida_8K_Albedo.ktx2",
+  //                      upload_mem_pool, texture_mem_pool);
 
   // Load Textures
   gputexture albedo = {0};
@@ -1190,7 +1190,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   demo_upload_texture(d, &d->roughness);
   demo_upload_texture(d, &d->skybox);
   demo_upload_texture(d, &d->pattern);
-  demo_upload_texture(d, &test);
+  // demo_upload_texture(d, &test);
   demo_upload_scene(d, d->duck);
 
   // Create Semaphores
@@ -2364,6 +2364,9 @@ static void demo_destroy(demo *d) {
   destroy_gpumesh(device, vma_alloc, &d->plane_gpu);
   destroy_gpumesh(device, vma_alloc, &d->cube_gpu);
 
+  vkDestroyFence(device, d->screenshot_fence, vk_alloc);
+  destroy_gpuimage(vma_alloc, &d->screenshot_image);
+
   vmaDestroyPool(vma_alloc, d->upload_mem_pool);
   vmaDestroyPool(vma_alloc, d->texture_mem_pool);
 
@@ -2390,9 +2393,6 @@ static void demo_destroy(demo *d) {
   vkDestroyDescriptorSetLayout(device, d->gltf_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->gltf_pipe_layout, vk_alloc);
   destroy_gpupipeline(device, vk_alloc, d->gltf_pipeline);
-
-  vkDestroyFence(device, d->screenshot_fence, vk_alloc);
-  destroy_gpuimage(vma_alloc, &d->screenshot_image);
 
   vkDestroyPipelineCache(device, d->pipeline_cache, vk_alloc);
   vkDestroyRenderPass(device, d->render_pass, vk_alloc);
@@ -2597,6 +2597,30 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                            vk_alloc_ptr, &d);
   assert(success);
 
+  OptickAPI_VulkanFunctions optick_volk_funcs = {
+      .vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties,
+      .vkCreateQueryPool = vkCreateQueryPool,
+      .vkCreateCommandPool = vkCreateCommandPool,
+      .vkAllocateCommandBuffers = vkAllocateCommandBuffers,
+      .vkCreateFence = vkCreateFence,
+      .vkCmdResetQueryPool = vkCmdResetQueryPool,
+      .vkQueueSubmit = vkQueueSubmit,
+      .vkWaitForFences = vkWaitForFences,
+      .vkResetCommandBuffer = vkResetCommandBuffer,
+      .vkCmdWriteTimestamp = vkCmdWriteTimestamp,
+      .vkGetQueryPoolResults = vkGetQueryPoolResults,
+      .vkBeginCommandBuffer = vkBeginCommandBuffer,
+      .vkEndCommandBuffer = vkEndCommandBuffer,
+      .vkResetFences = vkResetFences,
+      .vkDestroyCommandPool = vkDestroyCommandPool,
+      .vkDestroyQueryPool = vkDestroyQueryPool,
+      .vkDestroyFence = vkDestroyFence,
+      .vkFreeCommandBuffers = vkFreeCommandBuffers,
+  };
+  OptickAPI_GPUInitVulkan(&d.device, &d.gpu, &d.graphics_queue,
+                          &d.graphics_queue_family_index, 1,
+                          &optick_volk_funcs);
+
   transform cube_transform = {0};
   cube_transform.position = (float3){0, 2, 0};
   cube_transform.scale = (float3){1, 1, 1};
@@ -2706,14 +2730,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     reset_arena(arena, true); // Just allow it to grow for now
   }
 
-  OptickAPI_Shutdown();
-
-  if (g_screenshot_bytes != NULL) {
-    hb_free(std_alloc.alloc, g_screenshot_bytes);
-    g_screenshot_bytes = NULL;
-    g_screenshot_size = 0;
-  }
-
   SDL_DestroyWindow(window);
   window = NULL;
 
@@ -2721,6 +2737,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   SDL_Quit();
 
   demo_destroy(&d);
+
+  OptickAPI_Shutdown();
+
+  if (g_screenshot_bytes != NULL) {
+    hb_free(std_alloc.alloc, g_screenshot_bytes);
+    g_screenshot_bytes = NULL;
+    g_screenshot_size = 0;
+  }
 
   vkDestroyInstance(instance, vk_alloc_ptr);
   instance = VK_NULL_HANDLE;
