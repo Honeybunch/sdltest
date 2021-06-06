@@ -2521,7 +2521,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   SDL_Window *window = SDL_CreateWindow("SDL Test", SDL_WINDOWPOS_CENTERED,
                                         SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT,
                                         SDL_WINDOW_VULKAN);
-  assert(window != NULL);
+  if (window == NULL) {
+    char msg[500] = {0};
+    SDL_GetErrorMsg(msg, 500);
+    assert(0);
+  }
 
   // Create vulkan instance
   VkInstance instance = VK_NULL_HANDLE;

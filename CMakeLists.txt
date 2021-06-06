@@ -177,6 +177,7 @@ target_compile_definitions(sdltest PRIVATE HB_PLATFORM="${platform}" HB_ARCH="${
 
 if(STATIC)
   target_link_libraries(sdltest PRIVATE SDL2::SDL2-static)
+  set_property(TARGET sdltest PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
   target_link_libraries(sdltest PRIVATE SDL2::SDL2)
 endif()

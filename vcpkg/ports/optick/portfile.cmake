@@ -1,10 +1,12 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO Honeybunch/optick
-    REF vcpkg-2
-    SHA512 13cdfcfe2ed65edfb896c84a2064bb1c2b4660b957ab1d954fc2218c3d3a00f18c9f059bc3b28c65a3dcb8a2a67ee538b01a657146b9769125642fe7caac756d
+    REF vcpkg-4
+    SHA512 2e31ae506f95bdfc678aa249c9a48690b0dab1c2f738eac00f5f3fb17c2a2617ba2fec1fdf2dea8fa6393cc97cefaa4b2a87d8a412f81131e53a776671af014b
     HEAD_REF master
 )
+
+string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" ENABLE_STATIC)
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
     FEATURES
@@ -16,6 +18,7 @@ vcpkg_configure_cmake(
     SOURCE_PATH ${SOURCE_PATH}
     PREFER_NINJA
     OPTIONS
+        -DOPTICK_CORE_STATIC=${ENABLE_STATIC}
         ${FEATURE_OPTIONS}
 )
 
