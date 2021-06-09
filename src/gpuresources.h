@@ -121,10 +121,6 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
                      const VkAllocationCallbacks *vk_alloc,
                      const char *filename, VmaPool up_pool, VmaPool tex_pool,
                      gputexture *t);
-int32_t load_skybox(VkDevice device, VmaAllocator vma_alloc,
-                    const VkAllocationCallbacks *vk_alloc,
-                    const char *folder_path, VmaPool up_pool, VmaPool tex_pool,
-                    gputexture *t);
 int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        const cputexture *tex, VmaPool up_pool, VmaPool tex_pool,

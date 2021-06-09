@@ -3,7 +3,6 @@
 #include "gpuresources.h"
 
 #include <assert.h>
-#include <malloc.h>
 #include <stdbool.h>
 #include <stdlib.h>
 

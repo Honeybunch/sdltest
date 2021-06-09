@@ -130,7 +130,6 @@ typedef struct demo {
   gputexture displacement;
   gputexture normal;
   gputexture roughness;
-  gputexture skybox;
   gputexture pattern;
 
   scene *duck;
@@ -1000,7 +999,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   gpumesh cube = {0};
   {
     size_t cube_size = cube_alloc_size();
-    cpumesh *cube_cpu = malloc(cube_size);
+    cpumesh *cube_cpu = mi_malloc(cube_size);
     assert(cube_cpu);
     memset(cube_cpu, 0, cube_size);
     create_cube(cube_cpu);
@@ -1008,7 +1007,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     err = create_gpumesh(device, vma_alloc, cube_cpu, &cube);
     assert(err == VK_SUCCESS);
 
-    free(cube_cpu);
+    mi_free(cube_cpu);
   }
 
   // Create Plane Mesh
@@ -1016,7 +1015,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   {
     uint32_t plane_subdiv = 16;
     size_t plane_size = plane_alloc_size(plane_subdiv);
-    cpumesh *plane_cpu = malloc(plane_size);
+    cpumesh *plane_cpu = mi_malloc(plane_size);
     assert(plane_cpu);
     memset(plane_cpu, 0, plane_size);
     create_plane(plane_subdiv, plane_cpu);
@@ -1024,7 +1023,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     err = create_gpumesh(device, vma_alloc, plane_cpu, &plane);
     assert(err == VK_SUCCESS);
 
-    free(plane_cpu);
+    mi_free(plane_cpu);
   }
 
   // Create Skydome Mesh
@@ -1061,11 +1060,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   load_texture(device, vma_alloc, vk_alloc,
                "./assets/textures/shfsaida_8K_Roughness.png", upload_mem_pool,
                texture_mem_pool, &roughness);
-
-  // Load skybox
-  gputexture skybox = {0};
-  load_skybox(device, vma_alloc, vk_alloc, "./assets/skybox", upload_mem_pool,
-              texture_mem_pool, &skybox);
 
   // Create Uniform buffer for sky data
   gpuconstbuffer sky_const_buffer =
@@ -1174,7 +1168,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   d->displacement = displacement;
   d->normal = normal;
   d->roughness = roughness;
-  d->skybox = skybox;
   d->pattern = pattern;
   d->duck = duck;
   d->screenshot_image = screenshot_image;
@@ -1188,7 +1181,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   demo_upload_texture(d, &d->displacement);
   demo_upload_texture(d, &d->normal);
   demo_upload_texture(d, &d->roughness);
-  demo_upload_texture(d, &d->skybox);
   demo_upload_texture(d, &d->pattern);
   // demo_upload_texture(d, &test);
   demo_upload_scene(d, d->duck);
@@ -2359,7 +2351,6 @@ static void demo_destroy(demo *d) {
 
   destroy_scene(device, vma_alloc, vk_alloc, d->duck);
   destroy_texture(device, vma_alloc, vk_alloc, &d->pattern);
-  destroy_texture(device, vma_alloc, vk_alloc, &d->skybox);
   destroy_texture(device, vma_alloc, vk_alloc, &d->roughness);
   destroy_texture(device, vma_alloc, vk_alloc, &d->normal);
   destroy_texture(device, vma_alloc, vk_alloc, &d->displacement);
