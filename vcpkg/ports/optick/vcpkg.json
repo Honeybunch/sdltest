@@ -1,6 +1,6 @@
 {
   "name": "optick",
-  "version-string": "vcpkg-5",
+  "version-string": "vcpkg-6",
   "port-version": 1,
   "description": "C++ Profiler For Games",
   "homepage": "https://github.com/Honeybunch/optick",

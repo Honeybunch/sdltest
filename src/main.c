@@ -2751,6 +2751,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   IMG_Quit();
   SDL_Quit();
 
+  OptickAPI_GPUShutdown();
+
   demo_destroy(&d);
 
   OptickAPI_Shutdown();
