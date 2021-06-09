@@ -2229,7 +2229,6 @@ static bool demo_screenshot(demo *d, allocator std_alloc,
     return false;
   }
 
-  VkPipelineStageFlags wait_mask = VK_PIPELINE_STAGE_TRANSFER_BIT;
   VkSubmitInfo submit_info = {
       .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
       .commandBufferCount = 1,
@@ -2253,6 +2252,13 @@ static bool demo_screenshot(demo *d, allocator std_alloc,
   }
   vkResetFences(device, 1, &screenshot_fence);
 
+  VkImageSubresource sub_resource = {
+      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+  };
+  VkSubresourceLayout sub_resource_layout = {0};
+  vkGetImageSubresourceLayout(device, screenshot_image.image, &sub_resource,
+                              &sub_resource_layout);
+
   uint8_t *screenshot_mem = NULL;
   err =
       vmaMapMemory(vma_alloc, screenshot_image.alloc, (void **)&screenshot_mem);
@@ -2273,29 +2279,28 @@ static bool demo_screenshot(demo *d, allocator std_alloc,
 
   // Use SDL to transform raw bytes into a png bytestream
   {
-    // Set up the pixel format color masks for RGB(A) byte arrays.
-    // Only STBI_rgb (3) and STBI_rgb_alpha (4) are supported here!
     uint32_t rmask, gmask, bmask, amask;
 #if SDL_BYTEORDER == SDL_BIG_ENDIAN
-    rmask = 0xff000000;
+    rmask = 0x0000ff00;
     gmask = 0x00ff0000;
-    bmask = 0x0000ff00;
+    bmask = 0xff000000;
     amask = 0x000000ff;
 #else // little endian, like x86
-    rmask = 0x000000ff;
+    rmask = 0x00ff0000;
     gmask = 0x0000ff00;
-    bmask = 0x00ff0000;
+    bmask = 0x000000ff;
     amask = 0xff000000;
 #endif
+    // Note ^ We're assuming that the swapchain is BGR
 
-    int32_t pitch = alloc_info.size / d->swap_height;
+    int32_t pitch = d->swap_width * 4;
     SDL_Surface *img = SDL_CreateRGBSurfaceFrom(
-        (screenshot_mem + alloc_info.offset), d->swap_width, d->swap_height, 1,
-        pitch, rmask, gmask, bmask, amask);
+        (screenshot_mem + sub_resource_layout.offset), d->swap_width,
+        d->swap_height, 32, pitch, rmask, gmask, bmask, amask);
     assert(img);
 
     SDL_RWops *ops =
-        SDL_RWFromMem((void *)(*screenshot_bytes), alloc_info.size);
+        SDL_RWFromMem((void *)(*screenshot_bytes), sub_resource_layout.size);
     IMG_SavePNG_RW(img, ops, 0);
 
     SDL_FreeSurface(img);
