@@ -1035,31 +1035,26 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     assert(err == VK_SUCCESS);
   }
 
-  // gputexture test =
-  //    load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-  //                      "./assets/textures/shfsaida_8K_Albedo.ktx2",
-  //                      upload_mem_pool, texture_mem_pool);
-
   // Load Textures
-  gputexture albedo = {0};
-  load_texture(device, vma_alloc, vk_alloc,
-               "./assets/textures/shfsaida_8K_Albedo.png", upload_mem_pool,
-               texture_mem_pool, &albedo);
+  gputexture albedo =
+      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
+                        "./assets/textures/shfsaida_8K_Albedo.ktx2",
+                        upload_mem_pool, texture_mem_pool);
 
-  gputexture displacement = {0};
-  load_texture(device, vma_alloc, vk_alloc,
-               "./assets/textures/shfsaida_8K_Displacement.png",
-               upload_mem_pool, texture_mem_pool, &displacement);
+  gputexture displacement =
+      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
+                        "./assets/textures/shfsaida_8K_Displacement.ktx2",
+                        upload_mem_pool, texture_mem_pool);
 
-  gputexture normal = {0};
-  load_texture(device, vma_alloc, vk_alloc,
-               "./assets/textures/shfsaida_8K_Normal.png", upload_mem_pool,
-               texture_mem_pool, &normal);
+  gputexture normal =
+      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
+                        "./assets/textures/shfsaida_8K_Normal.ktx2",
+                        upload_mem_pool, texture_mem_pool);
 
-  gputexture roughness = {0};
-  load_texture(device, vma_alloc, vk_alloc,
-               "./assets/textures/shfsaida_8K_Roughness.png", upload_mem_pool,
-               texture_mem_pool, &roughness);
+  gputexture roughness =
+      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
+                        "./assets/textures/shfsaida_8K_Roughness.ktx2",
+                        upload_mem_pool, texture_mem_pool);
 
   // Create Uniform buffer for sky data
   gpuconstbuffer sky_const_buffer =
@@ -1182,7 +1177,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   demo_upload_texture(d, &d->normal);
   demo_upload_texture(d, &d->roughness);
   demo_upload_texture(d, &d->pattern);
-  // demo_upload_texture(d, &test);
   demo_upload_scene(d, d->duck);
 
   // Create Semaphores
@@ -1656,7 +1650,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
         // Issue texture uploads
         {
-          VkBufferImageCopy region = {0};
+
           VkImageMemoryBarrier barrier = {0};
           barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
           barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -1693,15 +1687,11 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
               // what
               barrier.subresourceRange.levelCount = 1;
             }
-
-            region.bufferRowLength = img_width;
-            region.bufferImageHeight = img_height;
-            region.imageSubresource = (VkImageSubresourceLayers){
-                VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, layer_count};
-            region.imageExtent = (VkExtent3D){img_width, img_height, 1};
+            uint32_t region_count = tex.region_count;
+            VkBufferImageCopy *regions = tex.regions;
             vkCmdCopyBufferToImage(upload_buffer, tex.host.buffer, image,
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                                   &region);
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   region_count, regions);
 
             // Generate mipmaps
             if (tex.gen_mips) {
@@ -1766,9 +1756,14 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                 }
               }
             }
-            // Transition last subresource to shader read
+            // Transition last subresource(s) to shader read
             {
-              barrier.subresourceRange.baseMipLevel = mip_levels - 1;
+              if (tex.gen_mips) {
+                barrier.subresourceRange.baseMipLevel = mip_levels - 1;
+              } else {
+                barrier.subresourceRange.baseMipLevel = 0;
+                barrier.subresourceRange.levelCount = mip_levels;
+              }
               barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
               barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
               barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;

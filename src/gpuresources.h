@@ -47,6 +47,8 @@ typedef struct gpuimage {
   VmaAllocation alloc;
 } gpuimage;
 
+#define MAX_REGION_COUNT 16
+
 typedef struct gputexture {
   gpubuffer host;
   gpuimage device;
@@ -57,6 +59,8 @@ typedef struct gputexture {
   bool gen_mips;
   uint32_t layer_count;
   uint32_t format;
+  uint32_t region_count;
+  VkBufferImageCopy regions[MAX_REGION_COUNT];
 } gputexture;
 
 typedef struct gpupipeline {

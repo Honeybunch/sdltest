@@ -301,6 +301,40 @@ static VkImageViewType get_ktx2_image_view_type(const ktxTexture2 *t) {
   return VK_IMAGE_VIEW_TYPE_MAX_ENUM;
 }
 
+typedef struct ktx2_cb_data {
+  VkBufferImageCopy *region; // Specify destination region in final image.
+  VkDeviceSize offset;       // Offset of current level in staging buffer
+  uint32_t num_faces;
+  uint32_t num_layers;
+} ktx2_cb_data;
+
+static ktx_error_code_e ktx2_optimal_tiling_callback(
+    int32_t mip_level, int32_t face, int32_t width, int32_t height,
+    int32_t depth, uint64_t face_lod_size, void *pixels, void *userdata) {
+  ktx2_cb_data *ud = (ktx2_cb_data *)userdata;
+  (void)pixels;
+
+  ud->region->bufferOffset = ud->offset;
+  ud->offset += face_lod_size;
+  // These 2 are expressed in texels.
+  ud->region->bufferRowLength = 0;
+  ud->region->bufferImageHeight = 0;
+  ud->region->imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  ud->region->imageSubresource.mipLevel = mip_level;
+  ud->region->imageSubresource.baseArrayLayer = face;
+  ud->region->imageSubresource.layerCount = ud->num_layers * ud->num_faces;
+  ud->region->imageOffset.x = 0;
+  ud->region->imageOffset.y = 0;
+  ud->region->imageOffset.z = 0;
+  ud->region->imageExtent.width = width;
+  ud->region->imageExtent.height = height;
+  ud->region->imageExtent.depth = depth;
+
+  ud->region += 1;
+
+  return KTX_SUCCESS;
+}
+
 gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
                              allocator *tmp_alloc,
                              const VkAllocationCallbacks *vk_alloc,
@@ -442,6 +476,12 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     }
   };
 
+  uint32_t region_count = mip_levels;
+  if (gen_mips) {
+    region_count = 1;
+  }
+  assert(region_count < MAX_REGION_COUNT);
+
   t.host = host_buffer;
   t.device = device_image;
   t.format = format;
@@ -451,6 +491,18 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
   t.gen_mips = gen_mips;
   t.layer_count = layers;
   t.view = view;
+  t.region_count = region_count;
+
+  // Gather Copy Regions
+  {
+    ktx2_cb_data cb_data = {
+        .num_faces = ktx->numFaces,
+        .num_layers = ktx->numLayers,
+        .region = t.regions,
+    };
+
+    ktxTexture_IterateLevels(ktx, ktx2_optimal_tiling_callback, &cb_data);
+  }
 
   return t;
 }
@@ -550,6 +602,20 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
   t->gen_mips = mip_levels > 1;
   t->layer_count = 1;
   t->view = view;
+  t->region_count = 1;
+  t->regions[0] = (VkBufferImageCopy){
+      .imageExtent =
+          {
+              .width = img_width,
+              .height = img_height,
+              .depth = 1,
+          },
+      .imageSubresource =
+          {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .layerCount = 1,
+          },
+  };
 
   SDL_FreeSurface(img);
 
@@ -689,6 +755,20 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
   t->gen_mips = desired_mip_levels > 1;
   t->layer_count = tex->layer_count;
   t->view = view;
+  t->region_count = 1;
+  t->regions[0] = (VkBufferImageCopy){
+      .imageExtent =
+          {
+              .width = img_width,
+              .height = img_height,
+              .depth = 1,
+          },
+      .imageSubresource =
+          {
+              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+              .layerCount = tex->layer_count,
+          },
+  };
 
   return err;
 }
