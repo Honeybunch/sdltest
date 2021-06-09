@@ -24,10 +24,10 @@ vcpkg_configure_cmake(
 
 vcpkg_install_cmake()
 
+vcpkg_copy_pdbs()
+
 vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/Optick)
 vcpkg_fixup_pkgconfig()
-
-vcpkg_copy_pdbs()
 
 # Need to manually copy headers
 file(GLOB INCLUDES ${CURRENT_PACKAGES_DIR}/include/Optick/*)

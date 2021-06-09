@@ -1811,6 +1811,9 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
       err = vkBeginCommandBuffer(graphics_buffer, &begin_info);
       assert(err == VK_SUCCESS);
 
+      OptickAPI_GPUContext optick_prev_gpu_ctx = OptickAPI_SetGpuContext(
+          (OptickAPI_GPUContext){.cmdBuffer = graphics_buffer});
+
       // Transition Swapchain Image
       {
         OPTICK_C_GPU_PUSH(optick_gpu_e, "Transition Swapchain Image",
@@ -2002,6 +2005,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
         vkCmdEndRenderPass(graphics_buffer);
       }
+
+      OptickAPI_SetGpuContext(optick_prev_gpu_ctx);
 
       err = vkEndCommandBuffer(graphics_buffer);
       assert(err == VK_SUCCESS);
