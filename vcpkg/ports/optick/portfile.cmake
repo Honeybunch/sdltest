@@ -1,8 +1,8 @@
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
     REPO Honeybunch/optick
-    REF vcpkg-4
-    SHA512 2e31ae506f95bdfc678aa249c9a48690b0dab1c2f738eac00f5f3fb17c2a2617ba2fec1fdf2dea8fa6393cc97cefaa4b2a87d8a412f81131e53a776671af014b
+    REF vcpkg-5
+    SHA512 0c5fa4c9f464c36eaa9e0bd5a8d364b1d7550d0d9a57dbb52f33fe0f91f01f9ec5279ae3ec0255d32d326805c000c38f0f6f0e231fa82180a43f2f97496eea26
     HEAD_REF master
 )
 

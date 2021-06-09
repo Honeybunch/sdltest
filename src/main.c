@@ -1813,6 +1813,9 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
       // Transition Swapchain Image
       {
+        OPTICK_C_GPU_PUSH(optick_gpu_e, "Transition Swapchain Image",
+                          OptickAPI_Category_Rendering);
+
         VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
         if (frame_idx >= FRAME_LATENCY) {
           old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -1834,6 +1837,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
+        OptickAPI_PopGPUEvent(optick_gpu_e);
       }
 
       // Render Pass
@@ -1879,6 +1883,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
         // Draw Cube
         {
+          OPTICK_C_GPU_PUSH(optick_gpu_e, "Cube", OptickAPI_Category_GPU_Scene);
           d->push_constants.mvp = mvp;
           vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
                              VK_SHADER_STAGE_ALL_GRAPHICS, 0,
@@ -1906,10 +1911,13 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
           vkCmdBindVertexBuffers(graphics_buffer, 0, 3, buffers, offsets);
           vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+          OptickAPI_PopGPUEvent(optick_gpu_e);
         }
 
         // Draw Plane
         {
+          OPTICK_C_GPU_PUSH(optick_gpu_e, "Plane",
+                            OptickAPI_Category_GPU_Scene);
           // Hack to change the plane's transform
           d->push_constants.mvp = *vp;
           vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
@@ -1933,10 +1941,12 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                                VK_INDEX_TYPE_UINT16);
           vkCmdBindVertexBuffers(graphics_buffer, 0, 1, &buffer, &offset);
           vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+          OptickAPI_PopGPUEvent(optick_gpu_e);
         }
 
         // Draw Scene
         {
+          OPTICK_C_GPU_PUSH(optick_gpu_e, "Duck", OptickAPI_Category_GPU_Scene);
           // HACK: Known desired permutations
           uint32_t perm = GLTF_PERM_NONE;
           VkPipelineLayout pipe_layout = d->gltf_pipe_layout;
@@ -1949,11 +1959,13 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
               1, &d->gltf_descriptor_sets[frame_idx], 0, NULL);
           demo_render_scene(d->duck, graphics_buffer, pipe_layout,
                             &d->push_constants, vp);
+          OptickAPI_PopGPUEvent(optick_gpu_e);
         }
 
         // Draw Skydome
-        // TODO: Figure out the best way to draw this last
         {
+          OPTICK_C_GPU_PUSH(optick_gpu_e, "Skydome",
+                            OptickAPI_Category_GPU_Scene);
           // Another hack to fiddle with the matrix we send to the shader for
           // the skydome
           d->push_constants.mvp = *sky_vp;
@@ -1985,6 +1997,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
           vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
           vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
           vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+          OptickAPI_PopGPUEvent(optick_gpu_e);
         }
 
         vkCmdEndRenderPass(graphics_buffer);
@@ -2056,6 +2069,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
       wait_sem = swapchain_sem;
     }
+
+    OptickAPI_GPUFlip(&swapchain);
 
     VkPresentInfoKHR present_info = {0};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -2440,10 +2455,10 @@ static uint32_t g_screenshot_size = 0;
 static bool g_taking_screenshot = false;
 
 bool optick_state_changed_callback(OptickAPI_State state) {
-  if (state == STOP_CAPTURE) {
+  if (state == OptickAPI_State_StopCapture) {
     // Request that we take a screenshot and store it in g_screenshot_bytes
     g_taking_screenshot = true;
-  } else if (state == DUMP_CAPTURE) {
+  } else if (state == OptickAPI_State_DumpCapture) {
     // Return false so optick knows that we *didn't* dump a capture
     // In this case because we're waiting for the renderer to get a screenshot
     // captured.
@@ -2461,8 +2476,8 @@ bool optick_state_changed_callback(OptickAPI_State state) {
     // OptickAPI_AttachSummary("ISA Vulkan Version", "TODO");
     // OptickAPI_AttachSummary("GPU Driver Version", "TODO");
 
-    OptickAPI_AttachFile(OPTICK_IMAGE, "Screenshot.png", g_screenshot_bytes,
-                         g_screenshot_size);
+    OptickAPI_AttachFile(OptickAPI_File_Image, "Screenshot.png",
+                         g_screenshot_bytes, g_screenshot_size);
   }
   return true;
 }
