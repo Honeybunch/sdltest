@@ -1505,10 +1505,10 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       // Hack to fuck with the scale of the object
       t->scale = (float3){0.01f, -0.01f, 0.01f};
 
-      float4x4 m = {0};
+      float4x4 m = {.row0 = {0}};
       transform_to_matrix(&m, t);
 
-      float4x4 mvp = {0};
+      float4x4 mvp = {.row0 = {0}};
       mulmf44(vp, &m, &mvp);
 
       // Hack to change the object's transform
@@ -2509,13 +2509,17 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   controller.move_speed = 10.0f;
   controller.look_speed = 1.0f;
 
-  camera main_cam = {0};
-  main_cam.transform.position = (float3){0, -1, 10};
-  main_cam.transform.scale = (float3){1, 1, 1};
-  main_cam.aspect = (float)WIDTH / (float)HEIGHT;
-  main_cam.fov = qtr_pi;
-  main_cam.near = 0.01f;
-  main_cam.far = 100.0f;
+  camera main_cam = {
+      .transform =
+          {
+              .position = {0, -1, 10},
+              .scale = {1, 1, 1},
+          },
+      .aspect = (float)WIDTH / (float)HEIGHT,
+      .fov = qtr_pi,
+      .near = 0.01f,
+      .far = 100.0f,
+  };
 
   VkResult err = volkInitialize();
   assert(err == VK_SUCCESS);
@@ -2612,6 +2616,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                            vk_alloc_ptr, &d);
   assert(success);
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wincompatible-function-pointer-types"
+#endif
   OptickAPI_VulkanFunctions optick_volk_funcs = {
       .vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties,
       .vkCreateQueryPool = vkCreateQueryPool,
@@ -2632,17 +2640,21 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .vkDestroyFence = vkDestroyFence,
       .vkFreeCommandBuffers = vkFreeCommandBuffers,
   };
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
   OptickAPI_GPUInitVulkan(&d.device, &d.gpu, &d.graphics_queue,
                           &d.graphics_queue_family_index, 1,
                           &optick_volk_funcs);
 
-  transform cube_transform = {0};
-  cube_transform.position = (float3){0, 2, 0};
-  cube_transform.scale = (float3){1, 1, 1};
-  cube_transform.rotation = (float3){0, 0, 0};
+  transform cube_transform = {
+      .position = {0, 2, 0},
+      .scale = {1, 1, 1},
+      .rotation = {0, 0, 0},
+  };
 
-  float4x4 cube_obj_mat = {0};
-  float4x4 cube_mvp = {0};
+  float4x4 cube_obj_mat = {.row0 = {0}};
+  float4x4 cube_mvp = {.row0 = {0}};
 
   SkyData sky_data = {
       .sun_dir = {0, -1, 0},
@@ -2686,19 +2698,19 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     cube_transform.rotation[1] += 1.0f * delta_time_seconds;
     transform_to_matrix(&cube_obj_mat, &cube_transform);
 
-    float4x4 view = {0};
+    float4x4 view = {.row0 = {0}};
     camera_view(&main_cam, &view);
 
-    float4x4 sky_view = {0};
+    float4x4 sky_view = {.row0 = {0}};
     camera_sky_view(&main_cam, &sky_view);
 
-    float4x4 proj = {0};
+    float4x4 proj = {.row0 = {0}};
     camera_projection(&main_cam, &proj);
 
-    float4x4 vp = {0};
+    float4x4 vp = {.row0 = {0}};
     mulmf44(&proj, &view, &vp);
 
-    float4x4 sky_vp = {0};
+    float4x4 sky_vp = {.row0 = {0}};
     mulmf44(&proj, &sky_view, &sky_vp);
 
     mulmf44(&vp, &cube_obj_mat, &cube_mvp);
