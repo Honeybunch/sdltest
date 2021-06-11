@@ -501,7 +501,14 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
         .region = t.regions,
     };
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wincompatible-pointer-types"
+#endif
     ktxTexture_IterateLevels(ktx, ktx2_optimal_tiling_callback, &cb_data);
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
   }
 
   return t;
