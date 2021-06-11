@@ -58,6 +58,7 @@
         "xlocmon": "c",
         "ktx.h": "c",
         "optick_capi.h": "c",
-        "shadercommon.h": "c"
+        "shadercommon.h": "c",
+        "cimgui.h": "c"
     }
 }

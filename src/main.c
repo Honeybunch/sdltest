@@ -8,6 +8,9 @@
 #include <stdint.h>
 #include <volk.h>
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include <cimgui.h>
+
 #include <vk_mem_alloc.h>
 
 #include "allocator.h"
@@ -152,6 +155,9 @@ typedef struct demo {
   gputexture texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE];
 
   PushConstants push_constants;
+
+  ImGuiContext *ig_ctx;
+  ImGuiIO *ig_io;
 } demo;
 
 static bool check_layer(const char *check_name, uint32_t layer_count,
@@ -327,6 +333,23 @@ static void demo_update_skydata(demo *d, gpuconstbuffer cb) {
   };
 
   vkUpdateDescriptorSets(d->device, 1, &const_buffer_write, 0, NULL);
+}
+
+static bool demo_init_imgui(demo *d) {
+  ImGuiContext *ctx = igCreateContext(NULL);
+  ImGuiIO *io = igGetIO();
+
+  uint8_t *pixels = NULL;
+  int32_t tex_w = 0;
+  int32_t tex_h = 0;
+  ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &pixels, &tex_w, &tex_h, NULL);
+
+  // TODO: Create and upload imgui atlas texture
+
+  d->ig_ctx = ctx;
+  d->ig_io = io;
+
+  return true;
 }
 
 static bool demo_init(SDL_Window *window, VkInstance instance,
@@ -1484,6 +1507,11 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     }
   }
 
+  if (!demo_init_imgui(d)) {
+    OptickAPI_PopEvent(optick_e);
+    return false;
+  }
+
   OptickAPI_PopEvent(optick_e);
 
   return true;
@@ -2007,6 +2035,13 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
       assert(err == VK_SUCCESS);
     }
 
+    // Render ImGui Pass
+    {
+      igRender();
+
+      // TODO: Record and submit ImGui render commands
+    }
+
     // Submit
     {
       OPTICK_C_PUSH(demo_render_frame_submit_event, "demo_render_frame submit",
@@ -2414,6 +2449,8 @@ static void demo_destroy(demo *d) {
   vkDestroyDevice(device, vk_alloc);
   *d = (demo){0};
 
+  igDestroyContext(d->ig_ctx);
+
   OptickAPI_PopEvent(optick_e);
 }
 
@@ -2483,6 +2520,7 @@ bool optick_state_changed_callback(OptickAPI_State state) {
 }
 
 int32_t SDL_main(int32_t argc, char *argv[]) {
+  static const float qtr_pi = 0.7853981625f;
 
   OptickAPI_SetAllocator(mi_malloc, mi_free, optick_init_thread_cb);
 
@@ -2493,8 +2531,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   OptickAPI_StartCapture();
 
-  static const float qtr_pi = 0.7853981625f;
-
   // Create Temporary Arena Allocator
   static const size_t arena_alloc_size = 1024 * 1024 * 1024; // 1 MB
   arena_allocator arena = create_arena_allocator(arena_alloc_size);
@@ -2504,6 +2540,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   standard_allocator std_alloc = create_standard_allocator();
 
   const VkAllocationCallbacks *vk_alloc_ptr = &vk_alloc;
+
+  assert(igDebugCheckVersionAndDataLayout(
+      igGetVersion(), sizeof(ImGuiIO), sizeof(ImGuiStyle), sizeof(ImVec2),
+      sizeof(ImVec4), sizeof(ImDrawVert), sizeof(ImDrawIdx)));
 
   editor_camera_controller controller = {0};
   controller.move_speed = 10.0f;
@@ -2674,6 +2714,23 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float delta_time_seconds = 0;
   while (running) {
     OptickAPI_NextFrame();
+
+    ImVec2 display_size;
+    display_size.x = WIDTH;
+    display_size.y = HEIGHT;
+    d.ig_io->DisplaySize = display_size;
+    d.ig_io->DeltaTime = 1.0f / 60.0f; // TODO: Input real delta time
+    igNewFrame();
+
+    // ImGui Test
+    igBegin("mainwindow", NULL, ImGuiWindowFlags_NoTitleBar);
+    static float f = 0.0f;
+    igText("Hello World!");
+    igSliderFloat("float", &f, 0.0f, 1.0f, "%.3f", 0);
+    igText("Application average %.3f ms/frame (%.1f FPS)",
+           1000.0f / d.ig_io->Framerate, d.ig_io->Framerate);
+    igEnd();
+    igShowDemoWindow(NULL);
 
     // Crunch some numbers
     last_time_ms = time_ms;
