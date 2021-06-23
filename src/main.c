@@ -528,7 +528,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
   uint32_t width = WIDTH;
   uint32_t height = HEIGHT;
-  VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+  VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
   VkFormat swapchain_image_format = VK_FORMAT_UNDEFINED;
   VkColorSpaceKHR swapchain_color_space = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
   uint32_t swap_img_count = FRAME_LATENCY;
@@ -1224,6 +1224,15 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
 
   // Get Swapchain Images
   {
+    uint32_t img_count = 0;
+    err = vkGetSwapchainImagesKHR(device, swapchain, &img_count, NULL);
+    assert(err == VK_SUCCESS);
+
+    // Device may really want us to have called vkGetSwapchainImagesKHR
+    // For now just assert that making that call doesn't change our desired
+    // swapchain images
+    assert(swap_img_count == img_count);
+
     err = vkGetSwapchainImagesKHR(device, swapchain, &swap_img_count,
                                   d->swapchain_images);
     assert(err == VK_SUCCESS || err == VK_INCOMPLETE);
@@ -2105,8 +2114,6 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
       wait_sem = swapchain_sem;
     }
 
-    OptickAPI_GPUFlip(&swapchain);
-
     VkPresentInfoKHR present_info = {0};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = 1;
@@ -2132,6 +2139,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
     } else {
       assert(err == VK_SUCCESS);
     }
+
+    OptickAPI_GPUFlip(&swapchain);
 
     OptickAPI_PopEvent(demo_render_frame_present_event);
   }
