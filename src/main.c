@@ -1061,22 +1061,22 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   // Load Textures
   gputexture albedo =
       load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_8K_Albedo.ktx2",
+                        "./assets/textures/shfsaida_2K_Albedo.ktx2",
                         upload_mem_pool, texture_mem_pool);
 
   gputexture displacement =
       load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_8K_Displacement.ktx2",
+                        "./assets/textures/shfsaida_2K_Displacement.ktx2",
                         upload_mem_pool, texture_mem_pool);
 
   gputexture normal =
       load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_8K_Normal.ktx2",
+                        "./assets/textures/shfsaida_2K_Normal.ktx2",
                         upload_mem_pool, texture_mem_pool);
 
   gputexture roughness =
       load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_8K_Roughness.ktx2",
+                        "./assets/textures/shfsaida_2K_Roughness.ktx2",
                         upload_mem_pool, texture_mem_pool);
 
   // Create Uniform buffer for sky data
@@ -2781,6 +2781,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     mulmf44(&vp, &cube_obj_mat, &cube_mvp);
 
+    // Change sun position
+    {
+      float y = -cosf(time_seconds);
+      float z = sinf(time_seconds);
+      sky_data.sun_dir = (float3){0, y, z};
+    }
+
     // Pass time to shader
     d.push_constants.time = (float4){time_seconds, time_ms, time_ns, time_us};
     d.push_constants.resolution = (float2){d.swap_width, d.swap_height};
@@ -2789,6 +2796,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     d.push_constants.mvp = cube_mvp;
     d.push_constants.m = cube_obj_mat;
     d.push_constants.view_pos = main_cam.transform.position;
+
+    // Light data to shader
+    d.push_constants.light_dir = -sky_data.sun_dir;
 
     // Update sky constant buffer
     {

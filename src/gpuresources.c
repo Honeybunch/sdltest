@@ -183,6 +183,8 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator allocator,
         attr_order[0] = i;
       } else if (attr_type == cgltf_attribute_type_normal) {
         attr_order[1] = i;
+      } else if (attr_type == cgltf_attribute_type_tangent) {
+        attr_order[3] = i;
       } else if (attr_type == cgltf_attribute_type_texcoord) {
         attr_order[2] = i;
       }

@@ -32,15 +32,10 @@ float4 frag(Interpolators i) : SV_TARGET
 {
     float gloss = 0.7; // Should be a material parameter...
 
-    // Change light direction over time
-    float seconds = consts.time[0];
-    float y = -abs(cos(seconds));
-    float z = sin(seconds);
-
     float3 lightColor = float3(1, 1, 1);
 
     // Lighting calcs
-    float3 L = normalize(float3(0, y, z));
+    float3 L = normalize(consts.light_dir);
     float3 N = normalize(i.normal);
 
     // Calc ambient light

@@ -71,15 +71,10 @@ float4 frag(Interpolators i) : SV_TARGET
     // TODO: Use tangents and bitangents to create and apply
     // tangent space to world space transformation matrix.
 
-    // Change light direction over time
-    float seconds = consts.time[0];
-    float y = -abs(cos(seconds));
-    float z = sin(seconds);
-
     float3 lightColor = float3(1, 1, 1);
 
     // Lighting calcs
-    float3 L = normalize(float3(0, y, z));
+    float3 L = normalize(consts.light_dir);
     
     // Calc ambient light
     float3 ambient = float3(0.01, 0.01, 0.01);

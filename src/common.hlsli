@@ -7,6 +7,8 @@ struct PushConstants
     float4x4 m;
 
     float3 view_pos;
+
+    float3 light_dir;
 };
 
 #define TAU 6.283185307179586

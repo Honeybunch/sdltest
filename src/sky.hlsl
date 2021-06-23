@@ -167,14 +167,7 @@ float angle_of_dot(float dot) { return acos(max(dot, 0.0000001f)); }
 
 FragmentOut frag(Interpolators i) {
   float3 sample_dir = i.view_pos;
-  //float3 sun_dir = sky_data.sun_dir;
-
-  // Change sun direction over time
-  float seconds = consts.time[0];
-  float y = -abs(cos(seconds));
-  float z = sin(seconds);
-
-  float3 sun_dir = normalize(float3(0, -y, z));
+  float3 sun_dir = sky_data.sun_dir;
 
   float cos_theta = dot(sample_dir, float3(0, 1, 0));
   float cos_gamma = dot(sample_dir, sun_dir);

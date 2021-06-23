@@ -49,15 +49,10 @@ float4 frag(Interpolators i) : SV_TARGET
     float roughness = roughness_map.Sample(static_sampler, i.uv).x;
     float gloss = 1 - roughness;
 
-    // Change light direction over time
-    float seconds = consts.time[0];
-    float y = -abs(cos(seconds));
-    float z = sin(seconds);
-
     float3 lightColor = float3(1, 1, 1);
 
     // Lighting calcs
-    float3 L = normalize(float3(0, y, z));
+    float3 L = normalize(consts.light_dir);
     // TODO: Use tangents and bitangents to create and apply
     // tangent space to world space transformation matrix.
     // Technically this only works because this is a plane
