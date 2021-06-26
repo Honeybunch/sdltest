@@ -129,6 +129,9 @@ typedef struct demo {
   gpumesh plane_gpu;
   gpumesh skydome_gpu;
 
+  uint8_t *imgui_mesh_data;
+  gpumesh imgui_gpu;
+
   gputexture albedo;
   gputexture displacement;
   gputexture normal;
@@ -144,6 +147,7 @@ typedef struct demo {
   VkDescriptorSet skydome_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet mesh_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet gltf_descriptor_sets[FRAME_LATENCY];
+  VkDescriptorSet imgui_descriptor_sets[FRAME_LATENCY];
 
   uint32_t const_buffer_upload_count;
   gpuconstbuffer const_buffer_upload_queue[CONST_BUFFER_UPLOAD_QUEUE_SIZE];
@@ -2046,9 +2050,67 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
     // Render ImGui Pass
     {
-      igRender();
+      {
+        OPTICK_C_PUSH(optick_e, "ImGui Internal", OptickAPI_Category_UI);
+        igRender();
+        OptickAPI_PopEvent(optick_e);
+      }
 
+      // TODO: (Re)Create and upload ImGui geometry buffer
+      {
+        OPTICK_C_PUSH(optick_e, "ImGui CPU", OptickAPI_Category_UI);
+
+        // If imgui_gpu is empty, this is still safe to call
+        destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu);
+
+        const ImDrawData *draw_data = igGetDrawData();
+        if (draw_data->Valid) {
+          uint32_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+          uint32_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
+
+          uint32_t imgui_size = idx_size + vtx_size;
+
+          if (imgui_size > 0) {
+            d->imgui_mesh_data =
+                hb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
+
+            uint8_t *idx_dst = d->imgui_mesh_data;
+            uint8_t *vtx_dst = idx_dst + idx_size;
+
+            // Organize all mesh data into a single cpu-side buffer
+            for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
+              const ImDrawList *cmd_list = draw_data->CmdLists[i];
+              memcpy(vtx_dst, cmd_list->VtxBuffer.Data,
+                     cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+              memcpy(idx_dst, cmd_list->IdxBuffer.Data,
+                     cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+              vtx_dst += cmd_list->VtxBuffer.Size;
+              idx_dst += cmd_list->IdxBuffer.Size;
+            }
+            idx_dst = d->imgui_mesh_data;
+            vtx_dst = idx_dst + idx_size;
+
+            cpumesh imgui_cpu = {.geom_size = imgui_size,
+                                 .index_count = draw_data->TotalIdxCount,
+                                 .index_size = idx_size,
+                                 .indices = (uint16_t *)idx_dst,
+                                 .vertex_count = draw_data->TotalVtxCount,
+                                 .vertices = vtx_dst};
+
+            create_gpumesh(device, d->vma_alloc, &imgui_cpu, &d->imgui_gpu);
+
+            // TODO: Manually record mesh upload here
+            {}
+          }
+        }
+
+        OptickAPI_PopEvent(optick_e);
+      };
       // TODO: Record and submit ImGui render commands
+      {
+        OPTICK_C_GPU_PUSH(optick_gpu_e, "ImGui", OptickAPI_Category_GPU_UI);
+        OptickAPI_PopGPUEvent(optick_gpu_e);
+      }
     }
 
     // Submit
@@ -2408,6 +2470,8 @@ static void demo_destroy(demo *d) {
 
   destroy_gpuimage(vma_alloc, &d->depth_buffers);
 
+  hb_free(d->std_alloc, d->imgui_mesh_data);
+
   destroy_scene(device, vma_alloc, vk_alloc, d->duck);
   destroy_texture(device, vma_alloc, vk_alloc, &d->pattern);
   destroy_texture(device, vma_alloc, vk_alloc, &d->roughness);
@@ -2418,6 +2482,7 @@ static void demo_destroy(demo *d) {
   destroy_gpumesh(device, vma_alloc, &d->skydome_gpu);
   destroy_gpumesh(device, vma_alloc, &d->plane_gpu);
   destroy_gpumesh(device, vma_alloc, &d->cube_gpu);
+  destroy_gpumesh(device, vma_alloc, &d->imgui_gpu);
 
   vkDestroyFence(device, d->screenshot_fence, vk_alloc);
   destroy_gpuimage(vma_alloc, &d->screenshot_image);
