@@ -13,7 +13,7 @@ target_architecture(arch)
 
 # Platform detection
 if(WIN32)
-    set(platform "windows")
+  set(platform "windows")
 elseif(APPLE)
   if(IOS)
     set(platform "ios")
@@ -29,6 +29,31 @@ elseif(SWITCH)
 else()
   message(FATAL_ERROR "Unknown platform")
 endif()
+
+# Host detection
+if(CMAKE_HOST_WIN32)
+  set(host "windows")
+elseif(CMAKE_HOST_UNIX)
+  if(CMAKE_HOST_APPLE)
+    set(host "macos")
+  else()
+    set(host "linux")
+  endif()
+else()
+  message(FATAL_ERROR "Unknown host")
+endif()
+
+if(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "AMD64")
+  set(host_arch "x64")
+elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "x86_64")
+  set(host_arch "x64")
+elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
+  set(host_arch "arm64")
+else()
+  message(FATAL_ERROR "Unknown host arch")
+endif()
+
+set(host_triple ${host_arch}-${host})
 
 # Set install prefix if not already overridden
 set(sdltest_install "${CMAKE_CURRENT_SOURCE_DIR}/install/${platform}")
@@ -60,13 +85,17 @@ find_package(Ktx CONFIG REQUIRED)
 find_package(Optick CONFIG REQUIRED)
 if(UNIX)
   find_package(Threads REQUIRED)
-  add_library(zstd::zstd ALIAS zstd::libzstd_static)
+  if(NOT ANDROID)
+    add_library(zstd::zstd ALIAS zstd::libzstd_static)
+  endif()
 endif()
 
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
 find_program(DXC dxc REQUIRED)
-find_program(TOKTX toktx REQUIRED)
+find_program(TOKTX toktx 
+  PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg/installed/${host_triple}/tools/ktx
+  REQUIRED)
 
 # Compile Shaders
 set(shader_includes
@@ -216,12 +245,12 @@ foreach(texture ${textures})
 endforeach()
 add_custom_target(textures ALL DEPENDS ${ktx_textures})
 
-install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/assets
-        DESTINATION .)
-
 # Copy assets to build output dir
 add_custom_command(TARGET sdltest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/assets ${CMAKE_CFG_INTDIR}/assets)
+
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets
+                   DESTINATION .)
 
 # Install dlls on dynamic builds
 if(NOT STATIC AND WIN32)

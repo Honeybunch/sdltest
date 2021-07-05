@@ -5,7 +5,7 @@ include(UseJava)
 get_filename_component(JAVA_HOME ${Java_JAVA_EXECUTABLE} DIRECTORY)
 file(REAL_PATH "${JAVA_HOME}/../" JAVA_HOME)
 
-set(ANDROID_VERSION 30)
+set(ANDROID_VERSION 29)
 
 set(dx_path ${CMAKE_ANDROID_NDK}/../../build-tools/29.0.3/dx.bat)
 set(aapt_path ${CMAKE_ANDROID_NDK}/../../build-tools/29.0.3/aapt.exe)

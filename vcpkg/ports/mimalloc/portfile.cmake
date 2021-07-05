@@ -7,7 +7,8 @@ vcpkg_from_github(
     SHA512 a1bda1b31d1bb3a4680fec91f180a988cf5ff486dcb8848fefd9245907f7986e4c4f10ce33133a3d796a7409ba38328bd156c47eba4f19368a2226a43b1ad298
     HEAD_REF master
     PATCHES
-        fix-cmake.patch
+        0001-Fix-CMake.patch
+        0002-No-Symlinks.patch
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
