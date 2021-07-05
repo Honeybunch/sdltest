@@ -250,7 +250,7 @@ add_custom_command(TARGET sdltest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/assets ${CMAKE_CFG_INTDIR}/assets)
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets
-                   DESTINATION .)
+                   DESTINATION $<CONFIG>)
 
 # Install dlls on dynamic builds
 if(NOT STATIC AND WIN32)

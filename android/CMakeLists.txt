@@ -17,6 +17,7 @@ set(android_main ${CMAKE_CURRENT_LIST_DIR}/src/main)
 set(resource_folder ${android_main}/res)
 set(manifest_path ${android_main}/AndroidManifest.xml)
 set(debug_keystore_path ${android_main}/debug.keystore)
+set(asset_path ${CMAKE_INSTALL_PREFIX}/$<CONFIG>/assets)
 
 set(keytool_path "${JAVA_HOME}/bin/keytool.exe")
 
@@ -70,7 +71,7 @@ add_custom_command(
     WORKING_DIRECTORY ${packaging_working_dir}
     COMMAND ${CMAKE_COMMAND} -E make_directory bin
     COMMAND ${CMAKE_COMMAND} -E env "JAVA_HOME=${JAVA_HOME}" ${dx_path} ARGS --dex --output=bin/classes.dex ${CMAKE_BINARY_DIR}/android/SDL.jar ${CMAKE_BINARY_DIR}/android/SDLTest.jar
-    COMMAND ${aapt_path} ARGS package -v -f -S ${resource_folder} -M ${manifest_path} -I ${android_path} -F ${unaligned_apk_path} bin
+    COMMAND ${aapt_path} ARGS package -v -f -S ${resource_folder} -A ${asset_path} -M ${manifest_path} -I ${android_path} -F ${unaligned_apk_path} bin
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libhidapi.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libSDL2.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libc++_shared.so
