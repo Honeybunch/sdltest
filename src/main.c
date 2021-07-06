@@ -1011,8 +1011,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     }
     assert(mem_type_idx != 0xFFFFFFFF);
 
-    // block size to fit an 8k R8G8B8A8 uncompressed texture w/ metadata
-    uint64_t block_size = (uint64_t)(8192.0 * 8192.0 * 4.0 * 1.4);
+    // block size to fit a 2k R8G8B8A8 uncompressed texture
+    uint64_t block_size = (uint64_t)(2048.0 * 2048.0 * 4.0);
 
     VmaPoolCreateInfo create_info = {0};
     create_info.memoryTypeIndex = mem_type_idx;
@@ -2606,7 +2606,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   OptickAPI_StartCapture();
 
   // Create Temporary Arena Allocator
-  static const size_t arena_alloc_size = 1024 * 1024 * 1024; // 1 MB
+  static const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
   arena_allocator arena = create_arena_allocator(arena_alloc_size);
 
   mi_heap_t *vk_heap = mi_heap_new();
