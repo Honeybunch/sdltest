@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.honeybunch.sdltest"
-    platformBuildVersionCode="30"
+    platformBuildVersionCode="29"
     platformBuildVersionName="11"
     android:versionCode="1"
     android:versionName="1.0"
@@ -12,7 +12,7 @@
 
     <uses-sdk 
         android:minSdkVersion="26"
-        android:targetSdkVersion="30"/>
+        android:targetSdkVersion="29"/>
 
     <!-- Vulkan -->
     <uses-feature

@@ -226,6 +226,13 @@ endif()
 # Compress Textures
 file(GLOB_RECURSE textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.png")
 
+
+if(platform STREQUAL "android")
+  set(resize "1024x1024")
+else()
+  set(resize "2048x2048")
+endif()
+
 set(UASTC_LEVEL $<$<CONFIG:Debug>:0>$<$<NOT:$<CONFIG:Debug>>:3>)
 foreach(texture ${textures})
   file(RELATIVE_PATH relpath ${CMAKE_CURRENT_LIST_DIR}/assets ${texture})
@@ -236,7 +243,7 @@ foreach(texture ${textures})
   add_custom_command(
         OUTPUT ${ktx_texture}
         COMMAND ${CMAKE_COMMAND} -E make_directory assets/${relpath}
-        COMMAND ${TOKTX} --t2 --genmipmap --uastc ${UASTC_LEVEL} assets/${relpath}/${filename}.ktx2 ${texture}
+        COMMAND ${TOKTX} --t2 --genmipmap --resize ${resize} --uastc ${UASTC_LEVEL} assets/${relpath}/${filename}.ktx2 ${texture}
         MAIN_DEPENDENCY ${texture}
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>
     )
@@ -249,8 +256,12 @@ add_custom_target(textures ALL DEPENDS ${ktx_textures})
 add_custom_command(TARGET sdltest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/assets ${CMAKE_CFG_INTDIR}/assets)
 
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets
-                   DESTINATION $<CONFIG>)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
+                   DESTINATION $<CONFIG>/assets)
+
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures
+                  DESTINATION $<CONFIG>/assets
+                  FILES_MATCHING PATTERN "*.ktx2")
 
 # Install dlls on dynamic builds
 if(NOT STATIC AND WIN32)
