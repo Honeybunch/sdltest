@@ -1,5 +1,8 @@
 #include "common.hlsli"
 
+[[vk::push_constant]]
+ConstantBuffer<PushConstants> consts : register(b0);
+
 Texture2D albedo_map : register(t0, space0); // Fragment Stage Only
 Texture2D normal_map : register(t1, space0); // Fragment Stage Only
 Texture2D roughness_map : register(t2, space0); // Fragment Stage Only

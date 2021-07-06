@@ -1,5 +1,8 @@
 #include "common.hlsli"
 
+[[vk::push_constant]]
+ConstantBuffer<PushConstants> consts : register(b0);
+
 struct VertexIn
 {
     float3 local_pos : SV_POSITION;

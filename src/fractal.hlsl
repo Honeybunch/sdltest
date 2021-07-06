@@ -1,5 +1,8 @@
 #include "fullscreenvert.hlsli"
 
+[[vk::push_constant]]
+ConstantBuffer<FullscreenPushConstants> consts : register(b0);
+
 // Created by evilryu
 // License Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
 

@@ -59,6 +59,7 @@
         "ktx.h": "c",
         "optick_capi.h": "c",
         "shadercommon.h": "c",
-        "cimgui.h": "c"
+        "cimgui.h": "c",
+        "*.hlsli": "c"
     }
 }

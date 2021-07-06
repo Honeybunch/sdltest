@@ -1,17 +1,15 @@
-struct PushConstants
-{
-    float4 time;
-    float2 resolution;
-    
-    float4x4 mvp;
-    float4x4 m;
+typedef struct FullscreenPushConstants {
+  float4 time;
+  float2 resolution;
+} FullscreenPushConstants;
 
-    float3 view_pos;
+typedef struct PushConstants {
+  float4x4 mvp;
+  float4x4 m;
 
-    float3 light_dir;
-};
+  float3 view_pos;
+
+  float3 light_dir;
+} PushConstants;
 
 #define TAU 6.283185307179586
-
-[[vk::push_constant]]
-ConstantBuffer<PushConstants> consts : register(b0);

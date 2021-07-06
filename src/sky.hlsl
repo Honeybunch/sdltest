@@ -3,6 +3,9 @@
 
 #include "hosek.hlsli"
 
+[[vk::push_constant]]
+ConstantBuffer<PushConstants> consts : register(b0);
+
 #define CIE_X 0
 #define CIE_Y 1
 #define CIE_Z 2

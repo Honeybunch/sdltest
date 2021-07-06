@@ -2854,8 +2854,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     }
 
     // Pass time to shader
-    d.push_constants.time = (float4){time_seconds, time_ms, time_ns, time_us};
-    d.push_constants.resolution = (float2){d.swap_width, d.swap_height};
+    // d.fullscreen_push_constants.time =
+    //     (float4){time_seconds, time_ms, time_ns, time_us};
+    // d.fullscreen_push_constants.resolution =
+    //     (float2){d.swap_width, d.swap_height};
 
     // Pass MVP to shader
     d.push_constants.mvp = cube_mvp;

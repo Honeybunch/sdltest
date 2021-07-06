@@ -1,5 +1,8 @@
 #include "common.hlsli"
 
+[[vk::push_constant]]
+ConstantBuffer<PushConstants> consts : register(b0);
+
 TextureCube cubemap : register(t0, space0); // Fragment Stage Only
 
 // Immutable sampler
