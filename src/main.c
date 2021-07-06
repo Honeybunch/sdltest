@@ -532,7 +532,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
   uint32_t width = WIDTH;
   uint32_t height = HEIGHT;
-  VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+  VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
   VkFormat swapchain_image_format = VK_FORMAT_UNDEFINED;
   VkColorSpaceKHR swapchain_color_space = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
   uint32_t swap_img_count = FRAME_LATENCY;
