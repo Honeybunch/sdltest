@@ -3,6 +3,7 @@
 #include "simd.h"
 
 #include "common.hlsli"
+#include "imgui.hlsli"
 
 #include <stdalign.h>
 
@@ -11,6 +12,8 @@
 _Static_assert(sizeof(FullscreenPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 _Static_assert(sizeof(PushConstants) <= PUSH_CONSTANT_BYTES,
+               "Too Many Push Constants");
+_Static_assert(sizeof(ImGuiPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 
 typedef struct SkyData {

@@ -73,6 +73,8 @@ typedef struct demo {
   uint32_t swap_height;
 
   VkRenderPass render_pass;
+  VkRenderPass imgui_pass;
+
   VkPipelineCache pipeline_cache;
 
   VkPipelineLayout simple_pipe_layout;
@@ -97,6 +99,10 @@ typedef struct demo {
   VkDescriptorSetLayout gltf_rt_layout;
   VkPipelineLayout gltf_rt_pipe_layout;
   gpupipeline *gltf_rt_pipeline;
+
+  VkDescriptorSetLayout imgui_layout;
+  VkPipelineLayout imgui_pipe_layout;
+  VkPipeline imgui_pipeline;
 
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
@@ -723,6 +729,49 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     assert(err == VK_SUCCESS);
   }
 
+  // Create ImGui Render Pass
+  VkRenderPass imgui_pass = VK_NULL_HANDLE;
+  {
+    VkAttachmentDescription color_attachment = {0};
+    color_attachment.format = swapchain_image_format;
+    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentDescription attachments[1] = {color_attachment};
+
+    VkAttachmentReference color_attachment_ref = {
+        0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+
+    VkAttachmentReference attachment_refs[1] = {color_attachment_ref};
+
+    VkSubpassDescription subpass = {0};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = attachment_refs;
+
+    VkSubpassDependency subpass_dep = {0};
+    subpass_dep.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    subpass_dep.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                               VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    subpass_dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    VkRenderPassCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    create_info.attachmentCount = 1;
+    create_info.pAttachments = attachments;
+    create_info.subpassCount = 1;
+    create_info.pSubpasses = &subpass;
+    create_info.pDependencies = &subpass_dep;
+    err = vkCreateRenderPass(device, &create_info, vk_alloc, &imgui_pass);
+    assert(err == VK_SUCCESS);
+  }
+
   // Create Pipeline Cache
   VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
   {
@@ -757,7 +806,13 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   VkPushConstantRange const_range = {
       VK_SHADER_STAGE_ALL_GRAPHICS,
       0,
-      PUSH_CONSTANT_BYTES,
+      sizeof(PushConstants),
+  };
+
+  VkPushConstantRange imgui_const_range = {
+      VK_SHADER_STAGE_ALL_GRAPHICS,
+      0,
+      sizeof(ImGuiPushConstants),
   };
 
   // Create Simple Pipeline Layout
@@ -977,6 +1032,46 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   //    render_pass, width, height, gltf_rt_pipe_layout, &gltf_rt_pipeline);
   // assert(err == VK_SUCCESS);
 
+  // Create ImGui Descriptor Set Layout
+  VkDescriptorSetLayout imgui_layout = VK_NULL_HANDLE;
+  {
+    VkDescriptorSetLayoutBinding bindings[2] = {
+        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         &sampler},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = 2;
+    create_info.pBindings = bindings;
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
+                                      &imgui_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create ImGui Pipeline Layout
+  VkPipelineLayout imgui_pipe_layout = VK_NULL_HANDLE;
+  {
+    VkPipelineLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    create_info.setLayoutCount = 1;
+    create_info.pSetLayouts = &imgui_layout;
+    create_info.pushConstantRangeCount = 1;
+    create_info.pPushConstantRanges = &imgui_const_range;
+
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                 &imgui_pipe_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create ImGui pipeline
+  VkPipeline imgui_pipeline = VK_NULL_HANDLE;
+  err =
+      create_imgui_pipeline(device, vk_alloc, pipeline_cache, imgui_pass, width,
+                            height, imgui_pipe_layout, &imgui_pipeline);
+  assert(err == VK_SUCCESS);
+
   // Create a pool for host memory uploads
   VmaPool upload_mem_pool = VK_NULL_HANDLE;
   {
@@ -1163,6 +1258,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   d->swap_width = width;
   d->swap_height = height;
   d->render_pass = render_pass;
+  d->imgui_pass = imgui_pass;
   d->pipeline_cache = pipeline_cache;
   d->simple_pipe_layout = simple_pipe_layout;
   d->fractal_pipeline = fractal_pipeline;
@@ -1181,6 +1277,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   d->gltf_rt_layout = gltf_rt_layout;
   d->gltf_rt_pipe_layout = gltf_rt_pipe_layout;
   // d->gltf_rt_pipeline = gltf_rt_pipeline;
+  d->imgui_layout = imgui_layout;
+  d->imgui_pipe_layout = imgui_pipe_layout;
+  d->imgui_pipeline = imgui_pipeline;
   d->upload_mem_pool = upload_mem_pool;
   d->texture_mem_pool = texture_mem_pool;
   d->cube_gpu = cube;
@@ -1879,164 +1978,281 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
         OptickAPI_PopGPUEvent(optick_gpu_e);
       }
 
-      // Render Pass
+      // Render
       {
-        VkRenderPass render_pass = d->render_pass;
         VkFramebuffer framebuffer = d->swapchain_framebuffers[frame_idx];
 
-        VkClearValue clear_values[2] = {
-            {.color = {.float32 = {0, 1, 1, 1}}},
-            {.depthStencil = {.depth = 0.0f, .stencil = 0.0f}},
-        };
-
-        const float width = d->swap_width;
-        const float height = d->swap_height;
-
-        VkRenderPassBeginInfo pass_info = {0};
-        pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        pass_info.renderPass = render_pass;
-        pass_info.framebuffer = framebuffer;
-        pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
-        pass_info.clearValueCount = 2;
-        pass_info.pClearValues = clear_values;
-
-        vkCmdBeginRenderPass(graphics_buffer, &pass_info,
-                             VK_SUBPASS_CONTENTS_INLINE);
-
-        VkViewport viewport = {0, height, width, -height, 0, 1};
-        VkRect2D scissor = {{0, 0}, {width, height}};
-        vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
-        vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
-
-        vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
-                           VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                           sizeof(PushConstants),
-                           (const void *)&d->push_constants);
-
-        // Draw Fullscreen Fractal
-        // vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-        //                    d->fractal_pipeline);
-        // vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
-
-        float4x4 mvp = d->push_constants.mvp;
-
-        // Draw Cube
+        // Main Geometry Pass
         {
-          OPTICK_C_GPU_PUSH(optick_gpu_e, "Cube", OptickAPI_Category_GPU_Scene);
-          d->push_constants.mvp = mvp;
+          const float width = d->swap_width;
+          const float height = d->swap_height;
+
+          // Set Render Pass
+          {
+            VkClearValue clear_values[2] = {
+                {.color = {.float32 = {0, 1, 1, 1}}},
+                {.depthStencil = {.depth = 0.0f, .stencil = 0.0f}},
+            };
+
+            VkRenderPassBeginInfo pass_info = {0};
+            pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            pass_info.renderPass = d->render_pass;
+            pass_info.framebuffer = framebuffer;
+            pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
+            pass_info.clearValueCount = 2;
+            pass_info.pClearValues = clear_values;
+
+            vkCmdBeginRenderPass(graphics_buffer, &pass_info,
+                                 VK_SUBPASS_CONTENTS_INLINE);
+          }
+
+          VkViewport viewport = {0, height, width, -height, 0, 1};
+          VkRect2D scissor = {{0, 0}, {width, height}};
+          vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
+          vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
+
           vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
                              VK_SHADER_STAGE_ALL_GRAPHICS, 0,
                              sizeof(PushConstants),
                              (const void *)&d->push_constants);
 
-          uint32_t idx_count = d->cube_gpu.idx_count;
-          uint32_t vert_count = d->cube_gpu.vtx_count;
+          // Draw Fullscreen Fractal
+          // vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+          //                    d->fractal_pipeline);
+          // vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
 
-          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            d->color_mesh_pipeline);
+          float4x4 mvp = d->push_constants.mvp;
 
-          VkBuffer b = d->cube_gpu.gpu.buffer;
+          // Draw Cube
+          {
+            OPTICK_C_GPU_PUSH(optick_gpu_e, "Cube",
+                              OptickAPI_Category_GPU_Scene);
+            d->push_constants.mvp = mvp;
+            vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+                               VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                               sizeof(PushConstants),
+                               (const void *)&d->push_constants);
 
-          vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+            uint32_t idx_count = d->cube_gpu.idx_count;
+            uint32_t vert_count = d->cube_gpu.vtx_count;
 
-          size_t idx_size =
-              idx_count * sizeof(uint16_t) >> d->cube_gpu.idx_type;
-          size_t pos_size = sizeof(float3) * vert_count;
-          size_t colors_size = sizeof(float3) * vert_count;
+            vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              d->color_mesh_pipeline);
 
-          VkBuffer buffers[3] = {b, b, b};
-          VkDeviceSize offsets[3] = {idx_size, idx_size + pos_size,
-                                     idx_size + pos_size + colors_size};
+            VkBuffer b = d->cube_gpu.gpu.buffer;
 
-          vkCmdBindVertexBuffers(graphics_buffer, 0, 3, buffers, offsets);
-          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
-          OptickAPI_PopGPUEvent(optick_gpu_e);
+            vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+
+            size_t idx_size =
+                idx_count * sizeof(uint16_t) >> d->cube_gpu.idx_type;
+            size_t pos_size = sizeof(float3) * vert_count;
+            size_t colors_size = sizeof(float3) * vert_count;
+
+            VkBuffer buffers[3] = {b, b, b};
+            VkDeviceSize offsets[3] = {idx_size, idx_size + pos_size,
+                                       idx_size + pos_size + colors_size};
+
+            vkCmdBindVertexBuffers(graphics_buffer, 0, 3, buffers, offsets);
+            vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+            OptickAPI_PopGPUEvent(optick_gpu_e);
+          }
+
+          // Draw Plane
+          {
+            OPTICK_C_GPU_PUSH(optick_gpu_e, "Plane",
+                              OptickAPI_Category_GPU_Scene);
+            // Hack to change the plane's transform
+            d->push_constants.mvp = *vp;
+            vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+                               VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                               sizeof(PushConstants),
+                               (const void *)&d->push_constants);
+
+            vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              d->uv_mesh_pipeline);
+
+            vkCmdBindDescriptorSets(
+                graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                d->material_pipe_layout, 0, 1,
+                &d->mesh_descriptor_sets[frame_idx], 0, NULL);
+
+            uint32_t idx_count = d->plane_gpu.idx_count;
+            VkBuffer buffer = d->plane_gpu.gpu.buffer;
+            VkDeviceSize offset = d->plane_gpu.idx_size;
+
+            vkCmdBindIndexBuffer(graphics_buffer, buffer, 0,
+                                 VK_INDEX_TYPE_UINT16);
+            vkCmdBindVertexBuffers(graphics_buffer, 0, 1, &buffer, &offset);
+            vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+            OptickAPI_PopGPUEvent(optick_gpu_e);
+          }
+
+          // Draw Scene
+          {
+            OPTICK_C_GPU_PUSH(optick_gpu_e, "Duck",
+                              OptickAPI_Category_GPU_Scene);
+            // HACK: Known desired permutations
+            uint32_t perm = GLTF_PERM_NONE;
+            VkPipelineLayout pipe_layout = d->gltf_pipe_layout;
+            VkPipeline pipe = d->gltf_pipeline->pipelines[perm];
+
+            vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              pipe);
+            vkCmdBindDescriptorSets(
+                graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe_layout,
+                0, 1, &d->gltf_descriptor_sets[frame_idx], 0, NULL);
+            demo_render_scene(d->duck, graphics_buffer, pipe_layout,
+                              &d->push_constants, vp);
+            OptickAPI_PopGPUEvent(optick_gpu_e);
+          }
+
+          // Draw Skydome
+          {
+            OPTICK_C_GPU_PUSH(optick_gpu_e, "Skydome",
+                              OptickAPI_Category_GPU_Scene);
+            // Another hack to fiddle with the matrix we send to the shader for
+            // the skydome
+            d->push_constants.mvp = *sky_vp;
+            vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+                               VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                               sizeof(PushConstants),
+                               (const void *)&d->push_constants);
+
+            uint32_t idx_count = d->skydome_gpu.idx_count;
+            uint32_t vert_count = d->skydome_gpu.vtx_count;
+
+            vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              d->skydome_pipeline);
+
+            vkCmdBindDescriptorSets(
+                graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                d->skydome_pipe_layout, 0, 1,
+                &d->skydome_descriptor_sets[frame_idx], 0, NULL);
+
+            VkBuffer b = d->skydome_gpu.gpu.buffer;
+
+            size_t idx_size =
+                idx_count * sizeof(uint16_t) >> d->skydome_gpu.idx_type;
+            size_t pos_size = sizeof(float3) * vert_count;
+
+            VkBuffer buffers[1] = {b};
+            VkDeviceSize offsets[1] = {idx_size};
+
+            vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
+            vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
+            vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+            OptickAPI_PopGPUEvent(optick_gpu_e);
+          }
         }
 
-        // Draw Plane
+        // ImGui Render Pass
         {
-          OPTICK_C_GPU_PUSH(optick_gpu_e, "Plane",
-                            OptickAPI_Category_GPU_Scene);
-          // Hack to change the plane's transform
-          d->push_constants.mvp = *vp;
-          vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
-                             VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                             sizeof(PushConstants),
-                             (const void *)&d->push_constants);
+          // ImGui Internal Render
+          {
+            OPTICK_C_PUSH(optick_e, "ImGui Internal", OptickAPI_Category_UI);
+            igRender();
+            OptickAPI_PopEvent(optick_e);
+          }
 
-          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            d->uv_mesh_pipeline);
+          // (Re)Create and upload ImGui geometry buffer
+          {
+            OPTICK_C_PUSH(optick_e, "ImGui CPU", OptickAPI_Category_UI);
 
-          vkCmdBindDescriptorSets(graphics_buffer,
-                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                  d->material_pipe_layout, 0, 1,
-                                  &d->mesh_descriptor_sets[frame_idx], 0, NULL);
+            // If imgui_gpu is empty, this is still safe to call
+            destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu);
 
-          uint32_t idx_count = d->plane_gpu.idx_count;
-          VkBuffer buffer = d->plane_gpu.gpu.buffer;
-          VkDeviceSize offset = d->plane_gpu.idx_size;
+            const ImDrawData *draw_data = igGetDrawData();
+            if (draw_data->Valid) {
+              uint32_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+              uint32_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
 
-          vkCmdBindIndexBuffer(graphics_buffer, buffer, 0,
-                               VK_INDEX_TYPE_UINT16);
-          vkCmdBindVertexBuffers(graphics_buffer, 0, 1, &buffer, &offset);
-          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
-          OptickAPI_PopGPUEvent(optick_gpu_e);
-        }
+              uint32_t imgui_size = idx_size + vtx_size;
 
-        // Draw Scene
-        {
-          OPTICK_C_GPU_PUSH(optick_gpu_e, "Duck", OptickAPI_Category_GPU_Scene);
-          // HACK: Known desired permutations
-          uint32_t perm = GLTF_PERM_NONE;
-          VkPipelineLayout pipe_layout = d->gltf_pipe_layout;
-          VkPipeline pipe = d->gltf_pipeline->pipelines[perm];
+              if (imgui_size > 0) {
+                d->imgui_mesh_data =
+                    hb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
 
-          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            pipe);
-          vkCmdBindDescriptorSets(
-              graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe_layout, 0,
-              1, &d->gltf_descriptor_sets[frame_idx], 0, NULL);
-          demo_render_scene(d->duck, graphics_buffer, pipe_layout,
-                            &d->push_constants, vp);
-          OptickAPI_PopGPUEvent(optick_gpu_e);
-        }
+                uint8_t *idx_dst = d->imgui_mesh_data;
+                uint8_t *vtx_dst = idx_dst + idx_size;
 
-        // Draw Skydome
-        {
-          OPTICK_C_GPU_PUSH(optick_gpu_e, "Skydome",
-                            OptickAPI_Category_GPU_Scene);
-          // Another hack to fiddle with the matrix we send to the shader for
-          // the skydome
-          d->push_constants.mvp = *sky_vp;
-          vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
-                             VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                             sizeof(PushConstants),
-                             (const void *)&d->push_constants);
+                // Organize all mesh data into a single cpu-side buffer
+                for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
+                  const ImDrawList *cmd_list = draw_data->CmdLists[i];
+                  memcpy(vtx_dst, cmd_list->VtxBuffer.Data,
+                         cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+                  memcpy(idx_dst, cmd_list->IdxBuffer.Data,
+                         cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+                  vtx_dst += cmd_list->VtxBuffer.Size;
+                  idx_dst += cmd_list->IdxBuffer.Size;
+                }
+                idx_dst = d->imgui_mesh_data;
+                vtx_dst = idx_dst + idx_size;
 
-          uint32_t idx_count = d->skydome_gpu.idx_count;
-          uint32_t vert_count = d->skydome_gpu.vtx_count;
+                cpumesh imgui_cpu = {.geom_size = imgui_size,
+                                     .index_count = draw_data->TotalIdxCount,
+                                     .index_size = idx_size,
+                                     .indices = (uint16_t *)idx_dst,
+                                     .vertex_count = draw_data->TotalVtxCount,
+                                     .vertices = vtx_dst};
 
-          vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            d->skydome_pipeline);
+                create_gpumesh(device, d->vma_alloc, &imgui_cpu, &d->imgui_gpu);
 
-          vkCmdBindDescriptorSets(
-              graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-              d->skydome_pipe_layout, 0, 1,
-              &d->skydome_descriptor_sets[frame_idx], 0, NULL);
+                // TODO: Manually record mesh upload here
+                {}
+              }
+            }
 
-          VkBuffer b = d->skydome_gpu.gpu.buffer;
+            OptickAPI_PopEvent(optick_e);
+          };
 
-          size_t idx_size =
-              idx_count * sizeof(uint16_t) >> d->skydome_gpu.idx_type;
-          size_t pos_size = sizeof(float3) * vert_count;
+          // Record ImGui render commands
+          {
+            OPTICK_C_GPU_PUSH(optick_gpu_e, "ImGui", OptickAPI_Category_GPU_UI);
 
-          VkBuffer buffers[1] = {b};
-          VkDeviceSize offsets[1] = {idx_size};
+            const float width = d->ig_io->DisplaySize.x;
+            const float height = d->ig_io->DisplaySize.y;
 
-          vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
-          vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
-          vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
-          OptickAPI_PopGPUEvent(optick_gpu_e);
+            /*
+            // Set Render Pass
+            {
+              VkFramebuffer framebuffer = d->swapchain_framebuffers[frame_idx];
+
+              VkClearValue clear_values[1] = {
+                  {.color = {.float32 = {0, 1, 1, 1}}},
+              };
+
+              VkRenderPassBeginInfo pass_info = {0};
+              pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+              pass_info.renderPass = d->imgui_pass;
+              pass_info.framebuffer = framebuffer;
+              pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
+              pass_info.clearValueCount = 1;
+              pass_info.pClearValues = clear_values;
+
+              vkCmdBeginRenderPass(graphics_buffer, &pass_info,
+                                   VK_SUBPASS_CONTENTS_INLINE);
+            }
+
+            // Draw ImGui
+            {
+              vkCmdBindPipeline(graphics_buffer,
+                                VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                d->imgui_pipeline);
+
+              VkViewport viewport = {0, height, width, -height, 0, 1};
+              VkRect2D scissor = {{0, 0}, {width, height}};
+              vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
+              vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
+
+              // vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+              //                   VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+              //                   sizeof(ImGuiPushConstants),
+              //                   (const void *)&d->push_constants);
+            }
+            */
+
+            OptickAPI_PopGPUEvent(optick_gpu_e);
+          }
         }
 
         vkCmdEndRenderPass(graphics_buffer);
@@ -2046,71 +2262,6 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
       err = vkEndCommandBuffer(graphics_buffer);
       assert(err == VK_SUCCESS);
-    }
-
-    // Render ImGui Pass
-    {
-      {
-        OPTICK_C_PUSH(optick_e, "ImGui Internal", OptickAPI_Category_UI);
-        igRender();
-        OptickAPI_PopEvent(optick_e);
-      }
-
-      // TODO: (Re)Create and upload ImGui geometry buffer
-      {
-        OPTICK_C_PUSH(optick_e, "ImGui CPU", OptickAPI_Category_UI);
-
-        // If imgui_gpu is empty, this is still safe to call
-        destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu);
-
-        const ImDrawData *draw_data = igGetDrawData();
-        if (draw_data->Valid) {
-          uint32_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
-          uint32_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
-
-          uint32_t imgui_size = idx_size + vtx_size;
-
-          if (imgui_size > 0) {
-            d->imgui_mesh_data =
-                hb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
-
-            uint8_t *idx_dst = d->imgui_mesh_data;
-            uint8_t *vtx_dst = idx_dst + idx_size;
-
-            // Organize all mesh data into a single cpu-side buffer
-            for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
-              const ImDrawList *cmd_list = draw_data->CmdLists[i];
-              memcpy(vtx_dst, cmd_list->VtxBuffer.Data,
-                     cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
-              memcpy(idx_dst, cmd_list->IdxBuffer.Data,
-                     cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
-              vtx_dst += cmd_list->VtxBuffer.Size;
-              idx_dst += cmd_list->IdxBuffer.Size;
-            }
-            idx_dst = d->imgui_mesh_data;
-            vtx_dst = idx_dst + idx_size;
-
-            cpumesh imgui_cpu = {.geom_size = imgui_size,
-                                 .index_count = draw_data->TotalIdxCount,
-                                 .index_size = idx_size,
-                                 .indices = (uint16_t *)idx_dst,
-                                 .vertex_count = draw_data->TotalVtxCount,
-                                 .vertices = vtx_dst};
-
-            create_gpumesh(device, d->vma_alloc, &imgui_cpu, &d->imgui_gpu);
-
-            // TODO: Manually record mesh upload here
-            {}
-          }
-        }
-
-        OptickAPI_PopEvent(optick_e);
-      };
-      // TODO: Record and submit ImGui render commands
-      {
-        OPTICK_C_GPU_PUSH(optick_gpu_e, "ImGui", OptickAPI_Category_GPU_UI);
-        OptickAPI_PopGPUEvent(optick_gpu_e);
-      }
     }
 
     // Submit
@@ -2514,8 +2665,13 @@ static void demo_destroy(demo *d) {
   vkDestroyPipelineLayout(device, d->gltf_pipe_layout, vk_alloc);
   destroy_gpupipeline(device, vk_alloc, d->gltf_pipeline);
 
+  vkDestroyDescriptorSetLayout(device, d->imgui_layout, vk_alloc);
+  vkDestroyPipelineLayout(device, d->imgui_pipe_layout, vk_alloc);
+  vkDestroyPipeline(device, d->imgui_pipeline, vk_alloc);
+
   vkDestroyPipelineCache(device, d->pipeline_cache, vk_alloc);
   vkDestroyRenderPass(device, d->render_pass, vk_alloc);
+  vkDestroyRenderPass(device, d->imgui_pass, vk_alloc);
   vkDestroySwapchainKHR(device, d->swapchain, vk_alloc);
   vkDestroySurfaceKHR(d->instance, d->surface,
                       NULL); // Surface is created by SDL

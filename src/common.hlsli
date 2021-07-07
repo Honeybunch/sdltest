@@ -1,3 +1,5 @@
+#pragma once
+
 typedef struct FullscreenPushConstants {
   float4 time;
   float2 resolution;

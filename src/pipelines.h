@@ -31,6 +31,12 @@ uint32_t create_skydome_pipeline(VkDevice device,
                                  uint32_t w, uint32_t h,
                                  VkPipelineLayout layout, VkPipeline *pipe);
 
+uint32_t create_imgui_pipeline(VkDevice device,
+                               const VkAllocationCallbacks *vk_alloc,
+                               VkPipelineCache cache, VkRenderPass pass,
+                               uint32_t w, uint32_t h, VkPipelineLayout layout,
+                               VkPipeline *pipe);
+
 enum GLTF_PERMUTATIONS {
   GLTF_PERM_NONE = 0x00000000,
   GLTF_PERM_NORMAL_MAP = 0x00000001,
