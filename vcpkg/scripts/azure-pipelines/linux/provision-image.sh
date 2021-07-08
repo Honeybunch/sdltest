@@ -58,14 +58,13 @@ cd ~
 curl -sSL https://get.haskellstack.org/ | sudo sh
 
 # Install CUDA
-wget http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-repo-ubuntu1804_10.2.89-1_amd64.deb
-sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
-sudo dpkg -i cuda-repo-ubuntu1804_10.2.89-1_amd64.deb
-wget http://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64/nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb
-sudo dpkg -i nvidia-machine-learning-repo-ubuntu1804_1.0.0-1_amd64.deb
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-ubuntu1804.pin
+sudo mv cuda-ubuntu1804.pin /etc/apt/preferences.d/cuda-repository-pin-600
+sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
+sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/ /"
 sudo apt -y update
-sudo apt install -y --no-install-recommends cuda-compiler-10-2 cuda-libraries-dev-10-2 cuda-driver-dev-10-2 cuda-cudart-dev-10-2 libcublas10 cuda-curand-dev-10-2
-sudo apt install -y --no-install-recommends libcudnn7-dev
+sudo apt install -y --no-install-recommends cuda-compiler-11-3 cuda-libraries-dev-11-3 cuda-driver-dev-11-3 \
+  cuda-cudart-dev-11-3 libcublas-11-3 libcurand-dev-11-3 libcudnn8-dev libnccl2 libnccl-dev
 
 # Install PowerShell
 wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb
@@ -73,5 +72,17 @@ sudo dpkg -i packages-microsoft-prod.deb
 sudo apt update
 sudo add-apt-repository universe
 sudo apt install -y powershell
+
+# Write script to provision disks used by cloud-init
+echo "if [ ! -d \"/mnt/vcpkg-ci\" ]; then" > /etc/provision-disks.sh
+echo "sudo parted /dev/sdb mklabel gpt" >> /etc/provision-disks.sh
+echo "sudo parted /dev/sdb mkpart cidisk ext4 0% 100%" >> /etc/provision-disks.sh
+echo "sudo mkfs -t ext4 /dev/sdb1" >> /etc/provision-disks.sh
+echo "sudo mkdir /mnt/vcpkg-ci -m=777" >> /etc/provision-disks.sh
+echo "echo \"/dev/sdb1 /mnt/vcpkg-ci ext4 barrier=0 0 0\" | sudo tee -a /etc/fstab" >> /etc/provision-disks.sh
+echo "sudo mount -a" >> /etc/provision-disks.sh
+echo "sudo chmod 777 /mnt/vcpkg-ci" >> /etc/provision-disks.sh
+echo "fi" >> /etc/provision-disks.sh
+sudo chmod 700 /etc/provision-disks.sh
 
 # provision-image.ps1 will append installation of the SAS token here
