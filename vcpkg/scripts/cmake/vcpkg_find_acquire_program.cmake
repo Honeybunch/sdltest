@@ -37,6 +37,7 @@ The current list of programs includes:
 * SCONS
 * SWIG
 * YASM
+* DXC
 
 Note that msys2 has a dedicated helper function: [`vcpkg_acquire_msys`](vcpkg_acquire_msys.md).
 
@@ -63,6 +64,7 @@ function(vcpkg_find_acquire_program VAR)
   unset(_vfa_SUPPORTED)
   unset(POST_INSTALL_COMMAND)
   unset(PATHS)
+  unset(NOSYSTEMENVPATH)
 
   if(VAR MATCHES "PERL")
     set(PROGNAME perl)
@@ -460,6 +462,18 @@ function(vcpkg_find_acquire_program VAR)
       set(APT_PACKAGE_NAME pkg-config)
       set(PATHS "/bin" "/usr/bin" "/usr/local/bin")
     endif()
+  elseif(VAR MATCHES "DXC")
+    set(PROGNAME dxc)
+    set(DXC_VERSION 1.6.2106)
+    if(CMAKE_HOST_WIN32)
+      set(SUBDIR ${DXC_VERSION}-win)
+      set(PATHS ${DOWNLOADS}/tools/dxc/${SUBDIR}/bin/x64)
+      set(URL "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v${DXC_VERSION}/dxc_2021_07_01.zip")
+      set(ARCHIVE "dxc_2021_07_01.zip")
+      set(HASH d0132c341f104cec073858bb099e6659dc0b0d8f8ec9fa3193d8eea62e02ffd97201b2bc88f50d3c58e941b12cda33f411546966c842e35465d53a5d90424b25)
+      set(NOSYSTEMENVPATH 1) # Don't try to find dxc from the VS install
+    endif()
+    #TODO: More host platforms
   else()
     message(FATAL "unknown tool ${VAR} -- unable to acquire.")
   endif()
@@ -484,9 +498,13 @@ function(vcpkg_find_acquire_program VAR)
 
   macro(do_find)
     if(NOT DEFINED REQUIRED_INTERPRETER)
+      message("Searching ${PATHS} for ${VAR}")
       find_program(${VAR} ${PROGNAME} PATHS ${PATHS} NO_DEFAULT_PATH)
       if(NOT ${VAR})
-        find_program(${VAR} ${PROGNAME})
+        if(DEFINED NOSYSTEMENVPATH)
+        else()
+          find_program(${VAR} ${PROGNAME})
+        endif()
         if(${VAR} AND NOT ${VAR}_VERSION_CHECKED)
             do_version_check()
             set(${VAR}_VERSION_CHECKED ON)
@@ -546,7 +564,7 @@ function(vcpkg_find_acquire_program VAR)
           SHA512 ${HASH}
           FILENAME ${ARCHIVE}
       )
-
+      
       file(MAKE_DIRECTORY ${PROG_PATH_SUBDIR})
       if(DEFINED NOEXTRACT)
         if(DEFINED _vfa_RENAME)
