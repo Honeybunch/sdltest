@@ -60,6 +60,7 @@
         "optick_capi.h": "c",
         "shadercommon.h": "c",
         "cimgui.h": "c",
-        "*.hlsli": "c"
+        "*.hlsli": "c",
+        "*.in": "cpp"
     }
 }

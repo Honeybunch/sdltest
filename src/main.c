@@ -2736,7 +2736,8 @@ bool optick_state_changed_callback(OptickAPI_State state) {
     }
     OptickAPI_AttachSummary("Engine", "SDLTest");
     OptickAPI_AttachSummary("Author", "Honeybunch");
-    OptickAPI_AttachSummary("Version", HB_VERSION);
+    OptickAPI_AttachSummary("Game Version", HB_GAME_VERSION);
+    OptickAPI_AttachSummary("Engine Version", HB_ENGINE_VERSION);
     OptickAPI_AttachSummary("Configuration", HB_CONFIG);
     OptickAPI_AttachSummary("Arch", HB_ARCH);
     // OptickAPI_AttachSummary("GPU Manufacturer", "TODO");
@@ -2863,9 +2864,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     VkApplicationInfo app_info = {0};
     app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     app_info.pApplicationName = "SDL Test";
-    app_info.applicationVersion = VK_MAKE_VERSION(0, 0, 1);
-    app_info.pEngineName = "SDL Test";
-    app_info.engineVersion = VK_MAKE_VERSION(0, 0, 1);
+    app_info.applicationVersion = VK_MAKE_VERSION(
+        HB_GAME_VERSION_MAJOR, HB_GAME_VERSION_MINOR, HB_GAME_VERSION_PATCH);
+    app_info.pEngineName = HB_ENGINE_NAME;
+    app_info.engineVersion =
+        VK_MAKE_VERSION(HB_ENGINE_VERSION_MAJOR, HB_ENGINE_VERSION_MINOR,
+                        HB_ENGINE_VERSION_PATCH);
     app_info.apiVersion = VK_API_VERSION_1_2;
 
     VkInstanceCreateInfo create_info = {0};

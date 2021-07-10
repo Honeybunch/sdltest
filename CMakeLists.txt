@@ -5,7 +5,22 @@ set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_LIST_DIR}/vcpkg/scripts/buildsystems/vc
 
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
-project(sdltest)
+project(sdltest
+        VERSION 0.1.0
+        DESCRIPTION "A personal game engine toybox project"
+        LANGUAGES C CXX)
+
+set(GAME_NAME "toolbox")
+set(GAME_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
+set(GAME_VERSION_MINOR ${CMAKE_PROJECT_VERSION_MINOR})
+set(GAME_VERSION_PATCH ${CMAKE_PROJECT_VERSION_PATCH})
+
+set(ENGINE_NAME "hbengine")
+set(ENGINE_VERSION_MAJOR 0)
+set(ENGINE_VERSION_MINOR 1)
+set(ENGINE_VERSION_PATCH 0)
+
+set(config $<CONFIG>)
 
 # Get target CPU architecture
 include(${CMAKE_CURRENT_LIST_DIR}/cmake/TargetArch.cmake)
@@ -192,7 +207,6 @@ else()
     get_filename_component(CMAKE_CFG_INTDIR_ABS "${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_CFG_INTDIR}" ABSOLUTE)
 endif()
 #set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
-target_include_directories(sdltest PRIVATE "src/" "${CMAKE_CFG_INTDIR_ABS}/shaders" "${CGLTF_INCLUDE_DIRS}")
 
 target_link_libraries(sdltest PRIVATE
   SDL2::SDL2main
@@ -205,7 +219,18 @@ target_link_libraries(sdltest PRIVATE
   mimalloc mimalloc-static
   KTX::ktx)
 
-target_compile_definitions(sdltest PRIVATE HB_PLATFORM="${platform}" HB_ARCH="${arch}" HB_CONFIG="$<CONFIG>" HB_VERSION="0.0.0")
+# Get the latest abbreviated commit hash of the working branch
+execute_process(COMMAND git log -1 --format=%h
+                WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+                OUTPUT_VARIABLE GIT_COMMIT_HASH
+                OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+# Generate config header
+set(config_include_dir ${CMAKE_CURRENT_BINARY_DIR}/config)
+configure_file(src/config.h.in ${config_include_dir}/config.h @ONLY)
+
+target_include_directories(sdltest PRIVATE "src/" "${CMAKE_CFG_INTDIR_ABS}/shaders" "${CGLTF_INCLUDE_DIRS}" "${config_include_dir}")
+target_compile_definitions(sdltest PRIVATE "-DHB_CONFIG=\"$<CONFIG>\"")
 
 if(STATIC)
   target_link_libraries(sdltest PRIVATE SDL2::SDL2-static)
