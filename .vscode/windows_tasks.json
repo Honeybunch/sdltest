@@ -292,5 +292,59 @@
                 "Install arm64 Android Release"
             ]
         },
+        {
+            "label": "Package x64 Windows Debug",
+            "type": "shell",
+            "command": "cmake --build build/x64/windows  --config Debug --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Windows Debug"
+            ]
+        },
+        {
+            "label": "Package x64 Windows RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/x64/windows  --config RelWithDebInfo --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Windows RelWithDebInfo"
+            ]
+        },
+        {
+            "label": "Package x64 Windows Release",
+            "type": "shell",
+            "command": "cmake --build build/x64/windows  --config Release --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Windows Release"
+            ]
+        },
+        {
+            "label": "Package x64 Windows Static Debug",
+            "type": "shell",
+            "command": "cmake --build build/x64/windows-static  --config Debug --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Windows Static Debug"
+            ]
+        },
+        {
+            "label": "Package x64 Windows Static RelWithDebInfo",
+            "type": "shell",
+            "command": "cmake --build build/x64/windows-static  --config RelWithDebInfo --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Windows Static RelWithDebInfo"
+            ]
+        },
+        {
+            "label": "Package x64 Windows Static Release",
+            "type": "shell",
+            "command": "cmake --build build/x64/windows-static  --config Release --target package",
+            "problemMatcher": [],
+            "dependsOn": [
+                "Build x64 Windows Static Release"
+            ]
+        },
     ]
 }
