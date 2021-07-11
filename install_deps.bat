@@ -2,6 +2,9 @@
 
 cd ./vcpkg
 
+REM Install Windows Tools
+call vcpkg install tool-dxc:x64-windows
+
 REM Install Windows Deps
 call vcpkg install cgltf:x64-windows
 call vcpkg install imgui:x64-windows

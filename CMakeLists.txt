@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 
 set(CMAKE_TOOLCHAIN_FILE ${CMAKE_CURRENT_LIST_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake
   CACHE STRING "Vcpkg toolchain file")
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 get_property(isMultiConfig GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 
@@ -208,16 +209,9 @@ else()
 endif()
 #set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-target_link_libraries(sdltest PRIVATE
-  SDL2::SDL2main
-  SDL2::SDL2_image
-  volk::volk
-  volk::volk_headers
-  unofficial::vulkan-memory-allocator::vulkan-memory-allocator
-  imgui::imgui
-  Optick::OptickCore
-  mimalloc mimalloc-static
-  KTX::ktx)
+set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;unofficial::vulkan-memory-allocator::vulkan-memory-allocator;imgui::imgui;Optick::OptickCore;mimalloc;mimalloc-static;KTX::ktx")
+
+target_link_libraries(sdltest PRIVATE ${library_list})
 
 # Get the latest abbreviated commit hash of the working branch
 execute_process(COMMAND git log -1 --format=%h
@@ -247,13 +241,12 @@ if(ANDROID)
           LIBRARY DESTINATION "$<CONFIG>/lib/${arch}")
 else()
   install(TARGETS sdltest
-          RUNTIME DESTINATION "${arch}/bin/$<CONFIG>"
-          LIBRARY DESTINATION "${arch}/lib/$<CONFIG>")
+          RUNTIME DESTINATION "."
+          LIBRARY DESTINATION ".")
 endif()
 
 # Compress Textures
 file(GLOB_RECURSE textures "${CMAKE_CURRENT_LIST_DIR}/assets/textures/*.png")
-
 
 if(platform STREQUAL "android")
   set(resize "1024x1024")
@@ -285,18 +278,90 @@ add_custom_command(TARGET sdltest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/assets ${CMAKE_CFG_INTDIR}/assets)
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
-                   DESTINATION $<CONFIG>/assets)
+                   DESTINATION assets)
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures
-                  DESTINATION $<CONFIG>/assets
+                  DESTINATION assets
                   FILES_MATCHING PATTERN "*.ktx2")
 
 # Install dlls on dynamic builds
 if(NOT STATIC AND WIN32)
   install(FILES $<TARGET_FILE_DIR:sdltest>/SDL2$<$<CONFIG:Debug>:d>.dll
-        DESTINATION "$<CONFIG>")
+        DESTINATION .)
+  install(FILES $<TARGET_FILE_DIR:sdltest>/libpng16$<$<CONFIG:Debug>:d>.dll
+        DESTINATION .)
+  install(FILES $<TARGET_FILE_DIR:sdltest>/mimalloc-redirect.dll
+        DESTINATION .)
+  install(FILES $<TARGET_FILE_DIR:sdltest>/zlib$<$<CONFIG:Debug>:d>1.dll
+        DESTINATION .)
+  install(FILES $<TARGET_FILE_DIR:sdltest>/zstd$<$<CONFIG:Debug>:d>.dll
+        DESTINATION .)
+
+  foreach(one_trg ${library_list})
+    get_target_property(one_trg_type ${one_trg} TYPE)
+
+    if (one_trg_type STREQUAL "SHARED_LIBRARY")
+      get_target_property(one_trg_dll_location ${one_trg} IMPORTED_LOCATION_RELEASE)
+      if( one_trg_dll_location MATCHES ".dll$")
+          install(FILES ${one_trg_dll_location} DESTINATION . CONFIGURATIONS Release)
+      endif()
+      get_target_property(one_trg_dll_location ${one_trg} IMPORTED_LOCATION_RELWITHDEBINFO)
+      if( one_trg_dll_location MATCHES ".dll$")
+          install(FILES ${one_trg_dll_location} DESTINATION . CONFIGURATIONS RelWithDebInfo)
+      endif()
+      get_target_property(one_trg_dll_location ${one_trg} IMPORTED_LOCATION_DEBUG)
+      if( one_trg_dll_location MATCHES ".dll$")
+          install(FILES ${one_trg_dll_location} DESTINATION . CONFIGURATIONS Debug)
+      endif()
+    endif()
+  endforeach()
 endif()
 
 if(ANDROID)
   add_subdirectory(android)
+elseif(IOS)
+  # TODO: custom iOS build steps
+else()
+  # Destkop OS Packaging
+  set(CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})
+  set(CPACK_PACKAGE_DESCRIPTION ${CMAKE_PROJECT_DESCRIPTION})
+  set(CPACK_PACKAGE_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
+  set(CPACK_PACKAGE_VERSION_MINOR ${CMAKE_PROJECT_VERSION_MINOR})
+  set(CPACK_PACKAGE_VERSION_PATCH ${CMAKE_PROJECT_VERSION_PATCH})
+  set(CPACK_PACKAGE_VERSION ${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH})
+  set(CPACK_PACKAGE_VENDOR "Honeybunch")
+  set(CPACK_PACKAGE_CONTACT "amt3824@g.rit.edu")
+  set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/Honeybunch/sdltest")
+  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION}-${GIT_COMMIT_HASH}-${CMAKE_SYSTEM_NAME}")
+  set(CPACK_PACKAGE_ICON ${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.ico) # TODO: Move to a better folder
+  set(CPACK_RESOURCE_FILE_LICENSE ${CMAKE_CURRENT_LIST_DIR}/license.txt)
+  set(CPACK_RESOURCE_FILE_README ${CMAKE_CURRENT_LIST_DIR}/readme.md)
+  set(CPACK_PACKAGE_EXECUTABLES sdltest "SDLTest")
+  set(CPACK_PACKAGE_INSTALL_DIRECTORY "sdltest")
+
+  if(WIN32)
+    find_package(WIX REQUIRED)
+
+    set(CPACK_GENERATOR WIX)
+
+    set(CPACK_WIX_PRODUCT_GUID "044b496e-773f-447d-90c9-2a0212e1ff2c")
+    set(CPACK_WIX_UPGRADE_GUID "d100fdbf-2e03-4bd0-af73-755e632fbc7a")
+    set(CPACK_WIX_LICENSE_RTF ${CMAKE_CURRENT_LIST_DIR}/license.rtf)
+    set(CPACK_WIX_PRODUCT_ICON ${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.ico) # TODO: Move to a better folder
+  elseif(APPLE)
+    set(CPACK_GENERATOR Bundle)
+
+    set(CPACK_BUNDLE_NAME ${CMAKE_PROJECT_NAME})
+    set(CPACK_BUNDLE_PLIST ${CMAKE_CURRENT_LIST_DIR}/macos/Info.plist)
+    set(CPACK_BUNDLE_ICON ${CMAKE_CURRENT_LIST_DIR}/macos/icon.ico)
+    set(CPACK_BUNDLE_APPLE_CERT_APP "")
+    set(CPACK_BUNDLE_APPLE_ENTITLEMENTS "")
+  elseif(UNIX)
+    # Unix systems are expected to provide the generator that suits them best
+    # Don't want to try to detect which flavors of linux we're capable of creating
+    # packages for.
+    # TODO: Set various cpack arguments for DEB and RPM specific generation
+  endif()
+
+  include(CPack)
 endif()

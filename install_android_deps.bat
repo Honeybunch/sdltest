@@ -2,6 +2,9 @@
 
 cd ./vcpkg
 
+REM Install Windows Host Tools
+call vcpkg install tool-dxc:x64-windows
+
 REM Install arm64 Android Deps
 call vcpkg install cgltf:arm64-android
 call vcpkg install imgui:arm64-android
