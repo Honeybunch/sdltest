@@ -71,14 +71,6 @@ endif()
 
 set(host_triple ${host_arch}-${host})
 
-# Set install prefix if not already overridden
-set(sdltest_install "${CMAKE_CURRENT_SOURCE_DIR}/install/${platform}")
-if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-    set (CMAKE_INSTALL_PREFIX ${sdltest_install} CACHE PATH "Default Install Path" FORCE )
-else()
-    set(sdltest_install ${CMAKE_INSTALL_PREFIX})
-endif()
-
 # Clang & GNU only for now
 if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" AND
    NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "AppleClang" AND
@@ -237,8 +229,8 @@ target_compile_features(sdltest PRIVATE c_std_11)
 
 if(ANDROID)
   install(TARGETS sdltest
-          RUNTIME DESTINATION "$<CONFIG>/lib/${arch}"
-          LIBRARY DESTINATION "$<CONFIG>/lib/${arch}")
+          RUNTIME DESTINATION "lib/${arch}"
+          LIBRARY DESTINATION "lib/${arch}")
 else()
   install(TARGETS sdltest
           RUNTIME DESTINATION "."
@@ -321,7 +313,7 @@ if(ANDROID)
   add_subdirectory(android)
 elseif(IOS)
   # TODO: custom iOS build steps
-else()
+endif()
   # Destkop OS Packaging
   set(CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})
   set(CPACK_PACKAGE_DESCRIPTION ${CMAKE_PROJECT_DESCRIPTION})
@@ -364,4 +356,3 @@ else()
   endif()
 
   include(CPack)
-endif()
