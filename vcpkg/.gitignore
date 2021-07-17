@@ -304,6 +304,7 @@ __pycache__/
 
 *.exe
 *.zip
+!/scripts/tls12-download.exe
 
 ############################################################
 # vcpkg - End
