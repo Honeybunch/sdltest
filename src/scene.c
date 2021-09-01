@@ -124,8 +124,8 @@ uint32_t parse_node(scene *s, cgltf_data *data, cgltf_node *node,
 }
 
 int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
-                   VmaAllocator vma_alloc, VmaPool up_pool, VmaPool tex_pool,
-                   const char *filename, scene **out_scene) {
+                   allocator tmp_alloc, VmaAllocator vma_alloc, VmaPool up_pool,
+                   VmaPool tex_pool, const char *filename, scene **out_scene) {
   // We really only want to handle glbs; gltfs should be pre-packed
   cgltf_options options = {.type = cgltf_file_type_glb};
   cgltf_data *data = NULL;
@@ -154,12 +154,13 @@ int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
     alloc_info.texture_count = texture_count;
     alloc_info.material_count = material_count;
     alloc_info.child_counts =
-        alloca(alloc_info.entity_count * sizeof(uint32_t));
+        hb_alloc_nm_tp(tmp_alloc, alloc_info.entity_count, uint32_t);
     for (uint32_t i = 0; i < alloc_info.entity_count; ++i) {
       alloc_info.child_counts[i] = data->nodes[i].children_count;
     }
 
     s = alloc_scene(&alloc_info);
+    hb_free(tmp_alloc, alloc_info.child_counts);
   }
   assert(s);
 
@@ -167,7 +168,7 @@ int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
   s->mesh_count = mesh_count;
   for (uint32_t i = 0; i < mesh_count; ++i) {
     cgltf_mesh *mesh = &data->meshes[i];
-    create_gpumesh_cgltf(device, vma_alloc, mesh, &s->meshes[i]);
+    create_gpumesh_cgltf(device, vma_alloc, tmp_alloc, mesh, &s->meshes[i]);
   }
 
   // Parse Textures

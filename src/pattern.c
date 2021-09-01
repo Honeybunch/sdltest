@@ -27,13 +27,14 @@ void write_pattern(uint32_t width, uint32_t height, uint32_t *bitmap) {
   }
 }
 
-void alloc_pattern(uint32_t width, uint32_t height, cputexture **out) {
+void alloc_pattern(allocator alloc, uint32_t width, uint32_t height,
+                   cputexture **out) {
   assert(out);
   uint64_t data_size = width * height * sizeof(uint32_t);
 
   cputexture *tex =
-      (cputexture *)malloc(data_size + sizeof(cputexture) +
-                           sizeof(texture_layer) + sizeof(texture_mip));
+      hb_alloc(alloc, data_size + sizeof(cputexture) + sizeof(texture_layer) +
+                          sizeof(texture_mip));
   assert(tex);
 
   uint64_t offset = sizeof(cputexture);

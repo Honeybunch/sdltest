@@ -2,6 +2,7 @@
 
 #include <stdint.h>
 
+#include "allocator.h"
 #include "simd.h"
 
 typedef struct VkDevice_T *VkDevice;
@@ -52,7 +53,7 @@ typedef struct scene {
 } scene;
 
 int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
-                   VmaAllocator vma_alloc, VmaPool up_pool, VmaPool tex_pool,
-                   const char *filename, scene **scene);
+                   allocator tmp_alloc, VmaAllocator vma_alloc, VmaPool up_pool,
+                   VmaPool tex_pool, const char *filename, scene **scene);
 void destroy_scene(VkDevice device, VmaAllocator alloc,
                    const VkAllocationCallbacks *vk_alloc, scene *s);

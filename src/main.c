@@ -182,13 +182,13 @@ static bool check_layer(const char *check_name, uint32_t layer_count,
   return found;
 }
 
-static VkPhysicalDevice select_gpu(VkInstance instance) {
+static VkPhysicalDevice select_gpu(VkInstance instance, allocator tmp_alloc) {
   uint32_t gpu_count = 0;
   VkResult err = vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
   assert(err == VK_SUCCESS);
 
   VkPhysicalDevice *physical_devices =
-      alloca(sizeof(VkPhysicalDevice) * gpu_count);
+      hb_alloc_nm_tp(tmp_alloc, gpu_count, VkPhysicalDevice);
   err = vkEnumeratePhysicalDevices(instance, &gpu_count, physical_devices);
   assert(err == VK_SUCCESS);
 
@@ -231,7 +231,9 @@ static VkPhysicalDevice select_gpu(VkInstance instance) {
     }
   }
   assert(gpu_idx >= 0);
-  return physical_devices[gpu_idx];
+  VkPhysicalDevice gpu = physical_devices[gpu_idx];
+  hb_free(tmp_alloc, physical_devices);
+  return gpu;
 }
 
 static VkDevice create_device(VkPhysicalDevice gpu,
@@ -369,7 +371,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   VkResult err = VK_SUCCESS;
 
   // Get the GPU we want to run on
-  VkPhysicalDevice gpu = select_gpu(instance);
+  VkPhysicalDevice gpu = select_gpu(instance, tmp_alloc);
   if (gpu == VK_NULL_HANDLE) {
     return false;
   }
@@ -401,7 +403,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   uint32_t present_queue_family_index = UINT32_MAX;
   {
     // Iterate over each queue to learn whether it supports presenting:
-    VkBool32 *supports_present = alloca(queue_family_count * sizeof(VkBool32));
+    VkBool32 *supports_present =
+        hb_alloc_nm_tp(tmp_alloc, queue_family_count, VkBool32);
     for (uint32_t i = 0; i < queue_family_count; i++) {
       vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, surface,
                                            &supports_present[i]);
@@ -433,6 +436,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
         }
       }
     }
+    hb_free(tmp_alloc, supports_present);
 
     // Generate error if could not find both a graphics and a present queue
     if (graphics_queue_family_index == UINT32_MAX ||
@@ -548,7 +552,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
         vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
     assert(err == VK_SUCCESS);
     VkSurfaceFormatKHR *surface_formats =
-        alloca(format_count * sizeof(VkSurfaceFormatKHR));
+        hb_alloc_nm_tp(tmp_alloc, format_count, VkSurfaceFormatKHR);
     err = vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count,
                                                surface_formats);
     assert(err == VK_SUCCESS);
@@ -556,6 +560,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
         pick_surface_format(surface_formats, format_count);
     swapchain_image_format = surface_format.format;
     swapchain_color_space = surface_format.colorSpace;
+    hb_free(tmp_alloc, surface_formats);
+    surface_formats = NULL;
 
     VkSurfaceCapabilitiesKHR surf_caps;
     err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surf_caps);
@@ -566,7 +572,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
                                                     &present_mode_count, NULL);
     assert(err == VK_SUCCESS);
     VkPresentModeKHR *present_modes =
-        alloca(present_mode_count * sizeof(VkPresentModeKHR));
+        hb_alloc_nm_tp(tmp_alloc, present_mode_count, VkPresentModeKHR);
     assert(present_modes);
     err = vkGetPhysicalDeviceSurfacePresentModesKHR(
         gpu, surface, &present_mode_count, present_modes);
@@ -615,6 +621,8 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
       // The desired present mode was not found, just use the first one
       present_mode = present_modes[0];
     }
+    hb_free(tmp_alloc, present_modes);
+    present_modes = NULL;
 
     // Determine the number of VkImages to use in the swap chain.
     // Application desires to acquire 3 images at a time for triple
@@ -980,8 +988,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
 
   // Create GLTF Pipeline
   gpupipeline *gltf_pipeline = NULL;
-  err = create_gltf_pipeline(device, vk_alloc, pipeline_cache, render_pass,
-                             width, height, gltf_pipe_layout, &gltf_pipeline);
+  err = create_gltf_pipeline(device, vk_alloc, tmp_alloc, pipeline_cache,
+                             render_pass, width, height, gltf_pipe_layout,
+                             &gltf_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create GLTF RT Pipeline Layout
@@ -1028,8 +1037,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   // Create GLTF Ray Tracing Pipeline
   // gpupipeline *gltf_rt_pipeline = NULL;
   // err = create_gltf_rt_pipeline(
-  //    device, vk_alloc, pipeline_cache, vkCreateRayTracingPipelinesKHR,
-  //    render_pass, width, height, gltf_rt_pipe_layout, &gltf_rt_pipeline);
+  //    device, vk_alloc, tmp_alloc, pipeline_cache,
+  //    vkCreateRayTracingPipelinesKHR, render_pass, width, height,
+  //    gltf_rt_pipe_layout, &gltf_rt_pipeline);
   // assert(err == VK_SUCCESS);
 
   // Create ImGui Descriptor Set Layout
@@ -1186,19 +1196,19 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   gputexture pattern = {0};
   {
     cputexture *cpu_pattern = NULL;
-    alloc_pattern(1024, 1024, &cpu_pattern);
+    alloc_pattern(tmp_alloc, 1024, 1024, &cpu_pattern);
     create_pattern(1024, 1024, cpu_pattern);
 
     create_texture(device, vma_alloc, vk_alloc, cpu_pattern, upload_mem_pool,
                    texture_mem_pool, &pattern);
 
-    free(cpu_pattern);
+    hb_free(tmp_alloc, cpu_pattern);
   }
 
   // Load scene
   scene *duck = NULL;
-  load_scene(device, vk_alloc, vma_alloc, upload_mem_pool, texture_mem_pool,
-             "./assets/scenes/duck.glb", &duck);
+  load_scene(device, vk_alloc, tmp_alloc, vma_alloc, upload_mem_pool,
+             texture_mem_pool, "./assets/scenes/duck.glb", &duck);
 
   // Create resources for screenshots
   gpuimage screenshot_image = {0};
@@ -2825,8 +2835,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       err = vkEnumerateInstanceLayerProperties(&instance_layer_count, NULL);
       assert(err == VK_SUCCESS);
       if (instance_layer_count > 0) {
-        VkLayerProperties *instance_layers =
-            alloca(sizeof(VkLayerProperties) * instance_layer_count);
+        VkLayerProperties *instance_layers = hb_alloc_nm_tp(
+            arena.alloc, instance_layer_count, VkLayerProperties);
         err = vkEnumerateInstanceLayerProperties(&instance_layer_count,
                                                  instance_layers);
         assert(err == VK_SUCCESS);

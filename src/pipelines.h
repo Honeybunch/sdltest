@@ -5,6 +5,8 @@
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
+#include "allocator.h"
+
 typedef struct gpupipeline gpupipeline;
 
 uint32_t create_fractal_pipeline(VkDevice device,
@@ -53,12 +55,12 @@ enum GLTF_PERMUTATIONS {
 
 uint32_t create_gltf_pipeline(VkDevice device,
                               const VkAllocationCallbacks *vk_alloc,
-                              VkPipelineCache cache, VkRenderPass pass,
-                              uint32_t w, uint32_t h, VkPipelineLayout layout,
-                              gpupipeline **pipe);
+                              allocator tmp_alloc, VkPipelineCache cache,
+                              VkRenderPass pass, uint32_t w, uint32_t h,
+                              VkPipelineLayout layout, gpupipeline **pipe);
 
 uint32_t create_gltf_rt_pipeline(
-    VkDevice device, const VkAllocationCallbacks *vk_alloc,
+    VkDevice device, const VkAllocationCallbacks *vk_alloc, allocator tmp_alloc,
     VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     VkRenderPass pass, uint32_t w, uint32_t h, VkPipelineLayout layout,

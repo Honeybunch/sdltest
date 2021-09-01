@@ -560,12 +560,11 @@ uint32_t create_skydome_pipeline(VkDevice device,
   return err;
 }
 
-uint32_t
-create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
-                      VkPipelineCache cache, VkRenderPass pass, uint32_t w,
-                      uint32_t h, VkPipelineLayout layout, VkPipeline *pipe)
-
-{
+uint32_t create_imgui_pipeline(VkDevice device,
+                               const VkAllocationCallbacks *vk_alloc,
+                               VkPipelineCache cache, VkRenderPass pass,
+                               uint32_t w, uint32_t h, VkPipelineLayout layout,
+                               VkPipeline *pipe) {
   VkResult err = VK_SUCCESS;
 
   // Create ImGui Pipeline
@@ -695,9 +694,9 @@ create_imgui_pipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
 
 uint32_t create_gltf_pipeline(VkDevice device,
                               const VkAllocationCallbacks *vk_alloc,
-                              VkPipelineCache cache, VkRenderPass pass,
-                              uint32_t w, uint32_t h, VkPipelineLayout layout,
-                              gpupipeline **pipe) {
+                              allocator tmp_alloc, VkPipelineCache cache,
+                              VkRenderPass pass, uint32_t w, uint32_t h,
+                              VkPipelineLayout layout, gpupipeline **pipe) {
   VkResult err = VK_SUCCESS;
 
   VkVertexInputBindingDescription vert_bindings[3] = {
@@ -822,8 +821,8 @@ uint32_t create_gltf_pipeline(VkDevice device,
 
   gpupipeline *p = NULL;
 
-  err = (VkResult)create_gfx_pipeline(device, vk_alloc, cache, perm_count,
-                                      &create_info_base, &p);
+  err = (VkResult)create_gfx_pipeline(device, vk_alloc, tmp_alloc, cache,
+                                      perm_count, &create_info_base, &p);
   assert(err == VK_SUCCESS);
 
   // Can destroy shader moduless
@@ -836,7 +835,7 @@ uint32_t create_gltf_pipeline(VkDevice device,
 }
 
 uint32_t create_gltf_rt_pipeline(
-    VkDevice device, const VkAllocationCallbacks *vk_alloc,
+    VkDevice device, const VkAllocationCallbacks *vk_alloc, allocator tmp_alloc,
     VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     VkRenderPass pass, uint32_t w, uint32_t h, VkPipelineLayout layout,
@@ -945,7 +944,7 @@ uint32_t create_gltf_rt_pipeline(
   create_info.layout = layout;
 
   VkPipeline pipeline = VK_NULL_HANDLE;
-  err = (VkResult)create_rt_pipeline(device, vk_alloc, cache,
+  err = (VkResult)create_rt_pipeline(device, vk_alloc, tmp_alloc, cache,
                                      vkCreateRayTracingPipelines, 1,
                                      &create_info, pipe);
   assert(err == VK_SUCCESS);

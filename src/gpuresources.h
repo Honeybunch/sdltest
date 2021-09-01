@@ -6,6 +6,8 @@
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
+#include "allocator.h"
+
 typedef struct VmaAllocator_T *VmaAllocator;
 typedef struct VmaAllocation_T *VmaAllocation;
 typedef struct VmaPool_T *VmaPool;
@@ -103,8 +105,9 @@ void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
 
 int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
                        const cpumesh *src_mesh, gpumesh *dst_mesh);
-int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator allocator,
-                             const cgltf_mesh *src_mesh, gpumesh *dst_mesh);
+int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
+                             allocator tmp_alloc, const cgltf_mesh *src_mesh,
+                             gpumesh *dst_mesh);
 void destroy_gpumesh(VkDevice device, VmaAllocator allocator,
                      const gpumesh *mesh);
 
@@ -140,11 +143,12 @@ void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
 
 int32_t create_gfx_pipeline(VkDevice device,
                             const VkAllocationCallbacks *vk_alloc,
-                            VkPipelineCache cache, uint32_t perm_count,
+                            allocator tmp_alloc, VkPipelineCache cache,
+                            uint32_t perm_count,
                             VkGraphicsPipelineCreateInfo *create_info_base,
                             gpupipeline **p);
 int32_t create_rt_pipeline(
-    VkDevice device, const VkAllocationCallbacks *vk_alloc,
+    VkDevice device, const VkAllocationCallbacks *vk_alloc, allocator tmp_alloc,
     VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
