@@ -1,14 +1,17 @@
 #include "common.hlsli"
 
-[[vk::push_constant]]
-ConstantBuffer<PushConstants> consts : register(b0);
-
+// Per-material data - Fragment Stage Only (Maybe vertex stage too later?)
 Texture2D albedo_map : register(t0, space0); // Fragment Stage Only
 Texture2D normal_map : register(t1, space0); // Fragment Stage Only
 Texture2D roughness_map : register(t2, space0); // Fragment Stage Only
+sampler static_sampler : register(s3, space0); // Immutable sampler
 
-// Immutable sampler
-sampler static_sampler : register(s3, space0);
+// Per-object data - Vertex Stage Only
+ConstantBuffer<CommonObjectData> object_data: register(b0, space1);
+
+// Per-view data - Fragment Stage Only
+ConstantBuffer<CommonCameraData> camera_data: register(b0, space2);
+ConstantBuffer<CommonLightData> light_data : register(b1, space2);
 
 #define GLTF_PERM_NORMAL_MAP 0x00000001
 #define GLTF_PERM_PBR_METALLIC_ROUGHNESS 0x00000002
@@ -41,11 +44,11 @@ Interpolators vert(VertexIn i)
     // Apply displacement map
     float3 pos = i.local_pos;
 
-    float3x3 orientation = (float3x3)consts.m;
+    float3x3 orientation = (float3x3)object_data.m;
 
     Interpolators o;
-    o.clip_pos = mul(float4(pos, 1.0), consts.mvp);
-    o.world_pos = mul(float4(pos, 1.0), consts.m).xyz;
+    o.clip_pos = mul(float4(pos, 1.0), object_data.mvp);
+    o.world_pos = mul(float4(pos, 1.0), object_data.m).xyz;
     o.normal = mul(i.normal, orientation); // convert to world-space normal
     o.uv = i.uv;
     return o;
@@ -77,7 +80,7 @@ float4 frag(Interpolators i) : SV_TARGET
     float3 lightColor = float3(1, 1, 1);
 
     // Lighting calcs
-    float3 L = normalize(consts.light_dir);
+    float3 L = normalize(light_data.light_dir);
     
     // Calc ambient light
     float3 ambient = float3(0.01, 0.01, 0.01);
@@ -87,7 +90,7 @@ float4 frag(Interpolators i) : SV_TARGET
     float3 diffuse = lightColor * lambert;
 
     // Calc specular light
-    float3 V = normalize(consts.view_pos - i.world_pos);
+    float3 V = normalize(camera_data.view_pos - i.world_pos);
     float3 H = normalize(L + V);
 
     float3 specular_exponent = exp2(gloss * 11) + 2;
