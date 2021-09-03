@@ -102,8 +102,7 @@ find_path(CGLTF_INCLUDE_DIRS "cgltf.h")
 
 find_program(DXC dxc 
   PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg/installed/${host_triple}/tools/dxc
-  REQUIRED 
-  NO_DEFAULT_PATH)
+  REQUIRED)
 find_program(TOKTX toktx 
   PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg/installed/${host_triple}/tools/ktx
   REQUIRED)
