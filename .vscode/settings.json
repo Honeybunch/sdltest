@@ -62,5 +62,6 @@
         "cimgui.h": "c",
         "*.hlsli": "c",
         "*.in": "cpp"
-    }
+    },
+    "cmake.configureOnOpen": false
 }

@@ -92,6 +92,10 @@ typedef struct demo {
   VkPipeline skydome_pipeline;
   gpuconstbuffer sky_const_buffer;
 
+  VkDescriptorSetLayout object_set_layout;
+  VkDescriptorSetLayout light_set_layout;
+  VkDescriptorSetLayout camera_set_layout;
+
   VkDescriptorSetLayout gltf_layout;
   VkPipelineLayout gltf_pipe_layout;
   gpupipeline *gltf_pipeline;
@@ -951,6 +955,39 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
                                 &skydome_pipeline);
   assert(err == VK_SUCCESS);
 
+  // Create Common Object DescriptorSet Layout
+  VkDescriptorSetLayout object_set_layout = VK_NULL_HANDLE;
+  {
+    VkDescriptorSetLayoutBinding bindings[1] = {
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = 1;
+    create_info.pBindings = bindings;
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
+                                      &object_set_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Common Per-View DescriptorSet Layout
+  VkDescriptorSetLayout view_set_layout = VK_NULL_HANDLE;
+  {
+    VkDescriptorSetLayoutBinding bindings[2] = {
+        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = 2;
+    create_info.pBindings = bindings;
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
+                                      &view_set_layout);
+    assert(err == VK_SUCCESS);
+  }
+
   // Create GLTF Descriptor Set Layout
   VkDescriptorSetLayout gltf_layout = VK_NULL_HANDLE;
   {
@@ -974,12 +1011,18 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   // Create GLTF Pipeline Layout
   VkPipelineLayout gltf_pipe_layout = VK_NULL_HANDLE;
   {
+    VkDescriptorSetLayout layouts[] = {
+        gltf_layout,
+        object_set_layout,
+        view_set_layout,
+    };
+    const uint32_t layout_count =
+        sizeof(layouts) / sizeof(VkDescriptorSetLayout);
+
     VkPipelineLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.setLayoutCount = 1;
-    create_info.pSetLayouts = &gltf_layout;
-    create_info.pushConstantRangeCount = 1;
-    create_info.pPushConstantRanges = &const_range;
+    create_info.setLayoutCount = layout_count;
+    create_info.pSetLayouts = layouts;
 
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &gltf_pipe_layout);
