@@ -61,7 +61,9 @@
         "shadercommon.h": "c",
         "cimgui.h": "c",
         "*.hlsli": "c",
-        "*.in": "cpp"
+        "*.in": "cpp",
+        "bitset": "c",
+        "queue": "c"
     },
     "cmake.configureOnOpen": false
 }

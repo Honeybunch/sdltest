@@ -132,7 +132,7 @@ typedef struct demo {
   gpumesh skydome_gpu;
 
   uint8_t *imgui_mesh_data;
-  gpumesh imgui_gpu;
+  gpumesh imgui_gpu[FRAME_LATENCY];
 
   scene *duck;
 
@@ -1906,7 +1906,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
         OptickAPI_PopGPUEvent(optick_gpu_e);
       }
 
-      // Render
+      // Render main geometry pass
       {
         VkFramebuffer framebuffer = d->swapchain_framebuffers[frame_idx];
 
@@ -2001,6 +2001,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
             vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
             OptickAPI_PopGPUEvent(optick_gpu_e);
           }
+
+          vkCmdEndRenderPass(graphics_buffer);
         }
 
         // ImGui Render Pass
@@ -2017,7 +2019,7 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
             OPTICK_C_PUSH(optick_e, "ImGui CPU", OptickAPI_Category_UI);
 
             // If imgui_gpu is empty, this is still safe to call
-            destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu);
+            destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu[frame_idx]);
 
             const ImDrawData *draw_data = igGetDrawData();
             if (draw_data->Valid) {
@@ -2053,10 +2055,20 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                                      .vertex_count = draw_data->TotalVtxCount,
                                      .vertices = vtx_dst};
 
-                create_gpumesh(device, d->vma_alloc, &imgui_cpu, &d->imgui_gpu);
+                create_gpumesh(device, d->vma_alloc, &imgui_cpu,
+                               &d->imgui_gpu[frame_idx]);
 
-                // TODO: Manually record mesh upload here
-                {}
+                // Copy to gpu
+                {
+                  VkBufferCopy region = {
+                      .srcOffset = 0,
+                      .dstOffset = 0,
+                      .size = d->imgui_gpu[frame_idx].size,
+                  };
+                  vkCmdCopyBuffer(
+                      graphics_buffer, d->imgui_gpu[frame_idx].host.buffer,
+                      d->imgui_gpu[frame_idx].gpu.buffer, 1, &region);
+                }
               }
             }
 
@@ -2070,6 +2082,8 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
             const float width = d->ig_io->DisplaySize.x;
             const float height = d->ig_io->DisplaySize.y;
 
+            // TODO: Can't re-use same framebuffer since the imgui pipeline
+            // doesn't need the depth buffer
             /*
             // Set Render Pass
             {
@@ -2107,13 +2121,13 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
               //                   sizeof(ImGuiPushConstants),
               //                   (const void *)&d->push_constants);
             }
+
+            vkCmdEndRenderPass(graphics_buffer);
             */
 
             OptickAPI_PopGPUEvent(optick_gpu_e);
           }
         }
-
-        vkCmdEndRenderPass(graphics_buffer);
       }
 
       OptickAPI_SetGpuContext(optick_prev_gpu_ctx);
@@ -2475,6 +2489,8 @@ static void demo_destroy(demo *d) {
     vkDestroyImageView(device, d->swapchain_image_views[i], vk_alloc);
     vkDestroyFramebuffer(device, d->swapchain_framebuffers[i], vk_alloc);
     vkDestroyCommandPool(device, d->command_pools[i], vk_alloc);
+
+    destroy_gpumesh(device, vma_alloc, &d->imgui_gpu[i]);
   }
 
   destroy_gpuimage(vma_alloc, &d->depth_buffers);
@@ -2487,7 +2503,6 @@ static void demo_destroy(demo *d) {
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->light_const_buffer);
   destroy_gpumesh(device, vma_alloc, &d->skydome_gpu);
-  destroy_gpumesh(device, vma_alloc, &d->imgui_gpu);
 
   vkDestroyFence(device, d->screenshot_fence, vk_alloc);
   destroy_gpuimage(vma_alloc, &d->screenshot_image);
@@ -2576,8 +2591,8 @@ bool optick_state_changed_callback(OptickAPI_State state) {
     // Return false so optick knows that we *didn't* dump a capture
     // In this case because we're waiting for the renderer to get a screenshot
     // captured.
-    // Optick will consider the caputre un-dumped and will attempt to call this
-    // again
+    // Optick will consider the caputre un-dumped and will attempt to call
+    // this again
     if (g_taking_screenshot) {
       return false;
     }
