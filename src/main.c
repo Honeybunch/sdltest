@@ -777,6 +777,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   // Create Pipeline Cache
   VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
   {
+    OPTICK_C_PUSH(pipe_cache_e, "init pipeline cache", OptickAPI_Category_None);
     size_t data_size = 0;
     void *data = NULL;
 
@@ -803,6 +804,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     if (data) {
       mi_free(data);
     }
+    OptickAPI_PopEvent(pipe_cache_e);
   }
 
   VkPushConstantRange const_range = {
@@ -1118,6 +1120,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   // Create a pool for host memory uploads
   VmaPool upload_mem_pool = VK_NULL_HANDLE;
   {
+    OPTICK_C_PUSH(vma_pool_e, "init vma upload pool", OptickAPI_Category_None);
     uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
@@ -1133,11 +1136,14 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     create_info.memoryTypeIndex = mem_type_idx;
     err = vmaCreatePool(vma_alloc, &create_info, &upload_mem_pool);
     assert(err == VK_SUCCESS);
+
+    OptickAPI_PopEvent(vma_pool_e);
   }
 
   // Create a pool for texture memory
   VmaPool texture_mem_pool = VK_NULL_HANDLE;
   {
+    OPTICK_C_PUSH(vma_pool_e, "init vma texture pool", OptickAPI_Category_None);
     uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
@@ -1158,6 +1164,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     create_info.minBlockCount = 4; // We know we will have at least 4 textures
     err = vmaCreatePool(vma_alloc, &create_info, &texture_mem_pool);
     assert(err == VK_SUCCESS);
+    OptickAPI_PopEvent(vma_pool_e);
   }
 
   // Create Cube Mesh
