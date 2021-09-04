@@ -2,8 +2,8 @@
 
 #include "common.hlsli"
 
-[[vk::push_constant]]
-ConstantBuffer<PushConstants> consts : register(b0);
+// Per-object data - Vertex Stage Only
+ConstantBuffer<CommonObjectData> object_data: register(b0, space0);
 
 struct VertexIn
 {
@@ -18,7 +18,7 @@ struct Interpolators
 Interpolators vert(VertexIn i)
 {
     Interpolators o;
-    o.clip_pos = mul(float4(i.local_pos, 1.0), consts.mvp);
+    o.clip_pos = mul(float4(i.local_pos, 1.0), object_data.mvp);
     return o;
 }
 

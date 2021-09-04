@@ -7,11 +7,11 @@
 
 #include <stdalign.h>
 
-#define PUSH_CONSTANT_BYTES 256
+#define PUSH_CONSTANT_BYTES 128
 
 _Static_assert(sizeof(FullscreenPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
-_Static_assert(sizeof(PushConstants) <= PUSH_CONSTANT_BYTES,
+_Static_assert(sizeof(SkyPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 _Static_assert(sizeof(ImGuiPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");

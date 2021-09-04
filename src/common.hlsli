@@ -6,14 +6,6 @@ typedef struct FullscreenPushConstants {
   float2 resolution;
 } FullscreenPushConstants;
 
-// TODO: Slim this down
-typedef struct PushConstants {
-  float4x4 mvp;
-  float4x4 m;
-  float3 view_pos;
-  float3 light_dir;
-} PushConstants;
-
 typedef struct SkyPushConstants {
   float4x4 vp;
 } SkyPushConstants;
