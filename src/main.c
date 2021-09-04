@@ -92,11 +92,13 @@ typedef struct demo {
   VkPipeline skydome_pipeline;
   gpuconstbuffer sky_const_buffer;
 
-  VkDescriptorSetLayout object_set_layout;
-  VkDescriptorSetLayout light_set_layout;
-  VkDescriptorSetLayout camera_set_layout;
+  gpuconstbuffer object_const_buffer;
+  gpuconstbuffer camera_const_buffer;
+  gpuconstbuffer light_const_buffer;
 
-  VkDescriptorSetLayout gltf_layout;
+  VkDescriptorSetLayout gltf_material_set_layout;
+  VkDescriptorSetLayout gltf_object_set_layout;
+  VkDescriptorSetLayout gltf_view_set_layout;
   VkPipelineLayout gltf_pipe_layout;
   gpupipeline *gltf_pipeline;
 
@@ -156,7 +158,9 @@ typedef struct demo {
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
   VkDescriptorSet skydome_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet mesh_descriptor_sets[FRAME_LATENCY];
-  VkDescriptorSet gltf_descriptor_sets[FRAME_LATENCY];
+  VkDescriptorSet gltf_material_descriptor_sets[FRAME_LATENCY];
+  VkDescriptorSet gltf_object_descriptor_sets[FRAME_LATENCY];
+  VkDescriptorSet gltf_view_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet imgui_descriptor_sets[FRAME_LATENCY];
 
   uint32_t const_buffer_upload_count;
@@ -335,20 +339,6 @@ static void demo_upload_scene(demo *d, const scene *s) {
   for (uint32_t i = 0; i < s->texture_count; ++i) {
     demo_upload_texture(d, &s->textures[i]);
   }
-}
-
-static void demo_update_skydata(demo *d, gpuconstbuffer cb) {
-  VkDescriptorBufferInfo buffer_info = {.buffer = cb.gpu.buffer,
-                                        .range = cb.size};
-
-  VkWriteDescriptorSet const_buffer_write = {
-      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-      .descriptorCount = 1,
-      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-      .pBufferInfo = &buffer_info,
-  };
-
-  vkUpdateDescriptorSets(d->device, 1, &const_buffer_write, 0, NULL);
 }
 
 static bool demo_init_imgui(demo *d) {
@@ -956,7 +946,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   assert(err == VK_SUCCESS);
 
   // Create Common Object DescriptorSet Layout
-  VkDescriptorSetLayout object_set_layout = VK_NULL_HANDLE;
+  VkDescriptorSetLayout gltf_object_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[1] = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT},
@@ -967,12 +957,12 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     create_info.bindingCount = 1;
     create_info.pBindings = bindings;
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &object_set_layout);
+                                      &gltf_object_set_layout);
     assert(err == VK_SUCCESS);
   }
 
   // Create Common Per-View DescriptorSet Layout
-  VkDescriptorSetLayout view_set_layout = VK_NULL_HANDLE;
+  VkDescriptorSetLayout gltf_view_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[2] = {
         {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -984,12 +974,12 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     create_info.bindingCount = 2;
     create_info.pBindings = bindings;
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &view_set_layout);
+                                      &gltf_view_set_layout);
     assert(err == VK_SUCCESS);
   }
 
   // Create GLTF Descriptor Set Layout
-  VkDescriptorSetLayout gltf_layout = VK_NULL_HANDLE;
+  VkDescriptorSetLayout gltf_material_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[4] = {
         {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -1004,7 +994,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     create_info.bindingCount = 4;
     create_info.pBindings = bindings;
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &gltf_layout);
+                                      &gltf_material_set_layout);
     assert(err == VK_SUCCESS);
   }
 
@@ -1012,9 +1002,9 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   VkPipelineLayout gltf_pipe_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayout layouts[] = {
-        gltf_layout,
-        object_set_layout,
-        view_set_layout,
+        gltf_material_set_layout,
+        gltf_object_set_layout,
+        gltf_view_set_layout,
     };
     const uint32_t layout_count =
         sizeof(layouts) / sizeof(VkDescriptorSetLayout);
@@ -1235,6 +1225,18 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   gpuconstbuffer sky_const_buffer =
       create_gpuconstbuffer(device, vma_alloc, vk_alloc, sizeof(SkyData));
 
+  // Create Uniform buffer for object data
+  gpuconstbuffer object_const_buffer = create_gpuconstbuffer(
+      device, vma_alloc, vk_alloc, sizeof(CommonObjectData));
+
+  // Create Uniform buffer for camera data
+  gpuconstbuffer camera_const_buffer = create_gpuconstbuffer(
+      device, vma_alloc, vk_alloc, sizeof(CommonCameraData));
+
+  // Create Uniform buffer for light data
+  gpuconstbuffer light_const_buffer = create_gpuconstbuffer(
+      device, vma_alloc, vk_alloc, sizeof(CommonLightData));
+
   // Create procedural texture
   gputexture pattern = {0};
   {
@@ -1324,7 +1326,12 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   d->skydome_pipe_layout = skydome_pipe_layout;
   d->skydome_pipeline = skydome_pipeline;
   d->sky_const_buffer = sky_const_buffer;
-  d->gltf_layout = gltf_layout;
+  d->object_const_buffer = object_const_buffer;
+  d->camera_const_buffer = camera_const_buffer;
+  d->light_const_buffer = light_const_buffer;
+  d->gltf_material_set_layout = gltf_material_set_layout;
+  d->gltf_object_set_layout = gltf_object_set_layout;
+  d->gltf_view_set_layout = gltf_view_set_layout;
   d->gltf_pipe_layout = gltf_pipe_layout;
   d->gltf_pipeline = gltf_pipeline;
   d->gltf_rt_layout = gltf_rt_layout;
@@ -1524,12 +1531,17 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
 
   // Create Descriptor Set Pools
   {
-    VkDescriptorPoolSize pool_size = {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 8};
+    VkDescriptorPoolSize pool_sizes[] = {
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 8},
+        {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4}};
+    const uint32_t pool_sizes_count =
+        sizeof(pool_sizes) / sizeof(VkDescriptorPoolSize);
+
     VkDescriptorPoolCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    create_info.maxSets = 3;
-    create_info.poolSizeCount = 1;
-    create_info.pPoolSizes = &pool_size;
+    create_info.maxSets = 6;
+    create_info.poolSizeCount = pool_sizes_count;
+    create_info.pPoolSizes = pool_sizes;
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       err = vkCreateDescriptorPool(device, &create_info, vk_alloc,
@@ -1560,11 +1572,27 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
       assert(err == VK_SUCCESS);
     }
 
-    alloc_info.pSetLayouts = &gltf_layout;
+    alloc_info.pSetLayouts = &gltf_material_set_layout;
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       alloc_info.descriptorPool = d->descriptor_pools[i];
       err = vkAllocateDescriptorSets(device, &alloc_info,
-                                     &d->gltf_descriptor_sets[i]);
+                                     &d->gltf_material_descriptor_sets[i]);
+      assert(err == VK_SUCCESS);
+    }
+
+    alloc_info.pSetLayouts = &gltf_object_set_layout;
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      alloc_info.descriptorPool = d->descriptor_pools[i];
+      err = vkAllocateDescriptorSets(device, &alloc_info,
+                                     &d->gltf_object_descriptor_sets[i]);
+      assert(err == VK_SUCCESS);
+    }
+
+    alloc_info.pSetLayouts = &gltf_view_set_layout;
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      alloc_info.descriptorPool = d->descriptor_pools[i];
+      err = vkAllocateDescriptorSets(device, &alloc_info,
+                                     &d->gltf_view_descriptor_sets[i]);
       assert(err == VK_SUCCESS);
     }
   }
@@ -1583,7 +1611,13 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
                                            sky_const_buffer.size};
     VkDescriptorImageInfo duck_info = {
         NULL, duck->textures[0].view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkWriteDescriptorSet writes[8] = {
+    VkDescriptorBufferInfo object_info = {object_const_buffer.gpu.buffer, 0,
+                                          object_const_buffer.size};
+    VkDescriptorBufferInfo camera_info = {camera_const_buffer.gpu.buffer, 0,
+                                          camera_const_buffer.size};
+    VkDescriptorBufferInfo light_info = {light_const_buffer.gpu.buffer, 0,
+                                         light_const_buffer.size};
+    VkWriteDescriptorSet writes[11] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .descriptorCount = 1,
@@ -1638,9 +1672,32 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .pImageInfo = &roughness_info,
         },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &object_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &camera_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &light_info,
+        },
     };
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      VkDescriptorSet gltf_set = d->gltf_descriptor_sets[i];
+      VkDescriptorSet gltf_material_set = d->gltf_material_descriptor_sets[i];
+      VkDescriptorSet gltf_object_set = d->gltf_object_descriptor_sets[i];
+      VkDescriptorSet gltf_view_set = d->gltf_view_descriptor_sets[i];
       VkDescriptorSet mesh_set = d->mesh_descriptor_sets[i];
       VkDescriptorSet skydome_set = d->skydome_descriptor_sets[i];
 
@@ -1651,11 +1708,16 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
 
       writes[4].dstSet = skydome_set;
 
-      writes[5].dstSet = gltf_set;
-      writes[6].dstSet = gltf_set;
-      writes[7].dstSet = gltf_set;
+      writes[5].dstSet = gltf_material_set;
+      writes[6].dstSet = gltf_material_set;
+      writes[7].dstSet = gltf_material_set;
 
-      vkUpdateDescriptorSets(device, 8, writes, 0, NULL);
+      writes[8].dstSet = gltf_object_set;
+
+      writes[9].dstSet = gltf_view_set;
+      writes[10].dstSet = gltf_view_set;
+
+      vkUpdateDescriptorSets(device, 11, writes, 0, NULL);
     }
   }
 
@@ -1683,9 +1745,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
 }
 
 static void demo_render_scene(scene *s, VkCommandBuffer cmd,
-                              VkPipelineLayout layout,
-                              PushConstants *push_constants,
-                              const float4x4 *vp) {
+                              VkPipelineLayout layout, VkDescriptorSet view_set,
+                              VkDescriptorSet object_set,
+                              VkDescriptorSet material_set, const float4x4 *vp,
+                              demo *d) {
   OPTICK_C_PUSH(optick_e, "demo_render_scene", OptickAPI_Category_Rendering);
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     uint64_t components = s->components[i];
@@ -1698,17 +1761,43 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       // Hack to fuck with the scale of the object
       t->scale = (float3){0.01f, -0.01f, 0.01f};
 
-      float4x4 m = {.row0 = {0}};
-      transform_to_matrix(&m, t);
+      CommonObjectData object_data = {0};
 
-      float4x4 mvp = {.row0 = {0}};
-      mulmf44(vp, &m, &mvp);
+      transform_to_matrix(&object_data.m, t);
+      mulmf44(vp, &object_data.m, &object_data.mvp);
 
-      // Hack to change the object's transform
-      push_constants->m = m;
-      push_constants->mvp = mvp;
-      vkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                         sizeof(PushConstants), (const void *)push_constants);
+      // HACK: Update object's constant buffer here
+      {
+        OPTICK_C_PUSH(update_object_event, "Update Object Const Buffer",
+                      OptickAPI_Category_Rendering);
+
+        VmaAllocator vma_alloc = d->vma_alloc;
+        VkBuffer object_host = d->object_const_buffer.host.buffer;
+        VmaAllocation object_host_alloc = d->object_const_buffer.host.alloc;
+
+        uint8_t *data = NULL;
+        VkResult err =
+            vmaMapMemory(vma_alloc, object_host_alloc, (void **)&data);
+        if (err != VK_SUCCESS) {
+          assert(0);
+          return;
+        }
+        memcpy(data, &object_data, sizeof(CommonObjectData));
+        vmaUnmapMemory(vma_alloc, object_host_alloc);
+
+        demo_upload_const_buffer(d, &d->object_const_buffer);
+
+        OptickAPI_PopEvent(update_object_event);
+      }
+
+      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
+                              1, &material_set, 0, NULL);
+
+      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1,
+                              1, &object_set, 0, NULL);
+
+      vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
+                              1, &view_set, 0, NULL);
 
       const gpumesh *mesh = static_mesh->mesh;
       uint32_t idx_count = mesh->idx_count;
@@ -2151,11 +2240,12 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
 
             vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               pipe);
-            vkCmdBindDescriptorSets(
-                graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe_layout,
-                0, 1, &d->gltf_descriptor_sets[frame_idx], 0, NULL);
+
             demo_render_scene(d->duck, graphics_buffer, pipe_layout,
-                              &d->push_constants, vp);
+                              d->gltf_view_descriptor_sets[frame_idx],
+                              d->gltf_object_descriptor_sets[frame_idx],
+                              d->gltf_material_descriptor_sets[frame_idx], vp,
+                              d);
             OptickAPI_PopGPUEvent(optick_gpu_e);
           }
 
@@ -2683,6 +2773,9 @@ static void demo_destroy(demo *d) {
   destroy_texture(device, vma_alloc, vk_alloc, &d->displacement);
   destroy_texture(device, vma_alloc, vk_alloc, &d->albedo);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
+  destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->object_const_buffer);
+  destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
+  destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->light_const_buffer);
   destroy_gpumesh(device, vma_alloc, &d->skydome_gpu);
   destroy_gpumesh(device, vma_alloc, &d->plane_gpu);
   destroy_gpumesh(device, vma_alloc, &d->cube_gpu);
@@ -2714,7 +2807,9 @@ static void demo_destroy(demo *d) {
   vkDestroyPipelineLayout(device, d->gltf_rt_pipe_layout, vk_alloc);
   // destroy_gpupipeline(device, vk_alloc, d->gltf_rt_pipeline);
 
-  vkDestroyDescriptorSetLayout(device, d->gltf_layout, vk_alloc);
+  vkDestroyDescriptorSetLayout(device, d->gltf_material_set_layout, vk_alloc);
+  vkDestroyDescriptorSetLayout(device, d->gltf_object_set_layout, vk_alloc);
+  vkDestroyDescriptorSetLayout(device, d->gltf_view_set_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->gltf_pipe_layout, vk_alloc);
   destroy_gpupipeline(device, vk_alloc, d->gltf_pipeline);
 
@@ -2989,6 +3084,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .albedo = 1,
   };
 
+  CommonCameraData camera_data = {
+      0,
+  };
+
   // Main loop
   bool running = true;
   float time_ms = 0;
@@ -3079,6 +3178,57 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Light data to shader
     d.push_constants.light_dir = -sky_data.sun_dir;
+
+    // Update view camera constant buffer
+    {
+      OPTICK_C_PUSH(update_camera_event, "Update Light Const Buffer",
+                    OptickAPI_Category_Rendering);
+      camera_data.vp = vp;
+      // TODO: camera_data.inv_vp = inv_vp;
+      camera_data.view_pos = main_cam.transform.position;
+
+      VmaAllocator vma_alloc = d.vma_alloc;
+      VkBuffer camera_host = d.camera_const_buffer.host.buffer;
+      VmaAllocation camera_host_alloc = d.camera_const_buffer.host.alloc;
+
+      uint8_t *data = NULL;
+      err = vmaMapMemory(vma_alloc, camera_host_alloc, (void **)&data);
+      if (err != VK_SUCCESS) {
+        assert(0);
+        return false;
+      }
+
+      memcpy(data, &camera_data, sizeof(CommonCameraData));
+      vmaUnmapMemory(vma_alloc, camera_host_alloc);
+
+      demo_upload_const_buffer(&d, &d.camera_const_buffer);
+
+      OptickAPI_PopEvent(update_camera_event);
+    }
+
+    // Update view light constant buffer
+    {
+      OPTICK_C_PUSH(update_light_event, "Update Light Const Buffer",
+                    OptickAPI_Category_Rendering);
+
+      VmaAllocator vma_alloc = d.vma_alloc;
+      VkBuffer light_host = d.light_const_buffer.host.buffer;
+      VmaAllocation light_host_alloc = d.light_const_buffer.host.alloc;
+
+      uint8_t *data = NULL;
+      err = vmaMapMemory(vma_alloc, light_host_alloc, (void **)&data);
+      if (err != VK_SUCCESS) {
+        assert(0);
+        return false;
+      }
+      // HACK: just pluck the light direction from the push constants for now
+      memcpy(data, &d.push_constants.light_dir, sizeof(CommonLightData));
+      vmaUnmapMemory(vma_alloc, light_host_alloc);
+
+      demo_upload_const_buffer(&d, &d.light_const_buffer);
+
+      OptickAPI_PopEvent(update_light_event);
+    }
 
     // Update sky constant buffer
     {
