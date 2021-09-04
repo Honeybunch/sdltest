@@ -14,6 +14,10 @@ typedef struct PushConstants {
   float3 light_dir;
 } PushConstants;
 
+typedef struct SkyPushConstants {
+  float4x4 vp;
+} SkyPushConstants;
+
 // Constant per-view Camera Data
 typedef struct CommonCameraData {
   float4x4 vp;

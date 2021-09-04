@@ -77,15 +77,7 @@ typedef struct demo {
 
   VkPipelineCache pipeline_cache;
 
-  VkPipelineLayout simple_pipe_layout;
-  VkPipeline fractal_pipeline;
-  VkPipeline color_mesh_pipeline;
-
   VkSampler sampler;
-
-  VkDescriptorSetLayout material_layout;
-  VkPipelineLayout material_pipe_layout;
-  VkPipeline uv_mesh_pipeline;
 
   VkDescriptorSetLayout skydome_layout;
   VkPipelineLayout skydome_pipe_layout;
@@ -137,18 +129,10 @@ typedef struct demo {
   VmaPool upload_mem_pool;
   VmaPool texture_mem_pool;
 
-  gpumesh cube_gpu;
-  gpumesh plane_gpu;
   gpumesh skydome_gpu;
 
   uint8_t *imgui_mesh_data;
   gpumesh imgui_gpu;
-
-  gputexture albedo;
-  gputexture displacement;
-  gputexture normal;
-  gputexture roughness;
-  gputexture pattern;
 
   scene *duck;
 
@@ -157,7 +141,6 @@ typedef struct demo {
 
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
   VkDescriptorSet skydome_descriptor_sets[FRAME_LATENCY];
-  VkDescriptorSet mesh_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet gltf_material_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet gltf_object_descriptor_sets[FRAME_LATENCY];
   VkDescriptorSet gltf_view_descriptor_sets[FRAME_LATENCY];
@@ -171,8 +154,6 @@ typedef struct demo {
 
   uint32_t texture_upload_count;
   gputexture texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE];
-
-  PushConstants push_constants;
 
   ImGuiContext *ig_ctx;
   ImGuiIO *ig_io;
@@ -807,10 +788,10 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     OptickAPI_PopEvent(pipe_cache_e);
   }
 
-  VkPushConstantRange const_range = {
+  VkPushConstantRange sky_const_range = {
       VK_SHADER_STAGE_ALL_GRAPHICS,
       0,
-      sizeof(PushConstants),
+      sizeof(SkyPushConstants),
   };
 
   VkPushConstantRange imgui_const_range = {
@@ -818,30 +799,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
       0,
       sizeof(ImGuiPushConstants),
   };
-
-  // Create Simple Pipeline Layout
-  VkPipelineLayout simple_pipe_layout = VK_NULL_HANDLE;
-  {
-    VkPipelineLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.pushConstantRangeCount = 1;
-    create_info.pPushConstantRanges = &const_range;
-    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
-                                 &simple_pipe_layout);
-    assert(err == VK_SUCCESS);
-  }
-
-  VkPipeline fractal_pipeline = VK_NULL_HANDLE;
-  err = create_fractal_pipeline(device, vk_alloc, pipeline_cache, render_pass,
-                                width, height, simple_pipe_layout,
-                                &fractal_pipeline);
-  assert(err == VK_SUCCESS);
-
-  VkPipeline color_mesh_pipeline = VK_NULL_HANDLE;
-  err = create_color_mesh_pipeline(device, vk_alloc, pipeline_cache,
-                                   render_pass, width, height,
-                                   simple_pipe_layout, &color_mesh_pipeline);
-  assert(err == VK_SUCCESS);
 
   // Create Immutable Sampler
   VkSampler sampler = VK_NULL_HANDLE;
@@ -861,51 +818,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     err = vkCreateSampler(device, &create_info, vk_alloc, &sampler);
     assert(err == VK_SUCCESS);
   }
-
-  // Create Material Descriptor Set Layout
-  VkDescriptorSetLayout material_layout = VK_NULL_HANDLE;
-  {
-    // Note: binding 1 is for the displacement map, which is useful only in the
-    // vertex stage
-    VkDescriptorSetLayoutBinding bindings[5] = {
-        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-        {1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_VERTEX_BIT},
-        {2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-        {3, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-        {4, VK_DESCRIPTOR_TYPE_SAMPLER, 1,
-         VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT, &sampler},
-    };
-
-    VkDescriptorSetLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 5;
-    create_info.pBindings = bindings;
-    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &material_layout);
-    assert(err == VK_SUCCESS);
-  }
-
-  // Create Material Pipeline Layout
-  VkPipelineLayout material_pipe_layout = VK_NULL_HANDLE;
-  {
-    VkPipelineLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.setLayoutCount = 1;
-    create_info.pSetLayouts = &material_layout;
-    create_info.pushConstantRangeCount = 1;
-    create_info.pPushConstantRanges = &const_range;
-
-    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
-                                 &material_pipe_layout);
-    assert(err == VK_SUCCESS);
-  }
-
-  // Create UV mesh pipeline
-  VkPipeline uv_mesh_pipeline = VK_NULL_HANDLE;
-  err = create_uv_mesh_pipeline(device, vk_alloc, pipeline_cache, render_pass,
-                                width, height, material_pipe_layout,
-                                &uv_mesh_pipeline);
-  assert(err == VK_SUCCESS);
 
   // Create Skydome Descriptor Set Layout
   VkDescriptorSetLayout skydome_layout = VK_NULL_HANDLE;
@@ -933,7 +845,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     create_info.setLayoutCount = 1;
     create_info.pSetLayouts = &skydome_layout;
     create_info.pushConstantRangeCount = 1;
-    create_info.pPushConstantRanges = &const_range;
+    create_info.pPushConstantRanges = &sky_const_range;
 
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &skydome_pipe_layout);
@@ -1056,8 +968,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     create_info.setLayoutCount = 1;
     create_info.pSetLayouts = &gltf_rt_layout;
-    create_info.pushConstantRangeCount = 1;
-    create_info.pPushConstantRanges = &const_range;
 
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &gltf_rt_pipe_layout);
@@ -1167,37 +1077,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     OptickAPI_PopEvent(vma_pool_e);
   }
 
-  // Create Cube Mesh
-  gpumesh cube = {0};
-  {
-    size_t cube_size = cube_alloc_size();
-    cpumesh *cube_cpu = mi_malloc(cube_size);
-    assert(cube_cpu);
-    memset(cube_cpu, 0, cube_size);
-    create_cube(cube_cpu);
-
-    err = create_gpumesh(device, vma_alloc, cube_cpu, &cube);
-    assert(err == VK_SUCCESS);
-
-    mi_free(cube_cpu);
-  }
-
-  // Create Plane Mesh
-  gpumesh plane = {0};
-  {
-    uint32_t plane_subdiv = 16;
-    size_t plane_size = plane_alloc_size(plane_subdiv);
-    cpumesh *plane_cpu = mi_malloc(plane_size);
-    assert(plane_cpu);
-    memset(plane_cpu, 0, plane_size);
-    create_plane(plane_subdiv, plane_cpu);
-
-    err = create_gpumesh(device, vma_alloc, plane_cpu, &plane);
-    assert(err == VK_SUCCESS);
-
-    mi_free(plane_cpu);
-  }
-
   // Create Skydome Mesh
   gpumesh skydome = {0};
   {
@@ -1206,27 +1085,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     err = create_gpumesh(device, vma_alloc, skydome_cpu, &skydome);
     assert(err == VK_SUCCESS);
   }
-
-  // Load Textures
-  gputexture albedo =
-      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_Albedo.ktx2",
-                        upload_mem_pool, texture_mem_pool);
-
-  gputexture displacement =
-      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_Displacement.ktx2",
-                        upload_mem_pool, texture_mem_pool);
-
-  gputexture normal =
-      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_Normal.ktx2",
-                        upload_mem_pool, texture_mem_pool);
-
-  gputexture roughness =
-      load_ktx2_texture(device, vma_alloc, &tmp_alloc, vk_alloc,
-                        "./assets/textures/shfsaida_Roughness.ktx2",
-                        upload_mem_pool, texture_mem_pool);
 
   // Create Uniform buffer for sky data
   gpuconstbuffer sky_const_buffer =
@@ -1243,19 +1101,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   // Create Uniform buffer for light data
   gpuconstbuffer light_const_buffer = create_gpuconstbuffer(
       device, vma_alloc, vk_alloc, sizeof(CommonLightData));
-
-  // Create procedural texture
-  gputexture pattern = {0};
-  {
-    cputexture *cpu_pattern = NULL;
-    alloc_pattern(tmp_alloc, 1024, 1024, &cpu_pattern);
-    create_pattern(1024, 1024, cpu_pattern);
-
-    create_texture(device, vma_alloc, vk_alloc, cpu_pattern, upload_mem_pool,
-                   texture_mem_pool, &pattern);
-
-    hb_free(tmp_alloc, cpu_pattern);
-  }
 
   // Load scene
   scene *duck = NULL;
@@ -1322,13 +1167,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   d->render_pass = render_pass;
   d->imgui_pass = imgui_pass;
   d->pipeline_cache = pipeline_cache;
-  d->simple_pipe_layout = simple_pipe_layout;
-  d->fractal_pipeline = fractal_pipeline;
-  d->color_mesh_pipeline = color_mesh_pipeline;
   d->sampler = sampler;
-  d->material_layout = material_layout;
-  d->material_pipe_layout = material_pipe_layout;
-  d->uv_mesh_pipeline = uv_mesh_pipeline;
   d->skydome_layout = skydome_layout;
   d->skydome_pipe_layout = skydome_pipe_layout;
   d->skydome_pipeline = skydome_pipeline;
@@ -1349,27 +1188,13 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
   d->imgui_pipeline = imgui_pipeline;
   d->upload_mem_pool = upload_mem_pool;
   d->texture_mem_pool = texture_mem_pool;
-  d->cube_gpu = cube;
-  d->plane_gpu = plane;
   d->skydome_gpu = skydome;
-  d->albedo = albedo;
-  d->displacement = displacement;
-  d->normal = normal;
-  d->roughness = roughness;
-  d->pattern = pattern;
   d->duck = duck;
   d->screenshot_image = screenshot_image;
   d->screenshot_fence = screenshot_fence;
   d->frame_idx = 0;
 
-  demo_upload_mesh(d, &d->cube_gpu);
-  demo_upload_mesh(d, &d->plane_gpu);
   demo_upload_mesh(d, &d->skydome_gpu);
-  demo_upload_texture(d, &d->albedo);
-  demo_upload_texture(d, &d->displacement);
-  demo_upload_texture(d, &d->normal);
-  demo_upload_texture(d, &d->roughness);
-  demo_upload_texture(d, &d->pattern);
   demo_upload_scene(d, d->duck);
 
   // Create Semaphores
@@ -1562,14 +1387,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
     VkDescriptorSetAllocateInfo alloc_info = {0};
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     alloc_info.descriptorSetCount = 1;
-    alloc_info.pSetLayouts = &material_layout;
-
-    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      alloc_info.descriptorPool = d->descriptor_pools[i];
-      err = vkAllocateDescriptorSets(device, &alloc_info,
-                                     &d->mesh_descriptor_sets[i]);
-      assert(err == VK_SUCCESS);
-    }
 
     alloc_info.pSetLayouts = &skydome_layout;
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
@@ -1606,14 +1423,6 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
 
   // Write textures to descriptor set
   {
-    VkDescriptorImageInfo albedo_info = {
-        NULL, albedo.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkDescriptorImageInfo displacement_info = {
-        NULL, displacement.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkDescriptorImageInfo normal_info = {
-        NULL, normal.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-    VkDescriptorImageInfo roughness_info = {
-        NULL, roughness.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorBufferInfo skydome_info = {sky_const_buffer.gpu.buffer, 0,
                                            sky_const_buffer.size};
     VkDescriptorImageInfo duck_info = {
@@ -1624,34 +1433,7 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
                                           camera_const_buffer.size};
     VkDescriptorBufferInfo light_info = {light_const_buffer.gpu.buffer, 0,
                                          light_const_buffer.size};
-    VkWriteDescriptorSet writes[11] = {
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &albedo_info,
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &displacement_info,
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstBinding = 2,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &normal_info,
-        },
-        {
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstBinding = 3,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &roughness_info,
-        },
+    VkWriteDescriptorSet writes[7] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 1,
@@ -1665,19 +1447,22 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
             .pImageInfo = &duck_info,
         },
+        // Future permutations of the gltf pipeline may support these
+        // For now we have to write *something* even if we know they're not used
+        // (yet)
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &normal_info,
+            .pImageInfo = &duck_info,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &roughness_info,
+            .pImageInfo = &duck_info,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1705,26 +1490,20 @@ static bool demo_init(SDL_Window *window, VkInstance instance,
       VkDescriptorSet gltf_material_set = d->gltf_material_descriptor_sets[i];
       VkDescriptorSet gltf_object_set = d->gltf_object_descriptor_sets[i];
       VkDescriptorSet gltf_view_set = d->gltf_view_descriptor_sets[i];
-      VkDescriptorSet mesh_set = d->mesh_descriptor_sets[i];
       VkDescriptorSet skydome_set = d->skydome_descriptor_sets[i];
 
-      writes[0].dstSet = mesh_set;
-      writes[1].dstSet = mesh_set;
-      writes[2].dstSet = mesh_set;
-      writes[3].dstSet = mesh_set;
+      writes[0].dstSet = skydome_set;
 
-      writes[4].dstSet = skydome_set;
+      writes[1].dstSet = gltf_material_set;
+      writes[2].dstSet = gltf_material_set;
+      writes[3].dstSet = gltf_material_set;
 
-      writes[5].dstSet = gltf_material_set;
-      writes[6].dstSet = gltf_material_set;
-      writes[7].dstSet = gltf_material_set;
+      writes[4].dstSet = gltf_object_set;
 
-      writes[8].dstSet = gltf_object_set;
+      writes[5].dstSet = gltf_view_set;
+      writes[6].dstSet = gltf_view_set;
 
-      writes[9].dstSet = gltf_view_set;
-      writes[10].dstSet = gltf_view_set;
-
-      vkUpdateDescriptorSets(device, 11, writes, 0, NULL);
+      vkUpdateDescriptorSets(device, 7, writes, 0, NULL);
     }
   }
 
@@ -2160,81 +1939,10 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
           vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
           vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
-          vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
-                             VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                             sizeof(PushConstants),
-                             (const void *)&d->push_constants);
-
           // Draw Fullscreen Fractal
           // vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
           //                    d->fractal_pipeline);
           // vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
-
-          float4x4 mvp = d->push_constants.mvp;
-
-          // Draw Cube
-          {
-            OPTICK_C_GPU_PUSH(optick_gpu_e, "Cube",
-                              OptickAPI_Category_GPU_Scene);
-            d->push_constants.mvp = mvp;
-            vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
-                               VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                               sizeof(PushConstants),
-                               (const void *)&d->push_constants);
-
-            uint32_t idx_count = d->cube_gpu.idx_count;
-            uint32_t vert_count = d->cube_gpu.vtx_count;
-
-            vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              d->color_mesh_pipeline);
-
-            VkBuffer b = d->cube_gpu.gpu.buffer;
-
-            vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
-
-            size_t idx_size =
-                idx_count * sizeof(uint16_t) >> d->cube_gpu.idx_type;
-            size_t pos_size = sizeof(float3) * vert_count;
-            size_t colors_size = sizeof(float3) * vert_count;
-
-            VkBuffer buffers[3] = {b, b, b};
-            VkDeviceSize offsets[3] = {idx_size, idx_size + pos_size,
-                                       idx_size + pos_size + colors_size};
-
-            vkCmdBindVertexBuffers(graphics_buffer, 0, 3, buffers, offsets);
-            vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
-            OptickAPI_PopGPUEvent(optick_gpu_e);
-          }
-
-          // Draw Plane
-          {
-            OPTICK_C_GPU_PUSH(optick_gpu_e, "Plane",
-                              OptickAPI_Category_GPU_Scene);
-            // Hack to change the plane's transform
-            d->push_constants.mvp = *vp;
-            vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
-                               VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                               sizeof(PushConstants),
-                               (const void *)&d->push_constants);
-
-            vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                              d->uv_mesh_pipeline);
-
-            vkCmdBindDescriptorSets(
-                graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                d->material_pipe_layout, 0, 1,
-                &d->mesh_descriptor_sets[frame_idx], 0, NULL);
-
-            uint32_t idx_count = d->plane_gpu.idx_count;
-            VkBuffer buffer = d->plane_gpu.gpu.buffer;
-            VkDeviceSize offset = d->plane_gpu.idx_size;
-
-            vkCmdBindIndexBuffer(graphics_buffer, buffer, 0,
-                                 VK_INDEX_TYPE_UINT16);
-            vkCmdBindVertexBuffers(graphics_buffer, 0, 1, &buffer, &offset);
-            vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
-            OptickAPI_PopGPUEvent(optick_gpu_e);
-          }
 
           // Draw Scene
           {
@@ -2262,11 +1970,11 @@ static void demo_render_frame(demo *d, const float4x4 *vp,
                               OptickAPI_Category_GPU_Scene);
             // Another hack to fiddle with the matrix we send to the shader for
             // the skydome
-            d->push_constants.mvp = *sky_vp;
-            vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
+            SkyPushConstants sky_consts = {.vp = *sky_vp};
+            vkCmdPushConstants(graphics_buffer, d->skydome_pipe_layout,
                                VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-                               sizeof(PushConstants),
-                               (const void *)&d->push_constants);
+                               sizeof(SkyPushConstants),
+                               (const void *)&sky_consts);
 
             uint32_t idx_count = d->skydome_gpu.idx_count;
             uint32_t vert_count = d->skydome_gpu.vtx_count;
@@ -2774,18 +2482,11 @@ static void demo_destroy(demo *d) {
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
   destroy_scene(device, vma_alloc, vk_alloc, d->duck);
-  destroy_texture(device, vma_alloc, vk_alloc, &d->pattern);
-  destroy_texture(device, vma_alloc, vk_alloc, &d->roughness);
-  destroy_texture(device, vma_alloc, vk_alloc, &d->normal);
-  destroy_texture(device, vma_alloc, vk_alloc, &d->displacement);
-  destroy_texture(device, vma_alloc, vk_alloc, &d->albedo);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->object_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->light_const_buffer);
   destroy_gpumesh(device, vma_alloc, &d->skydome_gpu);
-  destroy_gpumesh(device, vma_alloc, &d->plane_gpu);
-  destroy_gpumesh(device, vma_alloc, &d->cube_gpu);
   destroy_gpumesh(device, vma_alloc, &d->imgui_gpu);
 
   vkDestroyFence(device, d->screenshot_fence, vk_alloc);
@@ -2797,18 +2498,9 @@ static void demo_destroy(demo *d) {
   hb_free(d->std_alloc, d->queue_props);
   vkDestroySampler(device, d->sampler, vk_alloc);
 
-  vkDestroyPipeline(device, d->fractal_pipeline, vk_alloc);
-
   vkDestroyDescriptorSetLayout(device, d->skydome_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->skydome_pipe_layout, vk_alloc);
   vkDestroyPipeline(device, d->skydome_pipeline, vk_alloc);
-
-  vkDestroyDescriptorSetLayout(device, d->material_layout, vk_alloc);
-  vkDestroyPipelineLayout(device, d->material_pipe_layout, vk_alloc);
-  vkDestroyPipeline(device, d->uv_mesh_pipeline, vk_alloc);
-
-  vkDestroyPipelineLayout(device, d->simple_pipe_layout, vk_alloc);
-  vkDestroyPipeline(device, d->color_mesh_pipeline, vk_alloc);
 
   vkDestroyDescriptorSetLayout(device, d->gltf_rt_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->gltf_rt_pipe_layout, vk_alloc);
@@ -3172,20 +2864,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       sky_data.sun_dir = (float3){0, y, z};
     }
 
-    // Pass time to shader
-    // d.fullscreen_push_constants.time =
-    //     (float4){time_seconds, time_ms, time_ns, time_us};
-    // d.fullscreen_push_constants.resolution =
-    //     (float2){d.swap_width, d.swap_height};
-
-    // Pass MVP to shader
-    d.push_constants.mvp = cube_mvp;
-    d.push_constants.m = cube_obj_mat;
-    d.push_constants.view_pos = main_cam.transform.position;
-
-    // Light data to shader
-    d.push_constants.light_dir = -sky_data.sun_dir;
-
     // Update view camera constant buffer
     {
       OPTICK_C_PUSH(update_camera_event, "Update Light Const Buffer",
@@ -3218,6 +2896,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       OPTICK_C_PUSH(update_light_event, "Update Light Const Buffer",
                     OptickAPI_Category_Rendering);
 
+      CommonLightData light_data = {
+          .light_dir = -sky_data.sun_dir,
+      };
+
       VmaAllocator vma_alloc = d.vma_alloc;
       VkBuffer light_host = d.light_const_buffer.host.buffer;
       VmaAllocation light_host_alloc = d.light_const_buffer.host.alloc;
@@ -3229,7 +2911,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         return false;
       }
       // HACK: just pluck the light direction from the push constants for now
-      memcpy(data, &d.push_constants.light_dir, sizeof(CommonLightData));
+      memcpy(data, &light_data, sizeof(CommonLightData));
       vmaUnmapMemory(vma_alloc, light_host_alloc);
 
       demo_upload_const_buffer(&d, &d.light_const_buffer);

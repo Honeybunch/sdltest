@@ -22,7 +22,7 @@ ConstantBuffer<CommonLightData> light_data : register(b1, space2);
 #define GLTF_PERM_SPECULAR 0x00000040
 #define GLTF_PERM_UNLIT 0x00000080
 
-[[vk::constant_id(0)]] const uint32_t PermutationFlags = 0;
+[[vk::constant_id(0)]] const uint PermutationFlags = 0;
 
 struct VertexIn
 {
