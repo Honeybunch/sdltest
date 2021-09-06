@@ -94,7 +94,7 @@ bool optick_state_changed_callback(OptickAPI_State state) {
     OptickAPI_AttachSummary("Author", "Honeybunch");
     OptickAPI_AttachSummary("Game Version", HB_GAME_VERSION);
     OptickAPI_AttachSummary("Engine Version", HB_ENGINE_VERSION);
-    OptickAPI_AttachSummary("Configuration", HB_CONFIG);
+    // OptickAPI_AttachSummary("Configuration", HB_CONFIG);
     OptickAPI_AttachSummary("Arch", HB_ARCH);
     // OptickAPI_AttachSummary("GPU Manufacturer", "TODO");
     // OptickAPI_AttachSummary("ISA Vulkan Version", "TODO");
