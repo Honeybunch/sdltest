@@ -109,7 +109,7 @@ typedef struct demo {
   uint8_t *imgui_mesh_data;
   gpumesh imgui_gpu[FRAME_LATENCY];
 
-  scene *duck;
+  scene *scene;
 
   gpuimage screenshot_image;
   VkFence screenshot_fence;

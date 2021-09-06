@@ -267,7 +267,11 @@ SDL_Surface *load_and_transform_image(const char *filename) {
 SDL_Surface *parse_and_transform_image(const uint8_t *data, size_t size) {
   SDL_RWops *ops = SDL_RWFromMem((void *)data, size);
   SDL_Surface *img = IMG_Load_RW(ops, 0);
-  assert(img);
+  if (!img) {
+    const char *err = IMG_GetError();
+    assert(false);
+    return NULL;
+  }
 
   SDL_PixelFormat *opt_fmt = SDL_AllocFormat(SDL_PIXELFORMAT_RGBA32);
 

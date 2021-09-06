@@ -123,6 +123,17 @@ uint32_t parse_node(scene *s, cgltf_data *data, cgltf_node *node,
   return idx;
 }
 
+void parse_child_counts(cgltf_node *node, uint32_t *child_counts,
+                        uint32_t *index) {
+  uint32_t idx = *index;
+  (*index)++;
+
+  child_counts[idx] = node->children_count;
+  for (uint32_t i = 0; i < node->children_count; ++i) {
+    parse_child_counts(node->children[i], child_counts, index);
+  }
+}
+
 int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
                    allocator tmp_alloc, VmaAllocator vma_alloc, VmaPool up_pool,
                    VmaPool tex_pool, const char *filename, scene **out_scene) {
@@ -155,8 +166,16 @@ int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
     alloc_info.material_count = material_count;
     alloc_info.child_counts =
         hb_alloc_nm_tp(tmp_alloc, alloc_info.entity_count, uint32_t);
-    for (uint32_t i = 0; i < alloc_info.entity_count; ++i) {
-      alloc_info.child_counts[i] = data->nodes[i].children_count;
+
+    // The order of the child counts has to reflect the heirarchy of the nodes
+    {
+      uint32_t node_idx = 0;
+      for (uint32_t i = 0; i < alloc_info.entity_count; ++i) {
+        if (data->nodes[i].parent == NULL) {
+          parse_child_counts(&data->nodes[i], alloc_info.child_counts,
+                             &node_idx);
+        }
+      }
     }
 
     s = alloc_scene(&alloc_info);

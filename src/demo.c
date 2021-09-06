@@ -155,7 +155,9 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       transform *t = &scene_transform->t;
 
       // Hack to fuck with the scale of the object
-      t->scale = (float3){0.01f, -0.01f, 0.01f};
+      // t->scale = (float3){0.01f, -0.01f, 0.01f};
+      // t->scale = (float3){100.0f, -100.0f, 100.0f};
+      t->scale = (float3){1.0f, -1.0f, 1.0f};
 
       CommonObjectData object_data = {0};
 
@@ -969,13 +971,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     }
     assert(mem_type_idx != 0xFFFFFFFF);
 
-    // block size to fit a 2k R8G8B8A8 uncompressed texture
-    uint64_t block_size = (uint64_t)(2048.0 * 2048.0 * 4.0);
+    // block size to fit a 4k R8G8B8A8 uncompressed texture
+    uint64_t block_size = (uint64_t)(4096.0 * 4096.0 * 4.0);
 
     VmaPoolCreateInfo create_info = {0};
     create_info.memoryTypeIndex = mem_type_idx;
     create_info.blockSize = block_size;
-    create_info.minBlockCount = 4; // We know we will have at least 4 textures
+    create_info.minBlockCount = 10;
     err = vmaCreatePool(vma_alloc, &create_info, &texture_mem_pool);
     assert(err == VK_SUCCESS);
     OptickAPI_PopEvent(vma_pool_e);
@@ -1007,9 +1009,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
       device, vma_alloc, vk_alloc, sizeof(CommonLightData));
 
   // Load scene
-  scene *duck = NULL;
+  scene *scene = NULL;
   load_scene(device, vk_alloc, tmp_alloc, vma_alloc, upload_mem_pool,
-             texture_mem_pool, "./assets/scenes/duck.glb", &duck);
+             texture_mem_pool, "./assets/scenes/Lantern.glb", &scene);
 
   // Create resources for screenshots
   gpuimage screenshot_image = {0};
@@ -1093,13 +1095,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   d->upload_mem_pool = upload_mem_pool;
   d->texture_mem_pool = texture_mem_pool;
   d->skydome_gpu = skydome;
-  d->duck = duck;
+  d->scene = scene;
   d->screenshot_image = screenshot_image;
   d->screenshot_fence = screenshot_fence;
   d->frame_idx = 0;
 
   demo_upload_mesh(d, &d->skydome_gpu);
-  demo_upload_scene(d, d->duck);
+  demo_upload_scene(d, d->scene);
 
   // Create Semaphores
   {
@@ -1330,7 +1332,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     VkDescriptorBufferInfo skydome_info = {sky_const_buffer.gpu.buffer, 0,
                                            sky_const_buffer.size};
     VkDescriptorImageInfo duck_info = {
-        NULL, duck->textures[0].view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+        NULL, scene->textures[0].view,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorBufferInfo object_info = {object_const_buffer.gpu.buffer, 0,
                                           object_const_buffer.size};
     VkDescriptorBufferInfo camera_info = {camera_const_buffer.gpu.buffer, 0,
@@ -1483,7 +1486,7 @@ void demo_destroy(demo *d) {
 
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
-  destroy_scene(device, vma_alloc, vk_alloc, d->duck);
+  destroy_scene(device, vma_alloc, vk_alloc, d->scene);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->object_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
@@ -1911,7 +1914,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               pipe);
 
-            demo_render_scene(d->duck, graphics_buffer, pipe_layout,
+            demo_render_scene(d->scene, graphics_buffer, pipe_layout,
                               d->gltf_view_descriptor_sets[frame_idx],
                               d->gltf_object_descriptor_sets[frame_idx],
                               d->gltf_material_descriptor_sets[frame_idx], vp,
