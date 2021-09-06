@@ -79,7 +79,8 @@ typedef struct demo {
 
   VkImage swapchain_images[FRAME_LATENCY];
   VkImageView swapchain_image_views[FRAME_LATENCY];
-  VkFramebuffer swapchain_framebuffers[FRAME_LATENCY];
+  VkFramebuffer main_pass_framebuffers[FRAME_LATENCY];
+  VkFramebuffer ui_pass_framebuffers[FRAME_LATENCY];
 
   gpuimage depth_buffers; // Implemented as an image array; one image for each
                           // latency frame

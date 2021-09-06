@@ -570,7 +570,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentDescription depth_attachment = {0};
     depth_attachment.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
@@ -624,7 +624,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     VkAttachmentDescription color_attachment = {0};
     color_attachment.format = swapchain_image_format;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -1011,7 +1011,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Load scene
   scene *scene = NULL;
   load_scene(device, vk_alloc, tmp_alloc, vma_alloc, upload_mem_pool,
-             texture_mem_pool, "./assets/scenes/Lantern.glb", &scene);
+             texture_mem_pool, "./assets/scenes/WaterBottle.glb", &scene);
 
   // Create resources for screenshots
   gpuimage screenshot_image = {0};
@@ -1220,6 +1220,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     create_info.height = height;
     create_info.layers = 1;
 
+    // Create main pass framebuffers
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       VkImageView attachments[2] = {
           d->swapchain_image_views[i],
@@ -1228,7 +1229,21 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
 
       create_info.pAttachments = attachments;
       err = vkCreateFramebuffer(device, &create_info, vk_alloc,
-                                &d->swapchain_framebuffers[i]);
+                                &d->main_pass_framebuffers[i]);
+      assert(err == VK_SUCCESS);
+    }
+
+    // Create ui pass framebuffers
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      VkImageView attachments[1] = {
+          d->swapchain_image_views[i],
+      };
+
+      create_info.attachmentCount = 1;
+      create_info.pAttachments = attachments;
+      create_info.renderPass = imgui_pass;
+      err = vkCreateFramebuffer(device, &create_info, vk_alloc,
+                                &d->ui_pass_framebuffers[i]);
       assert(err == VK_SUCCESS);
     }
   }
@@ -1476,7 +1491,8 @@ void demo_destroy(demo *d) {
     vkDestroySemaphore(device, d->swapchain_image_sems[i], vk_alloc);
     vkDestroySemaphore(device, d->img_acquired_sems[i], vk_alloc);
     vkDestroyImageView(device, d->swapchain_image_views[i], vk_alloc);
-    vkDestroyFramebuffer(device, d->swapchain_framebuffers[i], vk_alloc);
+    vkDestroyFramebuffer(device, d->main_pass_framebuffers[i], vk_alloc);
+    vkDestroyFramebuffer(device, d->ui_pass_framebuffers[i], vk_alloc);
     vkDestroyCommandPool(device, d->command_pools[i], vk_alloc);
 
     destroy_gpumesh(device, vma_alloc, &d->imgui_gpu[i]);
@@ -1866,7 +1882,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
       // Render main geometry pass
       {
-        VkFramebuffer framebuffer = d->swapchain_framebuffers[frame_idx];
+        VkFramebuffer framebuffer = d->main_pass_framebuffers[frame_idx];
 
         // Main Geometry Pass
         {
@@ -1972,15 +1988,15 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             OptickAPI_PopEvent(optick_e);
           }
 
-          // (Re)Create and upload ImGui geometry buffer
-          {
-            OPTICK_C_PUSH(optick_e, "ImGui CPU", OptickAPI_Category_UI);
+          const ImDrawData *draw_data = igGetDrawData();
+          if (draw_data->Valid) {
+            // (Re)Create and upload ImGui geometry buffer
+            {
+              OPTICK_C_PUSH(optick_e, "ImGui CPU", OptickAPI_Category_UI);
 
-            // If imgui_gpu is empty, this is still safe to call
-            destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu[frame_idx]);
+              // If imgui_gpu is empty, this is still safe to call
+              destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu[frame_idx]);
 
-            const ImDrawData *draw_data = igGetDrawData();
-            if (draw_data->Valid) {
               uint32_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
               uint32_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
 
@@ -2028,62 +2044,100 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                       d->imgui_gpu[frame_idx].gpu.buffer, 1, &region);
                 }
               }
-            }
 
-            OptickAPI_PopEvent(optick_e);
-          };
+              OptickAPI_PopEvent(optick_e);
+            };
 
-          // Record ImGui render commands
-          {
-            OPTICK_C_GPU_PUSH(optick_gpu_e, "ImGui", OptickAPI_Category_GPU_UI);
-
-            const float width = d->ig_io->DisplaySize.x;
-            const float height = d->ig_io->DisplaySize.y;
-
-            // TODO: Can't re-use same framebuffer since the imgui pipeline
-            // doesn't need the depth buffer
-            /*
-            // Set Render Pass
+            // Record ImGui render commands
             {
-              VkFramebuffer framebuffer = d->swapchain_framebuffers[frame_idx];
+              OPTICK_C_GPU_PUSH(optick_gpu_e, "ImGui",
+                                OptickAPI_Category_GPU_UI);
 
-              VkClearValue clear_values[1] = {
-                  {.color = {.float32 = {0, 1, 1, 1}}},
-              };
+              const float width = d->ig_io->DisplaySize.x;
+              const float height = d->ig_io->DisplaySize.y;
 
-              VkRenderPassBeginInfo pass_info = {0};
-              pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-              pass_info.renderPass = d->imgui_pass;
-              pass_info.framebuffer = framebuffer;
-              pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
-              pass_info.clearValueCount = 1;
-              pass_info.pClearValues = clear_values;
+              // Set Render Pass
+              {
+                VkFramebuffer framebuffer = d->ui_pass_framebuffers[frame_idx];
 
-              vkCmdBeginRenderPass(graphics_buffer, &pass_info,
-                                   VK_SUBPASS_CONTENTS_INLINE);
+                VkClearValue clear_values[1] = {
+                    {.color = {.float32 = {0, 0, 0, 0}}},
+                };
+
+                VkRenderPassBeginInfo pass_info = {0};
+                pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                pass_info.renderPass = d->imgui_pass;
+                pass_info.framebuffer = framebuffer;
+                pass_info.renderArea = (VkRect2D){{0, 0}, {width, height}};
+                pass_info.clearValueCount = 1;
+                pass_info.pClearValues = clear_values;
+
+                vkCmdBeginRenderPass(graphics_buffer, &pass_info,
+                                     VK_SUBPASS_CONTENTS_INLINE);
+              }
+
+              // Draw ImGui
+              {
+                vkCmdBindPipeline(graphics_buffer,
+                                  VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                  d->imgui_pipeline);
+
+                VkViewport viewport = {0, height, width, -height, 0, 1};
+                VkRect2D scissor = {{0, 0}, {width, height}};
+                vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
+                vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
+
+                ImGuiPushConstants push_constants = {
+                    .scale = {draw_data->DisplaySize.x,
+                              draw_data->DisplaySize.y},
+                    .translation = {draw_data->DisplayPos.x,
+                                    draw_data->DisplayPos.y},
+                };
+                vkCmdPushConstants(graphics_buffer, d->imgui_pipe_layout,
+                                   VK_SHADER_STAGE_ALL_GRAPHICS, 0,
+                                   sizeof(ImGuiPushConstants),
+                                   (const void *)&push_constants);
+
+                gpumesh *imgui_mesh = &d->imgui_gpu[frame_idx];
+
+                VkDeviceSize idx_offset = 0;
+                VkDeviceSize vtx_offset =
+                    draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+
+                for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
+                  const ImDrawList *draw_list = draw_data->CmdLists[i];
+
+                  vkCmdBindIndexBuffer(graphics_buffer, imgui_mesh->gpu.buffer,
+                                       idx_offset,
+                                       (VkIndexType)imgui_mesh->idx_type);
+                  vkCmdBindVertexBuffers(graphics_buffer, 0, 1,
+                                         &imgui_mesh->gpu.buffer, &vtx_offset);
+
+                  for (int32_t ii = 0; ii < draw_list->CmdBuffer.Size; ++ii) {
+                    const ImDrawCmd *draw_cmd = &draw_list->CmdBuffer.Data[ii];
+                    // Set the scissor
+                    ImVec4 clip_rect = draw_cmd->ClipRect;
+                    scissor = (VkRect2D){
+                        {(int32_t)clip_rect.x, (int32_t)clip_rect.y},
+                        {(uint32_t)clip_rect.z, (uint32_t)clip_rect.w}};
+                    vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
+
+                    // Issue the draw
+                    // vkCmdDrawIndexed(graphics_buffer, draw_cmd->ElemCount, 1,
+                    //                 draw_cmd->IdxOffset, draw_cmd->VtxOffset,
+                    //                 0);
+                  }
+
+                  // Adjust offsets
+                  idx_offset += draw_list->IdxBuffer.Size * sizeof(ImDrawIdx);
+                  vtx_offset += draw_list->VtxBuffer.Size * sizeof(ImDrawVert);
+                }
+              }
+
+              vkCmdEndRenderPass(graphics_buffer);
+
+              OptickAPI_PopGPUEvent(optick_gpu_e);
             }
-
-            // Draw ImGui
-            {
-              vkCmdBindPipeline(graphics_buffer,
-                                VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                d->imgui_pipeline);
-
-              VkViewport viewport = {0, height, width, -height, 0, 1};
-              VkRect2D scissor = {{0, 0}, {width, height}};
-              vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
-              vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
-
-              // vkCmdPushConstants(graphics_buffer, d->simple_pipe_layout,
-              //                   VK_SHADER_STAGE_ALL_GRAPHICS, 0,
-              //                   sizeof(ImGuiPushConstants),
-              //                   (const void *)&d->push_constants);
-            }
-
-            vkCmdEndRenderPass(graphics_buffer);
-            */
-
-            OptickAPI_PopGPUEvent(optick_gpu_e);
           }
         }
       }

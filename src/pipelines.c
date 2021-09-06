@@ -648,9 +648,17 @@ uint32_t create_imgui_pipeline(VkDevice device,
     multisample_state.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
     VkPipelineColorBlendAttachmentState attachment_state = {0};
+    attachment_state.blendEnable = VK_TRUE;
+    attachment_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    attachment_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    attachment_state.colorBlendOp = VK_BLEND_OP_ADD;
+    attachment_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    attachment_state.alphaBlendOp = VK_BLEND_OP_ADD;
     attachment_state.colorWriteMask =
         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
     VkPipelineColorBlendStateCreateInfo color_blend_state = {0};
     color_blend_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
