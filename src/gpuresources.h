@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 #define VK_NO_PROTOTYPES
@@ -131,7 +132,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
 int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        const cputexture *tex, VmaPool up_pool, VmaPool tex_pool,
-                       gputexture *t);
+                       gputexture *t, bool gen_mips);
 int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
                                 const VkAllocationCallbacks *vk_alloc,
                                 const cgltf_texture *gltf, const uint8_t *bin,

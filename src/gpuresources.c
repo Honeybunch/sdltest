@@ -702,7 +702,7 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
       1, 1, &layer, image_size, image_pixels,
   };
   int32_t err = create_texture(device, vma_alloc, vk_alloc, &cpu_tex, up_pool,
-                               tex_pool, t);
+                               tex_pool, t, true);
   OptickAPI_PopEvent(optick_e);
   return err;
 }
@@ -710,7 +710,7 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
 int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        const cputexture *tex, VmaPool up_pool, VmaPool tex_pool,
-                       gputexture *t) {
+                       gputexture *t, bool gen_mips) {
   OPTICK_C_PUSH(optick_e, "create_texture", OptickAPI_Category_None);
   VkResult err = VK_SUCCESS;
 
@@ -737,7 +737,10 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
     assert(err == VK_SUCCESS);
   }
 
-  uint32_t desired_mip_levels = floor(log2(SDL_max(img_width, img_height))) + 1;
+  uint32_t desired_mip_levels = tex->mip_count;
+  if (gen_mips) {
+    desired_mip_levels = floor(log2(SDL_max(img_width, img_height))) + 1;
+  }
 
   // Allocate device image
   gpuimage device_image = {0};
@@ -795,7 +798,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
   t->width = img_width;
   t->height = img_height;
   t->mip_levels = desired_mip_levels;
-  t->gen_mips = desired_mip_levels > 1;
+  t->gen_mips = gen_mips;
   t->layer_count = tex->layer_count;
   t->view = view;
   t->region_count = 1;

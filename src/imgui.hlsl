@@ -24,7 +24,7 @@ struct Interpolators
 Interpolators vert(VertexIn i)
 {
     Interpolators o;
-    o.clip_pos = float4(i.position * consts.scale * consts.translation, 0, 1);
+    o.clip_pos = float4(i.position * consts.scale + consts.translation, 0.5, 1);
     o.color = i.color;
     o.uv = i.uv;
     return o;

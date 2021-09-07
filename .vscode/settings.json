@@ -63,7 +63,8 @@
         "*.hlsli": "c",
         "*.in": "cpp",
         "bitset": "c",
-        "queue": "c"
+        "queue": "c",
+        "*.inc": "c"
     },
     "cmake.configureOnOpen": false
 }

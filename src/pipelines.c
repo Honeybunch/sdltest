@@ -600,22 +600,21 @@ uint32_t create_imgui_pipeline(VkDevice device,
 
     VkPipelineShaderStageCreateInfo shader_stages[] = {vert_stage, frag_stage};
 
-    VkVertexInputBindingDescription vert_bindings[3] = {
-        {0, sizeof(float2), VK_VERTEX_INPUT_RATE_VERTEX},
-        {1, sizeof(float2), VK_VERTEX_INPUT_RATE_VERTEX},
-        {2, sizeof(float4), VK_VERTEX_INPUT_RATE_VERTEX},
+    VkVertexInputBindingDescription vert_bindings[1] = {
+        {0, sizeof(float2) + sizeof(float2) + sizeof(uint32_t),
+         VK_VERTEX_INPUT_RATE_VERTEX},
     };
 
     VkVertexInputAttributeDescription vert_attrs[3] = {
         {0, 0, VK_FORMAT_R32G32_SFLOAT, 0},
         {1, 0, VK_FORMAT_R32G32_SFLOAT, sizeof(float2)},
-        {2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, sizeof(float2) * 2},
+        {2, 0, VK_FORMAT_R8G8B8A8_UNORM, sizeof(float2) * 2},
     };
 
     VkPipelineVertexInputStateCreateInfo vert_input_state = {0};
     vert_input_state.sType =
         VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vert_input_state.vertexBindingDescriptionCount = 3;
+    vert_input_state.vertexBindingDescriptionCount = 1;
     vert_input_state.pVertexBindingDescriptions = vert_bindings;
     vert_input_state.vertexAttributeDescriptionCount = 3;
     vert_input_state.pVertexAttributeDescriptions = vert_attrs;
@@ -665,6 +664,10 @@ uint32_t create_imgui_pipeline(VkDevice device,
     color_blend_state.attachmentCount = 1;
     color_blend_state.pAttachments = &attachment_state;
 
+    VkPipelineDepthStencilStateCreateInfo depth_state = {0};
+    depth_state.sType =
+        VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+
     VkDynamicState dyn_states[] = {VK_DYNAMIC_STATE_VIEWPORT,
                                    VK_DYNAMIC_STATE_SCISSOR};
     VkPipelineDynamicStateCreateInfo dynamic_state = {0};
@@ -684,6 +687,7 @@ uint32_t create_imgui_pipeline(VkDevice device,
     create_info.pRasterizationState = &raster_state;
     create_info.pMultisampleState = &multisample_state;
     create_info.pColorBlendState = &color_blend_state;
+    create_info.pDepthStencilState = &depth_state;
     create_info.pDynamicState = &dynamic_state;
     create_info.layout = layout;
     create_info.renderPass = pass;

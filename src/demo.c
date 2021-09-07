@@ -155,9 +155,9 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       transform *t = &scene_transform->t;
 
       // Hack to fuck with the scale of the object
-      // t->scale = (float3){0.01f, -0.01f, 0.01f};
+      t->scale = (float3){0.01f, -0.01f, 0.01f};
       // t->scale = (float3){100.0f, -100.0f, 100.0f};
-      t->scale = (float3){1.0f, -1.0f, 1.0f};
+      // t->scale = (float3){1.0f, -1.0f, 1.0f};
 
       CommonObjectData object_data = {0};
 
@@ -226,10 +226,44 @@ static bool demo_init_imgui(demo *d) {
   uint8_t *pixels = NULL;
   int32_t tex_w = 0;
   int32_t tex_h = 0;
-  ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &pixels, &tex_w, &tex_h, NULL);
+  int32_t bytes_pp = 0;
+  ImFontAtlas_GetTexDataAsRGBA32(io->Fonts, &pixels, &tex_w, &tex_h, &bytes_pp);
 
-  // TODO: Create and upload imgui atlas texture
+  size_t size = tex_w * tex_h * bytes_pp;
 
+  // Create and upload imgui atlas texture
+  gputexture imgui_atlas = {0};
+  {
+    // Describe cpu-side texture
+    texture_mip mip = {
+        .width = tex_w,
+        .height = tex_h,
+        .depth = 1,
+        .data = pixels,
+    };
+    texture_layer layer = {
+        .width = tex_w,
+        .height = tex_h,
+        .depth = 1,
+        .mips = &mip,
+    };
+    cputexture cpu_atlas = {
+        .data = pixels,
+        .data_size = size,
+        .layer_count = 1,
+        .layers = &layer,
+        .mip_count = 1,
+    };
+
+    VkResult err = (VkResult)create_texture(
+        d->device, d->vma_alloc, d->vk_alloc, &cpu_atlas, d->upload_mem_pool,
+        d->texture_mem_pool, &imgui_atlas, false);
+    assert(err == VK_SUCCESS);
+
+    demo_upload_texture(d, &imgui_atlas);
+  }
+
+  d->imgui_atlas = imgui_atlas;
   d->ig_ctx = ctx;
   d->ig_io = io;
 
@@ -624,7 +658,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     VkAttachmentDescription color_attachment = {0};
     color_attachment.format = swapchain_image_format;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
@@ -894,7 +928,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // assert(err == VK_SUCCESS);
 
   // Create ImGui Descriptor Set Layout
-  VkDescriptorSetLayout imgui_layout = VK_NULL_HANDLE;
+  VkDescriptorSetLayout imgui_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[2] = {
         {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -907,7 +941,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     create_info.bindingCount = 2;
     create_info.pBindings = bindings;
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &imgui_layout);
+                                      &imgui_set_layout);
     assert(err == VK_SUCCESS);
   }
 
@@ -917,7 +951,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     VkPipelineLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     create_info.setLayoutCount = 1;
-    create_info.pSetLayouts = &imgui_layout;
+    create_info.pSetLayouts = &imgui_set_layout;
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &imgui_const_range;
 
@@ -1011,7 +1045,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Load scene
   scene *scene = NULL;
   load_scene(device, vk_alloc, tmp_alloc, vma_alloc, upload_mem_pool,
-             texture_mem_pool, "./assets/scenes/WaterBottle.glb", &scene);
+             texture_mem_pool, "./assets/scenes/Duck.glb", &scene);
 
   // Create resources for screenshots
   gpuimage screenshot_image = {0};
@@ -1089,7 +1123,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   d->gltf_rt_layout = gltf_rt_layout;
   d->gltf_rt_pipe_layout = gltf_rt_pipe_layout;
   // d->gltf_rt_pipeline = gltf_rt_pipeline;
-  d->imgui_layout = imgui_layout;
+  d->imgui_layout = imgui_set_layout;
   d->imgui_pipe_layout = imgui_pipe_layout;
   d->imgui_pipeline = imgui_pipeline;
   d->upload_mem_pool = upload_mem_pool;
@@ -1340,13 +1374,30 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
                                      &d->gltf_view_descriptor_sets[i]);
       assert(err == VK_SUCCESS);
     }
+
+    alloc_info.pSetLayouts = &imgui_set_layout;
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      alloc_info.descriptorPool = d->descriptor_pools[i];
+      err = vkAllocateDescriptorSets(device, &alloc_info,
+                                     &d->imgui_descriptor_sets[i]);
+      assert(err == VK_SUCCESS);
+    }
+  }
+
+  // Must do this before descriptor set writes so we can be sure to create the
+  // imgui resources on time
+  if (!demo_init_imgui(d)) {
+    OptickAPI_PopEvent(optick_e);
+    return false;
   }
 
   // Write textures to descriptor set
   {
     VkDescriptorBufferInfo skydome_info = {sky_const_buffer.gpu.buffer, 0,
                                            sky_const_buffer.size};
-    VkDescriptorImageInfo duck_info = {
+    VkDescriptorImageInfo imgui_info = {
+        NULL, d->imgui_atlas.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
+    VkDescriptorImageInfo material_info = {
         NULL, scene->textures[0].view,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorBufferInfo object_info = {object_const_buffer.gpu.buffer, 0,
@@ -1355,7 +1406,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
                                           camera_const_buffer.size};
     VkDescriptorBufferInfo light_info = {light_const_buffer.gpu.buffer, 0,
                                          light_const_buffer.size};
-    VkWriteDescriptorSet writes[7] = {
+    VkWriteDescriptorSet writes[8] = {
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 1,
@@ -1365,9 +1416,16 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &duck_info,
+            .pImageInfo = &imgui_info,
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+            .pImageInfo = &material_info,
         },
         // Future permutations of the gltf pipeline may support these
         // For now we have to write *something* even if we know they're not used
@@ -1377,14 +1435,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &duck_info,
+            .pImageInfo = &material_info,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-            .pImageInfo = &duck_info,
+            .pImageInfo = &material_info,
         },
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1413,19 +1471,21 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
       VkDescriptorSet gltf_object_set = d->gltf_object_descriptor_sets[i];
       VkDescriptorSet gltf_view_set = d->gltf_view_descriptor_sets[i];
       VkDescriptorSet skydome_set = d->skydome_descriptor_sets[i];
+      VkDescriptorSet imgui_set = d->imgui_descriptor_sets[i];
 
       writes[0].dstSet = skydome_set;
+      writes[1].dstSet = imgui_set;
 
-      writes[1].dstSet = gltf_material_set;
       writes[2].dstSet = gltf_material_set;
       writes[3].dstSet = gltf_material_set;
+      writes[4].dstSet = gltf_material_set;
 
-      writes[4].dstSet = gltf_object_set;
+      writes[5].dstSet = gltf_object_set;
 
-      writes[5].dstSet = gltf_view_set;
       writes[6].dstSet = gltf_view_set;
+      writes[7].dstSet = gltf_view_set;
 
-      vkUpdateDescriptorSets(device, 7, writes, 0, NULL);
+      vkUpdateDescriptorSets(device, 8, writes, 0, NULL);
     }
   }
 
@@ -1440,11 +1500,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
       err = vkCreateFence(device, &create_info, vk_alloc, &d->fences[i]);
       assert(err == VK_SUCCESS);
     }
-  }
-
-  if (!demo_init_imgui(d)) {
-    OptickAPI_PopEvent(optick_e);
-    return false;
   }
 
   OptickAPI_PopEvent(optick_e);
@@ -1508,6 +1563,7 @@ void demo_destroy(demo *d) {
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->light_const_buffer);
   destroy_gpumesh(device, vma_alloc, &d->skydome_gpu);
+  destroy_texture(device, vma_alloc, vk_alloc, &d->imgui_atlas);
 
   vkDestroyFence(device, d->screenshot_fence, vk_alloc);
   destroy_gpuimage(vma_alloc, &d->screenshot_image);
@@ -2012,12 +2068,17 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 // Organize all mesh data into a single cpu-side buffer
                 for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
                   const ImDrawList *cmd_list = draw_data->CmdLists[i];
-                  memcpy(vtx_dst, cmd_list->VtxBuffer.Data,
-                         cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
-                  memcpy(idx_dst, cmd_list->IdxBuffer.Data,
-                         cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
-                  vtx_dst += cmd_list->VtxBuffer.Size;
-                  idx_dst += cmd_list->IdxBuffer.Size;
+
+                  size_t idx_byte_count =
+                      cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
+                  size_t vtx_byte_count =
+                      cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
+
+                  memcpy(idx_dst, cmd_list->IdxBuffer.Data, idx_byte_count);
+                  memcpy(vtx_dst, cmd_list->VtxBuffer.Data, vtx_byte_count);
+
+                  idx_dst += idx_byte_count;
+                  vtx_dst += vtx_byte_count;
                 }
                 idx_dst = d->imgui_mesh_data;
                 vtx_dst = idx_dst + idx_size;
@@ -2082,16 +2143,24 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                                   VK_PIPELINE_BIND_POINT_GRAPHICS,
                                   d->imgui_pipeline);
 
-                VkViewport viewport = {0, height, width, -height, 0, 1};
+                // Bind the imgui atlas
+                vkCmdBindDescriptorSets(
+                    graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                    d->imgui_pipe_layout, 0, 1,
+                    &d->imgui_descriptor_sets[frame_idx], 0, NULL);
+
+                VkViewport viewport = {0, 0, width, height, 0, 1};
                 VkRect2D scissor = {{0, 0}, {width, height}};
                 vkCmdSetViewport(graphics_buffer, 0, 1, &viewport);
                 vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
+                float scale_x = 2.0f / draw_data->DisplaySize.x;
+                float scale_y = 2.0f / draw_data->DisplaySize.y;
+
                 ImGuiPushConstants push_constants = {
-                    .scale = {draw_data->DisplaySize.x,
-                              draw_data->DisplaySize.y},
-                    .translation = {draw_data->DisplayPos.x,
-                                    draw_data->DisplayPos.y},
+                    .scale = {scale_x, scale_y},
+                    .translation = {-1.0f - draw_data->DisplayPos.x * scale_x,
+                                    -1.0f - draw_data->DisplayPos.y * scale_y},
                 };
                 vkCmdPushConstants(graphics_buffer, d->imgui_pipe_layout,
                                    VK_SHADER_STAGE_ALL_GRAPHICS, 0,
@@ -2123,9 +2192,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                     vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
                     // Issue the draw
-                    // vkCmdDrawIndexed(graphics_buffer, draw_cmd->ElemCount, 1,
-                    //                 draw_cmd->IdxOffset, draw_cmd->VtxOffset,
-                    //                 0);
+                    vkCmdDrawIndexed(graphics_buffer, draw_cmd->ElemCount, 1,
+                                     draw_cmd->IdxOffset, draw_cmd->VtxOffset,
+                                     0);
                   }
 
                   // Adjust offsets

@@ -109,6 +109,7 @@ typedef struct demo {
 
   uint8_t *imgui_mesh_data;
   gpumesh imgui_gpu[FRAME_LATENCY];
+  gputexture imgui_atlas;
 
   scene *scene;
 
