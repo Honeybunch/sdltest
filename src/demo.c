@@ -4,6 +4,8 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_vulkan.h>
 #include <assert.h>
+#include <cimgui.h>
+#include <float.h>
 #include <mimalloc.h>
 #include <optick_capi.h>
 #include <stddef.h>
@@ -219,7 +221,81 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
   OptickAPI_PopEvent(optick_e);
 }
 
-static bool demo_init_imgui(demo *d) {
+static void demo_imgui_update(demo *d) {
+  ImGuiIO *io = d->ig_io;
+  ImVec2 mouse_pos_prev = io->MousePos;
+  io->MousePos = (ImVec2){-FLT_MAX, -FLT_MAX};
+
+  // Update mouse buttons
+  int32_t mouse_x_local = 0;
+  int32_t mouse_y_local = 0;
+  uint32_t mouse_buttons = SDL_GetMouseState(&mouse_x_local, &mouse_y_local);
+  // If a mouse press event came, always pass it as "mouse held this
+  // frame", so we don't miss click-release events that are shorter
+  // than 1 frame.
+  io->MouseDown[0] = (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT)) != 0;
+  io->MouseDown[1] = (mouse_buttons & SDL_BUTTON(SDL_BUTTON_RIGHT)) != 0;
+  io->MouseDown[2] = (mouse_buttons & SDL_BUTTON(SDL_BUTTON_MIDDLE)) != 0;
+  // bd->MousePressed[0] = bd->MousePressed[1] = bd->MousePressed[2] = false;
+
+  SDL_Window *mouse_window = NULL;
+
+  // Obtain focused and hovered window. We forward mouse input when focused or
+  // when hovered (and no other window is capturing)
+  /*
+#if SDL_HAS_CAPTURE_AND_GLOBAL_MOUSE
+  SDL_Window *focused_window = SDL_GetKeyboardFocus();
+  SDL_Window *hovered_window =
+      SDL_HAS_MOUSE_FOCUS_CLICKTHROUGH
+          ? SDL_GetMouseFocus()
+          : NULL; // This is better but is only reliably useful with SDL 2.0.5+
+                  // and SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH.
+
+  if (hovered_window && bd->Window == hovered_window)
+    mouse_window = hovered_window;
+  else if (focused_window && bd->Window == focused_window)
+    mouse_window = focused_window;
+
+  // SDL_CaptureMouse() let the OS know e.g. that our imgui drag outside the SDL
+  // window boundaries shouldn't e.g. trigger other operations outside
+  SDL_CaptureMouse(ImGui::IsAnyMouseDown() ? SDL_TRUE : SDL_FALSE);
+#else
+  // SDL 2.0.3 and non-windowed systems: single-viewport only
+  SDL_Window *mouse_window =
+      (SDL_GetWindowFlags(bd->Window) & SDL_WINDOW_INPUT_FOCUS) ? bd->Window
+                                                                : NULL;
+#endif
+ */
+
+  // if (mouse_window == NULL)
+  //  return;
+
+  // Set OS mouse position from Dear ImGui if requested (rarely used, only when
+  // ImGuiConfigFlags_NavEnableSetMousePos is enabled by user)
+  // if (io->WantSetMousePos)
+  //  SDL_WarpMouseInWindow(bd->Window, (int32_t)mouse_pos_prev.x,
+  //                        (int32_t)mouse_pos_prev.y);
+
+  // Set Dear ImGui mouse position from OS position + get buttons. (this is the
+  // common behavior)
+  /*
+  if (bd->MouseCanUseGlobalState) {
+    // Single-viewport mode: mouse position in client window coordinates
+    // (io->MousePos is (0,0) when the mouse is on the upper-left corner of the
+    // app window) Unlike local position obtained earlier this will be valid
+    // when straying out of bounds.
+    int32_t mouse_x_global, mouse_y_global;
+    SDL_GetGlobalMouseState(&mouse_x_global, &mouse_y_global);
+    int32_t window_x, window_y;
+    SDL_GetWindowPosition(mouse_window, &window_x, &window_y);
+    io->MousePos = ImVec2((float)(mouse_x_global - window_x),
+                          (float)(mouse_y_global - window_y));
+  } else
+  */
+  { io->MousePos = (ImVec2){(float)mouse_x_local, (float)mouse_y_local}; }
+}
+
+static bool demo_init_imgui(demo *d, SDL_Window *window) {
   ImGuiContext *ctx = igCreateContext(NULL);
   ImGuiIO *io = igGetIO();
 
@@ -261,6 +337,45 @@ static bool demo_init_imgui(demo *d) {
     assert(err == VK_SUCCESS);
 
     demo_upload_texture(d, &imgui_atlas);
+  }
+
+  // Setup interaction with SDL
+  {
+    io->BackendPlatformName = "HB SDL Test";
+    io->BackendRendererName = "HB Vulkan Renderer";
+    io->BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+    io->BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
+
+    // Keyboard mapping.Dear ImGui will use those indices to peek into the
+    // io->KeysDown[] array.
+    io->KeyMap[ImGuiKey_Tab] = SDL_SCANCODE_TAB;
+    io->KeyMap[ImGuiKey_LeftArrow] = SDL_SCANCODE_LEFT;
+    io->KeyMap[ImGuiKey_RightArrow] = SDL_SCANCODE_RIGHT;
+    io->KeyMap[ImGuiKey_UpArrow] = SDL_SCANCODE_UP;
+    io->KeyMap[ImGuiKey_DownArrow] = SDL_SCANCODE_DOWN;
+    io->KeyMap[ImGuiKey_PageUp] = SDL_SCANCODE_PAGEUP;
+    io->KeyMap[ImGuiKey_PageDown] = SDL_SCANCODE_PAGEDOWN;
+    io->KeyMap[ImGuiKey_Home] = SDL_SCANCODE_HOME;
+    io->KeyMap[ImGuiKey_End] = SDL_SCANCODE_END;
+    io->KeyMap[ImGuiKey_Insert] = SDL_SCANCODE_INSERT;
+    io->KeyMap[ImGuiKey_Delete] = SDL_SCANCODE_DELETE;
+    io->KeyMap[ImGuiKey_Backspace] = SDL_SCANCODE_BACKSPACE;
+    io->KeyMap[ImGuiKey_Space] = SDL_SCANCODE_SPACE;
+    io->KeyMap[ImGuiKey_Enter] = SDL_SCANCODE_RETURN;
+    io->KeyMap[ImGuiKey_Escape] = SDL_SCANCODE_ESCAPE;
+    io->KeyMap[ImGuiKey_KeyPadEnter] = SDL_SCANCODE_KP_ENTER;
+    io->KeyMap[ImGuiKey_A] = SDL_SCANCODE_A;
+    io->KeyMap[ImGuiKey_C] = SDL_SCANCODE_C;
+    io->KeyMap[ImGuiKey_V] = SDL_SCANCODE_V;
+    io->KeyMap[ImGuiKey_X] = SDL_SCANCODE_X;
+    io->KeyMap[ImGuiKey_Y] = SDL_SCANCODE_Y;
+    io->KeyMap[ImGuiKey_Z] = SDL_SCANCODE_Z;
+
+    // io->SetClipboardTextFn = ImGui_ImplSDL2_SetClipboardText;
+    // io->GetClipboardTextFn = ImGui_ImplSDL2_GetClipboardText;
+    io->ClipboardUserData = NULL;
+
+    // Could load mouse cursors here
   }
 
   d->imgui_atlas = imgui_atlas;
@@ -560,8 +675,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
       pre_transform = surf_caps.currentTransform;
     }
 
-    // Find a supported composite alpha mode - one of these is guaranteed to be
-    // set
+    // Find a supported composite alpha mode - one of these is guaranteed to
+    // be set
     VkCompositeAlphaFlagBitsKHR composite_alpha =
         VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
     VkCompositeAlphaFlagBitsKHR composite_alpha_flags[4] = {
@@ -762,8 +877,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Create Skydome Descriptor Set Layout
   VkDescriptorSetLayout skydome_layout = VK_NULL_HANDLE;
   {
-    // Note: binding 1 is for the displacement map, which is useful only in the
-    // vertex stage
+    // Note: binding 1 is for the displacement map, which is useful only in
+    // the vertex stage
     VkDescriptorSetLayoutBinding bindings[1] = {
         {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
     };
@@ -1386,7 +1501,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
 
   // Must do this before descriptor set writes so we can be sure to create the
   // imgui resources on time
-  if (!demo_init_imgui(d)) {
+  if (!demo_init_imgui(d, window)) {
     OptickAPI_PopEvent(optick_e);
     return false;
   }
@@ -1428,8 +1543,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
             .pImageInfo = &material_info,
         },
         // Future permutations of the gltf pipeline may support these
-        // For now we have to write *something* even if we know they're not used
-        // (yet)
+        // For now we have to write *something* even if we know they're not
+        // used (yet)
         {
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstBinding = 1,
@@ -1638,6 +1753,66 @@ void demo_upload_scene(demo *d, const scene *s) {
   }
 }
 
+void demo_process_event(demo *d, const SDL_Event *e) {
+  ImGuiIO *io = d->ig_io;
+
+  switch (e->type) {
+  case SDL_MOUSEWHEEL: {
+    if (e->wheel.x > 0)
+      io->MouseWheelH += 1;
+    if (e->wheel.x < 0)
+      io->MouseWheelH -= 1;
+    if (e->wheel.y > 0)
+      io->MouseWheel += 1;
+    if (e->wheel.y < 0)
+      io->MouseWheel -= 1;
+    return;
+  }
+  case SDL_MOUSEBUTTONDOWN: {
+    // Don't handle global mouse events for now
+    /*
+    if (e->button.button == SDL_BUTTON_LEFT) {
+      bd->MousePressed[0] = true;
+    }
+    if (e->button.button == SDL_BUTTON_RIGHT) {
+      bd->MousePressed[1] = true;
+    }
+    if (e->button.button == SDL_BUTTON_MIDDLE) {
+      bd->MousePressed[2] = true;
+    }
+    */
+    return;
+  }
+  case SDL_TEXTINPUT: {
+    ImGuiIO_AddInputCharactersUTF8(io, e->text.text);
+    return;
+  }
+  case SDL_KEYDOWN:
+  case SDL_KEYUP: {
+    int32_t key = e->key.keysym.scancode;
+    assert(key >= 0 && key < sizeof(io->KeysDown));
+    io->KeysDown[key] = (e->type == SDL_KEYDOWN);
+    io->KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);
+    io->KeyCtrl = ((SDL_GetModState() & KMOD_CTRL) != 0);
+    io->KeyAlt = ((SDL_GetModState() & KMOD_ALT) != 0);
+#ifdef _WIN32
+    io->KeySuper = false;
+#else
+    io->KeySuper = ((SDL_GetModState() & KMOD_GUI) != 0);
+#endif
+    return;
+  }
+  case SDL_WINDOWEVENT: {
+    // TODO: Update ImGui to support this
+    // if (e->window.event == SDL_WINDOWEVENT_FOCUS_GAINED)
+    //  ImGuiIO_AddFocusEvent(io, true);
+    // else if (e->window.event == SDL_WINDOWEVENT_FOCUS_LOST)
+    //  ImGuiIO_AddFocusEvent(io, false);
+    return;
+  }
+  }
+}
+
 void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
   OPTICK_C_PUSH(demo_render_frame_event, "demo_render_frame",
                 OptickAPI_Category_Rendering)
@@ -1679,8 +1854,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         // must be recreated:
         // resize(d);
       } else if (err == VK_SUBOPTIMAL_KHR) {
-        // demo->swapchain is not as optimal as it could be, but the platform's
-        // presentation engine will still present the image correctly.
+        // demo->swapchain is not as optimal as it could be, but the
+        // platform's presentation engine will still present the image
+        // correctly.
         break;
       } else if (err == VK_ERROR_SURFACE_LOST_KHR) {
         // If the surface was lost we could re-create it.
@@ -1781,8 +1957,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                                    VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, NULL,
                                    0, NULL, 1, &barrier);
 
-              // Afterwards, we're operating on single mips at a time no matter
-              // what
+              // Afterwards, we're operating on single mips at a time no
+              // matter what
               barrier.subresourceRange.levelCount = 1;
             }
             uint32_t region_count = tex.region_count;
@@ -1970,7 +2146,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
           // Draw Fullscreen Fractal
-          // vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+          // vkCmdBindPipeline(graphics_buffer,
+          // VK_PIPELINE_BIND_POINT_GRAPHICS,
           //                    d->fractal_pipeline);
           // vkCmdDraw(graphics_buffer, 3, 1, 0, 0);
 
@@ -1998,8 +2175,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           {
             OPTICK_C_GPU_PUSH(optick_gpu_e, "Skydome",
                               OptickAPI_Category_GPU_Scene);
-            // Another hack to fiddle with the matrix we send to the shader for
-            // the skydome
+            // Another hack to fiddle with the matrix we send to the shader
+            // for the skydome
             SkyPushConstants sky_consts = {.vp = *sky_vp};
             vkCmdPushConstants(graphics_buffer, d->skydome_pipe_layout,
                                VK_SHADER_STAGE_ALL_GRAPHICS, 0,
@@ -2040,6 +2217,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           // ImGui Internal Render
           {
             OPTICK_C_PUSH(optick_e, "ImGui Internal", OptickAPI_Category_UI);
+            demo_imgui_update(d);
             igRender();
             OptickAPI_PopEvent(optick_e);
           }

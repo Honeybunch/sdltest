@@ -337,10 +337,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Mutliple events (or none) could happen in one frame but we only process
     // the latest one
     SDL_Event e = {0};
-    SDL_PollEvent(&e);
-    if (e.type == SDL_QUIT) {
-      running = false;
-      break;
+    while (SDL_PollEvent(&e)) {
+      if (e.type == SDL_QUIT) {
+        running = false;
+        break;
+      }
+      demo_process_event(&d, &e);
     }
 
     editor_camera_control(delta_time_seconds, &e, &controller, &main_cam);

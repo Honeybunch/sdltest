@@ -16,6 +16,8 @@
 #define MESH_UPLOAD_QUEUE_SIZE 16
 #define TEXTURE_UPLOAD_QUEUE_SIZE 16
 
+typedef union SDL_Event SDL_Event;
+
 typedef struct demo {
   allocator std_alloc;
   allocator tmp_alloc;
@@ -148,6 +150,7 @@ void demo_upload_mesh(demo *d, const gpumesh *mesh);
 void demo_upload_texture(demo *d, const gputexture *tex);
 void demo_upload_scene(demo *d, const scene *s);
 
+void demo_process_event(demo *d, const SDL_Event *e);
 void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp);
 
 bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
