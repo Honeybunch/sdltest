@@ -152,7 +152,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   assert(err == VK_SUCCESS);
 
   {
-    int32_t res = SDL_Init(SDL_INIT_VIDEO);
+    int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
     assert(res == 0);
 
     int32_t flags = IMG_INIT_PNG;
@@ -298,22 +298,32 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   // Main loop
   bool running = true;
-  float time_ms = 0;
-  float time_seconds = 0;
-  float time_ns = 0.0f; // Uncalculated and unused for now
-  float time_us = 0.0f; // Uncalculated and unused for now
 
-  float last_time_ms = 0;
-  float delta_time_ms = 0;
-  float delta_time_seconds = 0;
+  uint64_t time = 0;
+  uint64_t last_time = SDL_GetPerformanceCounter();
+  uint64_t delta_time = 0;
+  float time_seconds = 0.0f;
+  float delta_time_ms = 0.0f;
+  float delta_time_seconds = 0.0f;
+
   while (running) {
     OptickAPI_NextFrame();
+
+    // Use SDL High Performance Counter to get timing info
+    time = SDL_GetPerformanceCounter();
+    delta_time = time - last_time;
+    delta_time_seconds =
+        (float)((double)delta_time / (double)SDL_GetPerformanceFrequency());
+    time_seconds =
+        (float)((double)time / (double)SDL_GetPerformanceFrequency());
+    delta_time_ms = delta_time_ms * 1000.0f;
+    last_time = time;
 
     ImVec2 display_size;
     display_size.x = WIDTH;
     display_size.y = HEIGHT;
     d.ig_io->DisplaySize = display_size;
-    d.ig_io->DeltaTime = 1.0f / 60.0f; // TODO: Input real delta time
+    d.ig_io->DeltaTime = delta_time_seconds;
     igNewFrame();
 
     // ImGui Test
@@ -326,26 +336,22 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     igEnd();
     igShowDemoWindow(NULL);
 
-    // Crunch some numbers
-    last_time_ms = time_ms;
-    time_ms = (float)SDL_GetTicks();
-    delta_time_ms = time_ms - last_time_ms;
-    delta_time_seconds = delta_time_ms / 1000.0f;
-    time_seconds = time_ms / 1000.0f;
-
     // TODO: Handle events more gracefully
     // Mutliple events (or none) could happen in one frame but we only process
     // the latest one
-    SDL_Event e = {0};
-    while (SDL_PollEvent(&e)) {
+
+    // while (SDL_PollEvent(&e))
+    {
+      SDL_Event e = {0};
+      SDL_PollEvent(&e);
       if (e.type == SDL_QUIT) {
         running = false;
         break;
       }
       demo_process_event(&d, &e);
-    }
 
-    editor_camera_control(delta_time_seconds, &e, &controller, &main_cam);
+      editor_camera_control(delta_time_seconds, &e, &controller, &main_cam);
+    }
 
     // Spin cube
     cube_transform.rotation[1] += 1.0f * delta_time_seconds;

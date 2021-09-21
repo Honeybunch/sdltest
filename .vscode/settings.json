@@ -64,7 +64,8 @@
         "*.in": "cpp",
         "bitset": "c",
         "queue": "c",
-        "*.inc": "c"
+        "*.inc": "c",
+        "scene.h": "c"
     },
     "cmake.configureOnOpen": false
 }

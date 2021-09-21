@@ -18,7 +18,7 @@ typedef struct scene_alloc_info {
   uint32_t material_count;
 } scene_alloc_info;
 
-static scene *alloc_scene(const scene_alloc_info *info) {
+static scene *alloc_scene(const scene_alloc_info *info, allocator std_alloc) {
   uint32_t entity_count = info->entity_count;
   uint32_t *child_counts = info->child_counts;
   uint32_t mesh_count = info->mesh_count;
@@ -39,7 +39,7 @@ static scene *alloc_scene(const scene_alloc_info *info) {
                             mesh_size + texture_size + components_size +
                             children_size;
 
-  scene *s = calloc(1, scene_size_bytes);
+  scene *s = hb_alloc(std_alloc, scene_size_bytes);
   assert(s);
 
   s->max_entity_count = entity_count;
@@ -134,9 +134,10 @@ void parse_child_counts(cgltf_node *node, uint32_t *child_counts,
   }
 }
 
-int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
-                   allocator tmp_alloc, VmaAllocator vma_alloc, VmaPool up_pool,
-                   VmaPool tex_pool, const char *filename, scene **out_scene) {
+int32_t load_scene(VkDevice device, allocator tmp_alloc, allocator std_alloc,
+                   const VkAllocationCallbacks *vk_alloc,
+                   VmaAllocator vma_alloc, VmaPool up_pool, VmaPool tex_pool,
+                   const char *filename, scene **out_scene) {
   // We really only want to handle glbs; gltfs should be pre-packed
   cgltf_options options = {.type = cgltf_file_type_glb};
   cgltf_data *data = NULL;
@@ -178,7 +179,7 @@ int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
       }
     }
 
-    s = alloc_scene(&alloc_info);
+    s = alloc_scene(&alloc_info, std_alloc);
     hb_free(tmp_alloc, alloc_info.child_counts);
   }
   assert(s);
@@ -220,7 +221,7 @@ int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
   return (int32_t)res;
 }
 
-void destroy_scene(VkDevice device, VmaAllocator vma_alloc,
+void destroy_scene(VkDevice device, allocator std_alloc, VmaAllocator vma_alloc,
                    const VkAllocationCallbacks *vk_alloc, scene *s) {
   for (uint32_t i = 0; i < s->mesh_count; i++) {
     destroy_gpumesh(device, vma_alloc, &s->meshes[i]);
@@ -230,5 +231,5 @@ void destroy_scene(VkDevice device, VmaAllocator vma_alloc,
     destroy_texture(device, vma_alloc, vk_alloc, &s->textures[i]);
   }
 
-  free(s);
+  hb_free(std_alloc, s);
 }

@@ -1159,7 +1159,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
 
   // Load scene
   scene *scene = NULL;
-  load_scene(device, vk_alloc, tmp_alloc, vma_alloc, upload_mem_pool,
+  load_scene(device, tmp_alloc, std_alloc, vk_alloc, vma_alloc, upload_mem_pool,
              texture_mem_pool, "./assets/scenes/Duck.glb", &scene);
 
   // Create resources for screenshots
@@ -1672,7 +1672,7 @@ void demo_destroy(demo *d) {
 
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
-  destroy_scene(device, vma_alloc, vk_alloc, d->scene);
+  destroy_scene(device, d->std_alloc, vma_alloc, vk_alloc, d->scene);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->object_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);

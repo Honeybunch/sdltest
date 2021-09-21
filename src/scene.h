@@ -52,8 +52,9 @@ typedef struct scene {
   gpumaterial *materials;
 } scene;
 
-int32_t load_scene(VkDevice device, const VkAllocationCallbacks *vk_alloc,
-                   allocator tmp_alloc, VmaAllocator vma_alloc, VmaPool up_pool,
-                   VmaPool tex_pool, const char *filename, scene **scene);
-void destroy_scene(VkDevice device, VmaAllocator alloc,
+int32_t load_scene(VkDevice device, allocator tmp_alloc, allocator std_alloc,
+                   const VkAllocationCallbacks *vk_alloc,
+                   VmaAllocator vma_alloc, VmaPool up_pool, VmaPool tex_pool,
+                   const char *filename, scene **scene);
+void destroy_scene(VkDevice device, allocator std_alloc, VmaAllocator alloc,
                    const VkAllocationCallbacks *vk_alloc, scene *s);
