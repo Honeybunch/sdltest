@@ -91,6 +91,8 @@ find_package(mimalloc 1.6 CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
 find_package(Ktx CONFIG REQUIRED)
 find_package(Optick CONFIG REQUIRED)
+find_package(Threads REQUIRED)
+find_package(Tracy CONFIG REQUIRED)
 if(UNIX)
   find_package(Threads REQUIRED)
   if(NOT ANDROID)
@@ -201,7 +203,7 @@ else()
 endif()
 #set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;unofficial::vulkan-memory-allocator::vulkan-memory-allocator;imgui::imgui;Optick::OptickCore;mimalloc;mimalloc-static;KTX::ktx")
+set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;unofficial::vulkan-memory-allocator::vulkan-memory-allocator;imgui::imgui;Optick::OptickCore;mimalloc;mimalloc-static;KTX::ktx;TracyClient")
 
 target_link_libraries(sdltest PRIVATE ${library_list})
 
