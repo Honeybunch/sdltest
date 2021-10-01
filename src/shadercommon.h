@@ -5,8 +5,6 @@
 #include "common.hlsli"
 #include "imgui.hlsli"
 
-#include <stdalign.h>
-
 #define PUSH_CONSTANT_BYTES 128
 
 _Static_assert(sizeof(FullscreenPushConstants) <= PUSH_CONSTANT_BYTES,

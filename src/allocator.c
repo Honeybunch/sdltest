@@ -1,6 +1,7 @@
 #include "allocator.h"
 
 #include <assert.h>
+#include <string.h>
 
 #include <mimalloc.h>
 
@@ -66,10 +67,14 @@ void reset_arena(arena_allocator a, bool allow_grow) {
   if (allow_grow) {
     if (a.grow) {
       a.max_size *= 2;
+
+      a.grow = false;
+      a.data = mi_heap_recalloc(a.heap, a.data, 1, a.max_size);
     }
+  } else {
+    memset(a.data, 0, a.max_size);
   }
-  a.grow = false;
-  a.data = mi_heap_recalloc(a.heap, a.data, 1, a.max_size);
+
   assert(a.data);
 }
 

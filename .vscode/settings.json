@@ -65,7 +65,8 @@
         "bitset": "c",
         "queue": "c",
         "*.inc": "c",
-        "scene.h": "c"
+        "scene.h": "c",
+        "mimalloc.h": "c"
     },
     "cmake.configureOnOpen": false
 }

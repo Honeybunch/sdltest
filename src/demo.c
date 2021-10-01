@@ -1792,9 +1792,9 @@ void demo_process_event(demo *d, const SDL_Event *e) {
     int32_t key = e->key.keysym.scancode;
     assert(key >= 0 && key < sizeof(io->KeysDown));
     io->KeysDown[key] = (e->type == SDL_KEYDOWN);
-    io->KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);
-    io->KeyCtrl = ((SDL_GetModState() & KMOD_CTRL) != 0);
-    io->KeyAlt = ((SDL_GetModState() & KMOD_ALT) != 0);
+    // io->KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);
+    // io->KeyCtrl = ((SDL_GetModState() & KMOD_CTRL) != 0);
+    // io->KeyAlt = ((SDL_GetModState() & KMOD_ALT) != 0);
 #ifdef _WIN32
     io->KeySuper = false;
 #else
