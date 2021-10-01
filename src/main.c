@@ -3,7 +3,7 @@
 #include <SDL2/SDL_vulkan.h>
 #include <assert.h>
 #include <mimalloc.h>
-#include <optick_capi.h>
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <volk.h>
@@ -15,6 +15,7 @@
 #include "config.h"
 
 #include "demo.h"
+#include "profiling.h"
 #include "shadercommon.h"
 #include "simd.h"
 
@@ -69,7 +70,7 @@ static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
   return ret;
 }
 
-void optick_init_thread_cb() {}
+void prof_init_thread_cb() {}
 
 // The intent is that g_screenshot_bytes will be allocated on a heap by the
 // renderer.
@@ -77,11 +78,11 @@ static uint8_t *g_screenshot_bytes = NULL;
 static uint32_t g_screenshot_size = 0;
 static bool g_taking_screenshot = false;
 
-bool optick_state_changed_callback(OptickAPI_State state) {
-  if (state == OptickAPI_State_StopCapture) {
+bool prof_state_changed_callback(HB_PROF_STATE_TYPE state) {
+  if (state == HB_PROF_STATE_STOPCAPTURE) {
     // Request that we take a screenshot and store it in g_screenshot_bytes
     g_taking_screenshot = true;
-  } else if (state == OptickAPI_State_DumpCapture) {
+  } else if (state == HB_PROF_STATE_DUMPCAPTURE) {
     // Return false so optick knows that we *didn't* dump a capture
     // In this case because we're waiting for the renderer to get a screenshot
     // captured.
@@ -90,18 +91,18 @@ bool optick_state_changed_callback(OptickAPI_State state) {
     if (g_taking_screenshot) {
       return false;
     }
-    OptickAPI_AttachSummary("Engine", "SDLTest");
-    OptickAPI_AttachSummary("Author", "Honeybunch");
-    OptickAPI_AttachSummary("Game Version", HB_GAME_VERSION);
-    OptickAPI_AttachSummary("Engine Version", HB_ENGINE_VERSION);
-    // OptickAPI_AttachSummary("Configuration", HB_CONFIG);
-    OptickAPI_AttachSummary("Arch", HB_ARCH);
-    // OptickAPI_AttachSummary("GPU Manufacturer", "TODO");
-    // OptickAPI_AttachSummary("ISA Vulkan Version", "TODO");
-    // OptickAPI_AttachSummary("GPU Driver Version", "TODO");
+    HB_PROF_ATTACH_SUMMARY("Engine", "SDLTest");
+    HB_PROF_ATTACH_SUMMARY("Author", "Honeybunch");
+    HB_PROF_ATTACH_SUMMARY("Game Version", HB_GAME_VERSION);
+    HB_PROF_ATTACH_SUMMARY("Engine Version", HB_ENGINE_VERSION);
+    // HB_PROF_ATTACH_SUMMARY("Configuration", HB_CONFIG);
+    HB_PROF_ATTACH_SUMMARY("Arch", HB_ARCH);
+    // HB_PROF_ATTACH_SUMMARY("GPU Manufacturer", "TODO");
+    // HB_PROF_ATTACH_SUMMARY("ISA Vulkan Version", "TODO");
+    // HB_PROF_ATTACH_SUMMARY("GPU Driver Version", "TODO");
 
-    OptickAPI_AttachFile(OptickAPI_File_Image, "Screenshot.png",
-                         g_screenshot_bytes, g_screenshot_size);
+    HB_PROF_ATTACH_FILE(HB_PROF_FILE_TYPE_IMAGE, "Screenshot.png",
+                        g_screenshot_bytes, g_screenshot_size);
   }
   return true;
 }
@@ -109,14 +110,14 @@ bool optick_state_changed_callback(OptickAPI_State state) {
 int32_t SDL_main(int32_t argc, char *argv[]) {
   static const float qtr_pi = 0.7853981625f;
 
-  OptickAPI_SetAllocator(mi_malloc, mi_free, optick_init_thread_cb);
+  HB_PROF_SET_ALLOCATOR(mi_malloc, mi_free, prof_init_thread_cb);
 
   static const char thread_name[] = "Main Thread";
-  OptickAPI_RegisterThread(thread_name, sizeof(thread_name));
+  HB_PROF_REGISTER_THREAD(thread_name, sizeof(thread_name));
 
-  OptickAPI_SetStateChangedCallback(optick_state_changed_callback);
+  HB_PROF_SET_STATE_CHANGED_CALLBACK(prof_state_changed_callback);
 
-  OptickAPI_StartCapture();
+  HB_PROF_START_CAPTURE();
 
   // Create Temporary Arena Allocator
   static const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
@@ -246,11 +247,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                            vk_alloc_ptr, &d);
   assert(success);
 
+#ifndef HB_NO_PROFILING
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wincompatible-function-pointer-types"
 #endif
-  OptickAPI_VulkanFunctions optick_volk_funcs = {
+  HB_VK_FN_STRUCT_TYPE prof_volk_funcs = {
       .vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties,
       .vkCreateQueryPool = vkCreateQueryPool,
       .vkCreateCommandPool = vkCreateCommandPool,
@@ -273,9 +275,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-  OptickAPI_GPUInitVulkan(&d.device, &d.gpu, &d.graphics_queue,
-                          &d.graphics_queue_family_index, 1,
-                          &optick_volk_funcs);
+  HB_PROF_GPU_INIT(&d.device, &d.gpu, &d.graphics_queue,
+                   &d.graphics_queue_family_index, 1, &prof_volk_funcs);
+#endif
 
   transform cube_transform = {
       .position = {0, 2, 0},
@@ -307,7 +309,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float delta_time_seconds = 0.0f;
 
   while (running) {
-    OptickAPI_NextFrame();
+    HB_PROF_NEXT_FRAME();
 
     // Use SDL High Performance Counter to get timing info
     time = SDL_GetPerformanceCounter();
@@ -383,8 +385,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Update view camera constant buffer
     {
-      OPTICK_C_PUSH(update_camera_event, "Update Light Const Buffer",
-                    OptickAPI_Category_Rendering);
+      HB_PROF_PUSH(update_camera_event, "Update Light Const Buffer",
+                   HB_PROF_CATEGORY_RENDERING);
       camera_data.vp = vp;
       // TODO: camera_data.inv_vp = inv_vp;
       camera_data.view_pos = main_cam.transform.position;
@@ -405,13 +407,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       demo_upload_const_buffer(&d, &d.camera_const_buffer);
 
-      OptickAPI_PopEvent(update_camera_event);
+      HB_PROF_POP(update_camera_event);
     }
 
     // Update view light constant buffer
     {
-      OPTICK_C_PUSH(update_light_event, "Update Light Const Buffer",
-                    OptickAPI_Category_Rendering);
+      HB_PROF_PUSH(update_light_event, "Update Light Const Buffer",
+                   HB_PROF_CATEGORY_RENDERING);
 
       CommonLightData light_data = {
           .light_dir = -sky_data.sun_dir,
@@ -433,13 +435,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       demo_upload_const_buffer(&d, &d.light_const_buffer);
 
-      OptickAPI_PopEvent(update_light_event);
+      HB_PROF_POP(update_light_event);
     }
 
     // Update sky constant buffer
     {
-      OPTICK_C_PUSH(update_sky_event, "Update Sky",
-                    OptickAPI_Category_Rendering)
+      HB_PROF_PUSH(update_sky_event, "Update Sky", HB_PROF_CATEGORY_RENDERING);
 
       VmaAllocator vma_alloc = d.vma_alloc;
       VkBuffer sky_host = d.sky_const_buffer.host.buffer;
@@ -455,7 +456,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       vmaUnmapMemory(vma_alloc, sky_host_alloc);
 
       demo_upload_const_buffer(&d, &d.sky_const_buffer);
-      OptickAPI_PopEvent(update_sky_event);
+      HB_PROF_POP(update_sky_event);
     }
 
     demo_render_frame(&d, &vp, &sky_vp);
@@ -475,11 +476,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   IMG_Quit();
   SDL_Quit();
 
-  OptickAPI_GPUShutdown();
+  HB_PROF_GPU_SHUTDOWN();
 
   demo_destroy(&d);
 
-  OptickAPI_Shutdown();
+  HB_PROF_SHUTDOWN();
 
   if (g_screenshot_bytes != NULL) {
     hb_free(std_alloc.alloc, g_screenshot_bytes);

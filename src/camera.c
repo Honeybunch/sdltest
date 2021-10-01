@@ -1,7 +1,8 @@
 #include "camera.h"
 
 #include <SDL2/SDL_events.h>
-#include <optick_capi.h>
+
+#include "profiling.h"
 
 void camera_projection(const camera *c, float4x4 *p) {
   perspective(p, c->fov, c->aspect, c->near, c->far);
@@ -37,7 +38,7 @@ void camera_view_projection(const camera *c, float4x4 *vp) {
 
 void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
                            editor_camera_controller *editor, camera *cam) {
-  OPTICK_C_PUSH(optick_e, "editor_camera_control", OptickAPI_Category_Camera);
+  HB_PROF_PUSH(prof_e, "editor_camera_control", HB_PROF_CATEGORY_CAMERA);
 
   uint32_t event_type = event->type;
 
@@ -147,5 +148,5 @@ void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
   }
 
   editor->state = state;
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
 }

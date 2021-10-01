@@ -7,7 +7,6 @@
 #include <cimgui.h>
 #include <float.h>
 #include <mimalloc.h>
-#include <optick_capi.h>
 #include <stddef.h>
 
 #include <volk.h>
@@ -16,6 +15,7 @@
 
 #include "cpuresources.h"
 #include "pipelines.h"
+#include "profiling.h"
 #include "shadercommon.h"
 #include "simd.h"
 #include "skydome.h"
@@ -147,7 +147,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
                               VkDescriptorSet object_set,
                               VkDescriptorSet material_set, const float4x4 *vp,
                               demo *d) {
-  OPTICK_C_PUSH(optick_e, "demo_render_scene", OptickAPI_Category_Rendering);
+  HB_PROF_PUSH(prof_e, "demo_render_scene", HB_PROF_CATEGORY_RENDERING);
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     uint64_t components = s->components[i];
     scene_transform *scene_transform = &s->transforms[i];
@@ -168,8 +168,8 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
 
       // HACK: Update object's constant buffer here
       {
-        OPTICK_C_PUSH(update_object_event, "Update Object Const Buffer",
-                      OptickAPI_Category_Rendering);
+        HB_PROF_PUSH(update_object_event, "Update Object Const Buffer",
+                     HB_PROF_CATEGORY_RENDERING);
 
         VmaAllocator vma_alloc = d->vma_alloc;
         VkBuffer object_host = d->object_const_buffer.host.buffer;
@@ -187,7 +187,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
 
         demo_upload_const_buffer(d, &d->object_const_buffer);
 
-        OptickAPI_PopEvent(update_object_event);
+        HB_PROF_POP(update_object_event);
       }
 
       vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
@@ -218,7 +218,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
     }
   }
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
 }
 
 static void demo_imgui_update(demo *d) {
@@ -388,7 +388,7 @@ static bool demo_init_imgui(demo *d, SDL_Window *window) {
 bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
                allocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
                demo *d) {
-  OPTICK_C_PUSH(optick_e, "demo_init", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "demo_init", HB_PROF_CATEGORY_NONE);
   VkResult err = VK_SUCCESS;
 
   // Get the GPU we want to run on
@@ -813,7 +813,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Create Pipeline Cache
   VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
   {
-    OPTICK_C_PUSH(pipe_cache_e, "init pipeline cache", OptickAPI_Category_None);
+    HB_PROF_PUSH(pipe_cache_e, "init pipeline cache", HB_PROF_CATEGORY_NONE);
     size_t data_size = 0;
     void *data = NULL;
 
@@ -840,7 +840,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     if (data) {
       mi_free(data);
     }
-    OptickAPI_PopEvent(pipe_cache_e);
+    HB_PROF_POP(pipe_cache_e);
   }
 
   VkPushConstantRange sky_const_range = {
@@ -1085,7 +1085,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Create a pool for host memory uploads
   VmaPool upload_mem_pool = VK_NULL_HANDLE;
   {
-    OPTICK_C_PUSH(vma_pool_e, "init vma upload pool", OptickAPI_Category_None);
+    HB_PROF_PUSH(vma_pool_e, "init vma upload pool", HB_PROF_CATEGORY_NONE);
     uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
@@ -1102,13 +1102,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     err = vmaCreatePool(vma_alloc, &create_info, &upload_mem_pool);
     assert(err == VK_SUCCESS);
 
-    OptickAPI_PopEvent(vma_pool_e);
+    HB_PROF_POP(vma_pool_e);
   }
 
   // Create a pool for texture memory
   VmaPool texture_mem_pool = VK_NULL_HANDLE;
   {
-    OPTICK_C_PUSH(vma_pool_e, "init vma texture pool", OptickAPI_Category_None);
+    HB_PROF_PUSH(vma_pool_e, "init vma texture pool", HB_PROF_CATEGORY_NONE);
     uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
@@ -1129,7 +1129,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     create_info.minBlockCount = 10;
     err = vmaCreatePool(vma_alloc, &create_info, &texture_mem_pool);
     assert(err == VK_SUCCESS);
-    OptickAPI_PopEvent(vma_pool_e);
+    HB_PROF_POP(vma_pool_e);
   }
 
   // Create Skydome Mesh
@@ -1502,7 +1502,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Must do this before descriptor set writes so we can be sure to create the
   // imgui resources on time
   if (!demo_init_imgui(d, window)) {
-    OptickAPI_PopEvent(optick_e);
+    HB_PROF_POP(prof_e);
     return false;
   }
 
@@ -1617,13 +1617,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     }
   }
 
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
 
   return true;
 }
 
 void demo_destroy(demo *d) {
-  OPTICK_C_PUSH(optick_e, "demo_destroy", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "demo_destroy", HB_PROF_CATEGORY_NONE);
 
   VkDevice device = d->device;
   VmaAllocator vma_alloc = d->vma_alloc;
@@ -1719,7 +1719,7 @@ void demo_destroy(demo *d) {
 
   igDestroyContext(d->ig_ctx);
 
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
 }
 
 void demo_upload_const_buffer(demo *d, const gpuconstbuffer *buffer) {
@@ -1814,8 +1814,8 @@ void demo_process_event(demo *d, const SDL_Event *e) {
 }
 
 void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
-  OPTICK_C_PUSH(demo_render_frame_event, "demo_render_frame",
-                OptickAPI_Category_Rendering)
+  HB_PROF_PUSH(demo_render_frame_event, "demo_render_frame",
+               HB_PROF_CATEGORY_RENDERING)
 
   VkResult err = VK_SUCCESS;
 
@@ -1833,18 +1833,18 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
   // Ensure no more than FRAME_LATENCY renderings are outstanding
   {
-    OPTICK_C_PUSH(fence_wait_event, "demo_render_frame wait for fence",
-                  OptickAPI_Category_Wait);
+    HB_PROF_PUSH(fence_wait_event, "demo_render_frame wait for fence",
+                 HB_PROF_CATEGORY_WAIT);
     vkWaitForFences(device, 1, &fences[frame_idx], VK_TRUE, UINT64_MAX);
-    OptickAPI_PopEvent(fence_wait_event);
+    HB_PROF_POP(fence_wait_event);
 
     vkResetFences(device, 1, &fences[frame_idx]);
   }
 
   // Acquire Image
   {
-    OPTICK_C_PUSH(optick_e, "demo_render_frame acquire next image",
-                  OptickAPI_Category_Rendering);
+    HB_PROF_PUSH(prof_e, "demo_render_frame acquire next image",
+                 HB_PROF_CATEGORY_RENDERING);
     do {
       err =
           vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, img_acquired_sem,
@@ -1866,15 +1866,15 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         assert(err == VK_SUCCESS);
       }
     } while (err != VK_SUCCESS);
-    OptickAPI_PopEvent(optick_e);
+    HB_PROF_POP(prof_e);
   }
 
   uint32_t swap_img_idx = d->swap_img_idx;
 
   // Render
   {
-    OPTICK_C_PUSH(demo_render_frame_render_event, "demo_render_frame render",
-                  OptickAPI_Category_Rendering);
+    HB_PROF_PUSH(demo_render_frame_render_event, "demo_render_frame render",
+                 HB_PROF_CATEGORY_RENDERING);
 
     VkCommandPool command_pool = d->command_pools[frame_idx];
     vkResetCommandPool(device, command_pool, 0);
@@ -1886,9 +1886,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
     // Record
     {
-      OPTICK_C_PUSH(record_upload_event,
-                    "demo_render_frame record upload commands",
-                    OptickAPI_Category_Rendering);
+      HB_PROF_PUSH(record_upload_event,
+                   "demo_render_frame record upload commands",
+                   HB_PROF_CATEGORY_RENDERING);
 
       // Upload
       if (d->const_buffer_upload_count > 0 || d->mesh_upload_count > 0 ||
@@ -2072,7 +2072,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         err = vkQueueSubmit(d->graphics_queue, 1, &submit_info, NULL);
         assert(err == VK_SUCCESS);
 
-        OptickAPI_PopEvent(record_upload_event);
+        HB_PROF_POP(record_upload_event);
       }
 
       VkCommandBufferBeginInfo begin_info = {
@@ -2080,13 +2080,13 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       err = vkBeginCommandBuffer(graphics_buffer, &begin_info);
       assert(err == VK_SUCCESS);
 
-      OptickAPI_GPUContext optick_prev_gpu_ctx = OptickAPI_SetGpuContext(
-          (OptickAPI_GPUContext){.cmdBuffer = graphics_buffer});
+      HB_PROF_GPU_CONTEXT_TYPE prev_gpu_ctx = HB_PROF_GPU_SET_CONTEXT(
+          (HB_PROF_GPU_CONTEXT_TYPE){.cmdBuffer = graphics_buffer});
 
       // Transition Swapchain Image
       {
-        OPTICK_C_GPU_PUSH(optick_gpu_e, "Transition Swapchain Image",
-                          OptickAPI_Category_Rendering);
+        HB_PROF_GPU_PUSH(gpu_e, "Transition Swapchain Image",
+                         HB_PROF_CATEGORY_RENDERING);
 
         VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
         if (frame_idx >= FRAME_LATENCY) {
@@ -2109,7 +2109,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
-        OptickAPI_PopGPUEvent(optick_gpu_e);
+        HB_PROF_GPU_POP(gpu_e);
       }
 
       // Render main geometry pass
@@ -2153,8 +2153,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
           // Draw Scene
           {
-            OPTICK_C_GPU_PUSH(optick_gpu_e, "Duck",
-                              OptickAPI_Category_GPU_Scene);
+            HB_PROF_GPU_PUSH(gpu_e, "Duck", HB_PROF_CATEGORY_GPU_SCENE);
             // HACK: Known desired permutations
             uint32_t perm = GLTF_PERM_NONE;
             VkPipelineLayout pipe_layout = d->gltf_pipe_layout;
@@ -2168,13 +2167,12 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                               d->gltf_object_descriptor_sets[frame_idx],
                               d->gltf_material_descriptor_sets[frame_idx], vp,
                               d);
-            OptickAPI_PopGPUEvent(optick_gpu_e);
+            HB_PROF_GPU_POP(gpu_e);
           }
 
           // Draw Skydome
           {
-            OPTICK_C_GPU_PUSH(optick_gpu_e, "Skydome",
-                              OptickAPI_Category_GPU_Scene);
+            HB_PROF_GPU_PUSH(gpu_e, "Skydome", HB_PROF_CATEGORY_GPU_SCENE);
             // Another hack to fiddle with the matrix we send to the shader
             // for the skydome
             SkyPushConstants sky_consts = {.vp = *sky_vp};
@@ -2206,7 +2204,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
             vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
             vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
-            OptickAPI_PopGPUEvent(optick_gpu_e);
+            HB_PROF_GPU_POP(gpu_e);
           }
 
           vkCmdEndRenderPass(graphics_buffer);
@@ -2216,17 +2214,17 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         {
           // ImGui Internal Render
           {
-            OPTICK_C_PUSH(optick_e, "ImGui Internal", OptickAPI_Category_UI);
+            HB_PROF_PUSH(prof_e, "ImGui Internal", HB_PROF_CATEGORY_UI);
             demo_imgui_update(d);
             igRender();
-            OptickAPI_PopEvent(optick_e);
+            HB_PROF_POP(prof_e);
           }
 
           const ImDrawData *draw_data = igGetDrawData();
           if (draw_data->Valid) {
             // (Re)Create and upload ImGui geometry buffer
             {
-              OPTICK_C_PUSH(optick_e, "ImGui CPU", OptickAPI_Category_UI);
+              HB_PROF_PUSH(prof_e, "ImGui CPU", HB_PROF_CATEGORY_UI);
 
               // If imgui_gpu is empty, this is still safe to call
               destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu[frame_idx]);
@@ -2284,13 +2282,12 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 }
               }
 
-              OptickAPI_PopEvent(optick_e);
+              HB_PROF_POP(prof_e);
             };
 
             // Record ImGui render commands
             {
-              OPTICK_C_GPU_PUSH(optick_gpu_e, "ImGui",
-                                OptickAPI_Category_GPU_UI);
+              HB_PROF_GPU_PUSH(gpu_e, "ImGui", HB_PROF_CATEGORY_GPU_UI);
 
               const float width = d->ig_io->DisplaySize.x;
               const float height = d->ig_io->DisplaySize.y;
@@ -2383,13 +2380,13 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
               vkCmdEndRenderPass(graphics_buffer);
 
-              OptickAPI_PopGPUEvent(optick_gpu_e);
+              HB_PROF_GPU_POP(gpu_e);
             }
           }
         }
       }
 
-      OptickAPI_SetGpuContext(optick_prev_gpu_ctx);
+      HB_PROF_GPU_SET_CONTEXT(prev_gpu_ctx);
 
       err = vkEndCommandBuffer(graphics_buffer);
       assert(err == VK_SUCCESS);
@@ -2397,8 +2394,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
     // Submit
     {
-      OPTICK_C_PUSH(demo_render_frame_submit_event, "demo_render_frame submit",
-                    OptickAPI_Category_Rendering);
+      HB_PROF_PUSH(demo_render_frame_submit_event, "demo_render_frame submit",
+                   HB_PROF_CATEGORY_RENDERING);
 
       uint32_t wait_sem_count = 0;
       VkSemaphore wait_sems[16] = {0};
@@ -2426,16 +2423,16 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_idx]);
       assert(err == VK_SUCCESS);
 
-      OptickAPI_PopEvent(demo_render_frame_submit_event);
+      HB_PROF_POP(demo_render_frame_submit_event);
     }
 
-    OptickAPI_PopEvent(demo_render_frame_render_event);
+    HB_PROF_POP(demo_render_frame_render_event);
   }
 
   // Present
   {
-    OPTICK_C_PUSH(demo_render_frame_present_event, "demo_render_frame present",
-                  OptickAPI_Category_Rendering);
+    HB_PROF_PUSH(demo_render_frame_present_event, "demo_render_frame present",
+                 HB_PROF_CATEGORY_RENDERING);
 
     VkSemaphore wait_sem = render_complete_sem;
     if (d->separate_present_queue) {
@@ -2484,17 +2481,17 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       assert(err == VK_SUCCESS);
     }
 
-    OptickAPI_GPUFlip(&swapchain);
+    HB_PROF_GPU_FLIP(&swapchain);
 
-    OptickAPI_PopEvent(demo_render_frame_present_event);
+    HB_PROF_POP(demo_render_frame_present_event);
   }
 
-  OptickAPI_PopEvent(demo_render_frame_event);
+  HB_PROF_POP(demo_render_frame_event);
 }
 
 bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
                      uint32_t *screenshot_size) {
-  OPTICK_C_PUSH(optick_e, "demo_screenshot", OptickAPI_Category_Rendering);
+  HB_PROF_PUSH(prof_e, "demo_screenshot", HB_PROF_CATEGORY_RENDERING);
   VkResult err = VK_SUCCESS;
 
   VkDevice device = d->device;
@@ -2519,7 +2516,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
   if (status == VK_NOT_READY) {
     err = vkWaitForFences(device, 1, &swap_fence, VK_TRUE, ~0ULL);
     if (err != VK_SUCCESS) {
-      OptickAPI_PopEvent(optick_e);
+      HB_PROF_POP(prof_e);
       assert(0);
       return false;
     }
@@ -2529,7 +2526,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   err = vkBeginCommandBuffer(screenshot_cmd, &begin_info);
   if (err != VK_SUCCESS) {
-    OptickAPI_PopEvent(optick_e);
+    HB_PROF_POP(prof_e);
     assert(0);
     return false;
   }
@@ -2618,7 +2615,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
 
   err = vkEndCommandBuffer(screenshot_cmd);
   if (err != VK_SUCCESS) {
-    OptickAPI_PopEvent(optick_e);
+    HB_PROF_POP(prof_e);
     assert(0);
     return false;
   }
@@ -2630,7 +2627,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
   };
   err = vkQueueSubmit(queue, 1, &submit_info, screenshot_fence);
   if (err != VK_SUCCESS) {
-    OptickAPI_PopEvent(optick_e);
+    HB_PROF_POP(prof_e);
     assert(0);
     return false;
   }
@@ -2640,7 +2637,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
 
   err = vkWaitForFences(device, 1, &screenshot_fence, VK_TRUE, ~0ULL);
   if (err != VK_SUCCESS) {
-    OptickAPI_PopEvent(optick_e);
+    HB_PROF_POP(prof_e);
     assert(0);
     return false;
   }
@@ -2657,7 +2654,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
   err =
       vmaMapMemory(vma_alloc, screenshot_image.alloc, (void **)&screenshot_mem);
   if (err != VK_SUCCESS) {
-    OptickAPI_PopEvent(optick_e);
+    HB_PROF_POP(prof_e);
     assert(0);
     return false;
   }
@@ -2702,6 +2699,6 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
 
   vmaUnmapMemory(vma_alloc, screenshot_image.alloc);
 
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return true;
 }

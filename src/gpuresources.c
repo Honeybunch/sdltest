@@ -2,11 +2,11 @@
 
 #include "allocator.h"
 #include "cpuresources.h"
+#include "profiling.h"
 
 #include <SDL2/SDL_image.h>
 #include <cgltf.h>
 #include <ktx.h>
-#include <optick_capi.h>
 #include <volk.h>
 
 #include <vk_mem_alloc.h>
@@ -86,7 +86,7 @@ void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
 
 int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
                        const cpumesh *src_mesh, gpumesh *dst_mesh) {
-  OPTICK_C_PUSH(optick_e, "create_gpumesh", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "create_gpumesh", HB_PROF_CATEGORY_NONE);
   VkResult err = VK_SUCCESS;
 
   size_t index_size = src_mesh->index_size;
@@ -123,14 +123,14 @@ int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
                         src_mesh->index_size,  src_mesh->geom_size,
                         host_buffer,           device_buffer};
 
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return err;
 }
 
 int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
                              allocator tmp_alloc, const cgltf_mesh *src_mesh,
                              gpumesh *dst_mesh) {
-  OPTICK_C_PUSH(optick_e, "create_gpumesh_cgltf", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "create_gpumesh_cgltf", HB_PROF_CATEGORY_NONE);
   assert(src_mesh->primitives_count == 1);
   cgltf_primitive *prim = &src_mesh->primitives[0];
 
@@ -216,7 +216,7 @@ int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
   *dst_mesh =
       (gpumesh){index_count, vertex_count, VK_INDEX_TYPE_UINT16, size,
                 index_size,  geom_size,    host_buffer,          device_buffer};
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return err;
 }
 
@@ -230,7 +230,7 @@ int32_t create_gpuimage(VmaAllocator vma_alloc,
                         const VkImageCreateInfo *img_create_info,
                         const VmaAllocationCreateInfo *alloc_create_info,
                         gpuimage *i) {
-  OPTICK_C_PUSH(optick_e, "create_gpuimage", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "create_gpuimage", HB_PROF_CATEGORY_NONE);
   VkResult err = VK_SUCCESS;
   gpuimage img = {0};
 
@@ -242,7 +242,7 @@ int32_t create_gpuimage(VmaAllocator vma_alloc,
   if (err == VK_SUCCESS) {
     *i = img;
   }
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return err;
 }
 
@@ -251,7 +251,7 @@ void destroy_gpuimage(VmaAllocator allocator, const gpuimage *image) {
 }
 
 SDL_Surface *load_and_transform_image(const char *filename) {
-  OPTICK_C_PUSH(optick_e, "load_and_transform_image", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "load_and_transform_image", HB_PROF_CATEGORY_NONE);
   SDL_Surface *img = IMG_Load(filename);
   assert(img);
 
@@ -260,7 +260,7 @@ SDL_Surface *load_and_transform_image(const char *filename) {
   SDL_Surface *opt_img = SDL_ConvertSurface(img, opt_fmt, 0);
   SDL_FreeSurface(img);
 
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return opt_img;
 }
 
@@ -357,7 +357,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
                              const VkAllocationCallbacks *vk_alloc,
                              const char *file_path, VmaPool up_pool,
                              VmaPool tex_pool) {
-  OPTICK_C_PUSH(optick_e, "load_ktx2_texture", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "load_ktx2_texture", HB_PROF_CATEGORY_NONE);
   gputexture t = {0};
 
   uint8_t *mem = NULL;
@@ -366,7 +366,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     SDL_RWops *file = SDL_RWFromFile(file_path, "rb");
     if (file == NULL) {
       assert(0);
-      OptickAPI_PopEvent(optick_e);
+      HB_PROF_POP(prof_e);
       return t;
     }
 
@@ -378,7 +378,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     if (file->read(file, mem, size, 1) == 0) {
       file->close(file);
       assert(0);
-      OptickAPI_PopEvent(optick_e);
+      HB_PROF_POP(prof_e);
       return t;
     }
     file->close(file);
@@ -388,13 +388,13 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
   ktxTexture2 *ktx = NULL;
   uint32_t component_count = 0;
   {
-    OPTICK_C_PUSH(optick_ktx_transcode_e, "load_ktx2_texture transcode",
-                  OptickAPI_Category_None);
+    HB_PROF_PUSH(ktx_transcode_e, "load_ktx2_texture transcode",
+                 HB_PROF_CATEGORY_NONE);
     ktx_error_code_e err = ktxTexture2_CreateFromMemory(mem, size, flags, &ktx);
     if (err != KTX_SUCCESS) {
       assert(0);
-      OptickAPI_PopEvent(optick_ktx_transcode_e);
-      OptickAPI_PopEvent(optick_e);
+      HB_PROF_POP(ktx_transcode_e);
+      HB_PROF_POP(prof_e);
       return t;
     }
 
@@ -404,12 +404,12 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
       err = ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0);
       if (err != KTX_SUCCESS) {
         assert(0);
-        OptickAPI_PopEvent(optick_ktx_transcode_e);
-        OptickAPI_PopEvent(optick_e);
+        HB_PROF_POP(ktx_transcode_e);
+        HB_PROF_POP(prof_e);
         return t;
       }
     }
-    OptickAPI_PopEvent(optick_ktx_transcode_e);
+    HB_PROF_POP(ktx_transcode_e);
   }
 
   VkResult err = VK_SUCCESS;
@@ -437,7 +437,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
                           &host_buffer.buffer, &host_buffer.alloc, &alloc_info);
     if (err != VK_SUCCESS) {
       assert(0);
-      OptickAPI_PopEvent(optick_e);
+      HB_PROF_POP(prof_e);
       return t;
     }
   }
@@ -469,7 +469,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     err = create_gpuimage(vma_alloc, &img_info, &alloc_info, &device_image);
     if (err != VK_SUCCESS) {
       assert(0);
-      OptickAPI_PopEvent(optick_e);
+      HB_PROF_POP(prof_e);
       return t;
     }
   }
@@ -480,7 +480,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     err = vmaMapMemory(vma_alloc, host_buffer.alloc, (void **)&data);
     if (err != VK_SUCCESS) {
       assert(0);
-      OptickAPI_PopEvent(optick_e);
+      HB_PROF_POP(prof_e);
       return t;
     }
 
@@ -502,7 +502,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
     err = vkCreateImageView(device, &create_info, vk_alloc, &view);
     if (err != VK_SUCCESS) {
       assert(0);
-      OptickAPI_PopEvent(optick_e);
+      HB_PROF_POP(prof_e);
       return t;
     }
   };
@@ -542,7 +542,7 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
 #endif
   }
 
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return t;
 }
 
@@ -550,7 +550,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
                      const VkAllocationCallbacks *vk_alloc,
                      const char *filename, VmaPool up_pool, VmaPool tex_pool,
                      gputexture *t) {
-  OPTICK_C_PUSH(optick_e, "load_texture", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "load_texture", HB_PROF_CATEGORY_NONE);
   assert(filename);
   assert(t);
 
@@ -658,7 +658,7 @@ int32_t load_texture(VkDevice device, VmaAllocator vma_alloc,
 
   SDL_FreeSurface(img);
 
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
 
   return err;
 }
@@ -668,7 +668,7 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
                                 const cgltf_texture *gltf, const uint8_t *bin,
                                 VmaPool up_pool, VmaPool tex_pool,
                                 gputexture *t) {
-  OPTICK_C_PUSH(optick_e, "create_gputexture_cgltf", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "create_gputexture_cgltf", HB_PROF_CATEGORY_NONE);
   cgltf_buffer_view *image_view = gltf->image->buffer_view;
   cgltf_buffer *image_data = image_view->buffer;
   const uint8_t *data = (uint8_t *)(image_view->buffer) + image_view->offset;
@@ -703,7 +703,7 @@ int32_t create_gputexture_cgltf(VkDevice device, VmaAllocator vma_alloc,
   };
   int32_t err = create_texture(device, vma_alloc, vk_alloc, &cpu_tex, up_pool,
                                tex_pool, t, true);
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return err;
 }
 
@@ -711,7 +711,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
                        const VkAllocationCallbacks *vk_alloc,
                        const cputexture *tex, VmaPool up_pool, VmaPool tex_pool,
                        gputexture *t, bool gen_mips) {
-  OPTICK_C_PUSH(optick_e, "create_texture", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "create_texture", HB_PROF_CATEGORY_NONE);
   VkResult err = VK_SUCCESS;
 
   VkDeviceSize host_buffer_size = tex->data_size;
@@ -816,7 +816,7 @@ int32_t create_texture(VkDevice device, VmaAllocator vma_alloc,
           },
   };
 
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return err;
 }
 
@@ -855,7 +855,7 @@ int32_t create_gfx_pipeline(VkDevice device,
                             uint32_t perm_count,
                             VkGraphicsPipelineCreateInfo *create_info_base,
                             gpupipeline **p) {
-  OPTICK_C_PUSH(optick_e, "create_gfx_pipeline", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "create_gfx_pipeline", HB_PROF_CATEGORY_NONE);
   gpupipeline *pipe = alloc_gpupipeline(perm_count);
   VkResult err = VK_SUCCESS;
 
@@ -910,7 +910,7 @@ int32_t create_gfx_pipeline(VkDevice device,
   hb_free(tmp_alloc, flags);
 
   *p = pipe;
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return err;
 }
 
@@ -920,7 +920,7 @@ int32_t create_rt_pipeline(
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
     gpupipeline **p) {
-  OPTICK_C_PUSH(optick_e, "create_rt_pipeline", OptickAPI_Category_None);
+  HB_PROF_PUSH(prof_e, "create_rt_pipeline", HB_PROF_CATEGORY_NONE);
   gpupipeline *pipe = alloc_gpupipeline(perm_count);
   VkResult err = VK_SUCCESS;
 
@@ -974,7 +974,7 @@ int32_t create_rt_pipeline(
   hb_free(tmp_alloc, flags);
 
   *p = pipe;
-  OptickAPI_PopEvent(optick_e);
+  HB_PROF_POP(prof_e);
   return err;
 }
 
