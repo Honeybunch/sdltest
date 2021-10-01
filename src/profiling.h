@@ -52,6 +52,8 @@
 #define HB_PROF_GPU_FLIP(swapchain) OptickAPI_GPUFlip(swapchain)
 
 #elif HB_PROFILER_TRACY
+#define TRACY_ENABLE
+#include "TracyC.h"
 
 #else
 #error Expected one profiler

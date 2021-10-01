@@ -1,35 +1,41 @@
-vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
-
 vcpkg_from_github(
-    OUT_SOURCE_PATH SOURCE_PATH
-    REPO wolfpld/tracy
-    REF b7a27d02afe1941eed8f64f2164447ff1a06daa6
-    SHA512 027adffc1e362610016a86c7e37c97dc836d14ca0c8579281f0d53c443c58c206ad80d33936a18668c2695b9009cbbb7acbc16ec516b83f796870dc527e469e1
-    HEAD_REF master
-    PATCHES
-        add-install.patch
+	OUT_SOURCE_PATH SOURCE_PATH
+	REPO wolfpld/tracy
+	REF 07778badcced109b8190805fbf2d7abfaef0d3b9
+	SHA512 17f52d2b9558a2a6ebada5a405f74a8c6eb51c8dfb794a182cf7635cbe48206e1edce3bf6f5e9358ec8b24e9c0cba4019c8eb14bb37524ea762a80aece04652f
+	HEAD_REF master
 )
 
-string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" ENABLE_STATIC)
+file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})
+
+vcpkg_check_features(
+	OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+	FEATURES
+		on-demand TRACY_ON_DEMAND
+		callstack TRACY_CALLSTACK
+		only-localhost TRACY_ONLY_LOCALHOST
+		no-broadcast TRACY_NO_BROADCAST
+		no-code-transfer TRACY_NO_CODE_TRANSFER
+		no-context-switch TRACY_NO_CONTEXT_SWITCH
+		no-exit TRACY_NO_EXIT
+		no-frame-image TRACY_NO_FRAME_IMAGE
+		no-sampling TRACE_NO_SAMPLING
+		no-verify TRACY_NO_VERIFY
+		no-vsync-capture TRACY_NO_VSYNC_CAPTURE
+)
 
 vcpkg_configure_cmake(
-    SOURCE_PATH ${SOURCE_PATH}
-    PREFER_NINJA
+	SOURCE_PATH ${SOURCE_PATH}
+	PREFER_NINJA
+	OPTIONS
+		${FEATURE_OPTIONS}
 )
 
 vcpkg_install_cmake()
+vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/${PORT})
 
 vcpkg_copy_pdbs()
 
-vcpkg_fixup_cmake_targets(CONFIG_PATH lib/cmake/Tracy)
-vcpkg_fixup_pkgconfig()
-
-# Need to manually copy headers
-file(GLOB INCLUDES ${CURRENT_PACKAGES_DIR}/include/*)
-file(COPY ${INCLUDES} DESTINATION ${CURRENT_PACKAGES_DIR}/include)
-
-# Handle copyright
+file(REMOVE_RECURSE ${CURRENT_PACKAGES_DIR}/debug/include)
 file(INSTALL ${SOURCE_PATH}/LICENSE DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT} RENAME copyright)
-
-# Cleanup
-file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/include")
+file(INSTALL ${CMAKE_CURRENT_LIST_DIR}/usage DESTINATION ${CURRENT_PACKAGES_DIR}/share/${PORT})

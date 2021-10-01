@@ -66,7 +66,8 @@
         "queue": "c",
         "*.inc": "c",
         "scene.h": "c",
-        "mimalloc.h": "c"
+        "mimalloc.h": "c",
+        "tracyc.h": "c"
     },
     "cmake.configureOnOpen": false
 }
