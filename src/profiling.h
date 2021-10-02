@@ -1,3 +1,5 @@
+#pragma once
+
 #define HB_NO_PROFILING
 #define TRACY_ENABLE
 #include <TracyC.h>
@@ -43,7 +45,7 @@
 #define HB_PROF_NEXT_FRAME() OptickAPI_NextFrame()
 
 #define HB_PROF_PUSH(event, name, category) OPTICK_C_PUSH(event, name, category)
-#define HB_PROF_POP(event) OptickAPI_PopEvent(event)
+#define TracyCZoneEnd(event) OptickAPI_PopEvent(event)
 #define HB_PROF_ATTACH_SUMMARY(key, value) OptickAPI_AttachSummary(key, value)
 #define HB_PROF_ATTACH_FILE(type, name, data, size)                            \
   OptickAPI_AttachFile(type, name, data, size)

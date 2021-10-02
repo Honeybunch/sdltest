@@ -4,6 +4,8 @@
 
 #include "profiling.h"
 
+#include <stdbool.h>
+
 void camera_projection(const camera *c, float4x4 *p) {
   perspective(p, c->fov, c->aspect, c->near, c->far);
 }
@@ -38,7 +40,7 @@ void camera_view_projection(const camera *c, float4x4 *vp) {
 
 void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
                            editor_camera_controller *editor, camera *cam) {
-  HB_PROF_PUSH(prof_e, "editor_camera_control", HB_PROF_CATEGORY_CAMERA);
+  TracyCZoneN(ctx, "editor_camera_control", true);
 
   uint32_t event_type = event->type;
 
@@ -148,5 +150,5 @@ void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
   }
 
   editor->state = state;
-  HB_PROF_POP(prof_e);
+  TracyCZoneEnd(ctx);
 }

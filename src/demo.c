@@ -147,8 +147,8 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
                               VkDescriptorSet object_set,
                               VkDescriptorSet material_set, const float4x4 *vp,
                               demo *d) {
-  TracyCZoneN(prof_e, "demo_render_scene", true);
-  TracyCZoneColor(prof_e, TracyCategoryColorRendering);
+  TracyCZoneN(ctx, "demo_render_scene", true);
+  TracyCZoneColor(ctx, TracyCategoryColorRendering);
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     uint64_t components = s->components[i];
     scene_transform *scene_transform = &s->transforms[i];
@@ -169,8 +169,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
 
       // HACK: Update object's constant buffer here
       {
-        HB_PROF_PUSH(update_object_event, "Update Object Const Buffer",
-                     HB_PROF_CATEGORY_RENDERING);
+        TracyCZoneN(update_object_ctx, "Update Object Const Buffer", true);
 
         VmaAllocator vma_alloc = d->vma_alloc;
         VkBuffer object_host = d->object_const_buffer.host.buffer;
@@ -188,7 +187,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
 
         demo_upload_const_buffer(d, &d->object_const_buffer);
 
-        HB_PROF_POP(update_object_event);
+        TracyCZoneEnd(update_object_ctx);
       }
 
       vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
@@ -219,8 +218,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
     }
   }
-  TracyCZoneEnd(prof_e);
-  HB_PROF_POP(prof_e);
+  TracyCZoneEnd(ctx);
 }
 
 static void demo_imgui_update(demo *d) {
@@ -390,7 +388,7 @@ static bool demo_init_imgui(demo *d, SDL_Window *window) {
 bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
                allocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
                demo *d) {
-  HB_PROF_PUSH(prof_e, "demo_init", HB_PROF_CATEGORY_NONE);
+  TracyCZoneN(ctx, "demo_init", true);
   VkResult err = VK_SUCCESS;
 
   // Get the GPU we want to run on
@@ -815,7 +813,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Create Pipeline Cache
   VkPipelineCache pipeline_cache = VK_NULL_HANDLE;
   {
-    HB_PROF_PUSH(pipe_cache_e, "init pipeline cache", HB_PROF_CATEGORY_NONE);
+    TracyCZoneN(pipe_cache_ctx, "init pipeline cache", true);
     size_t data_size = 0;
     void *data = NULL;
 
@@ -842,7 +840,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     if (data) {
       mi_free(data);
     }
-    HB_PROF_POP(pipe_cache_e);
+    TracyCZoneEnd(pipe_cache_ctx);
   }
 
   VkPushConstantRange sky_const_range = {
@@ -1087,7 +1085,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Create a pool for host memory uploads
   VmaPool upload_mem_pool = VK_NULL_HANDLE;
   {
-    HB_PROF_PUSH(vma_pool_e, "init vma upload pool", HB_PROF_CATEGORY_NONE);
+    TracyCZoneN(vma_pool_ctx, "init vma upload pool", true);
     uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
@@ -1104,13 +1102,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     err = vmaCreatePool(vma_alloc, &create_info, &upload_mem_pool);
     assert(err == VK_SUCCESS);
 
-    HB_PROF_POP(vma_pool_e);
+    TracyCZoneEnd(vma_pool_ctx);
   }
 
   // Create a pool for texture memory
   VmaPool texture_mem_pool = VK_NULL_HANDLE;
   {
-    HB_PROF_PUSH(vma_pool_e, "init vma texture pool", HB_PROF_CATEGORY_NONE);
+    TracyCZoneN(vma_pool_e, "init vma texture pool", true);
     uint32_t mem_type_idx = 0xFFFFFFFF;
     // Find the desired memory type index
     for (uint32_t i = 0; i < gpu_mem_props.memoryTypeCount; ++i) {
@@ -1131,7 +1129,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     create_info.minBlockCount = 10;
     err = vmaCreatePool(vma_alloc, &create_info, &texture_mem_pool);
     assert(err == VK_SUCCESS);
-    HB_PROF_POP(vma_pool_e);
+    TracyCZoneEnd(vma_pool_e);
   }
 
   // Create Skydome Mesh
@@ -1504,7 +1502,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Must do this before descriptor set writes so we can be sure to create the
   // imgui resources on time
   if (!demo_init_imgui(d, window)) {
-    HB_PROF_POP(prof_e);
+    TracyCZoneEnd(ctx);
     return false;
   }
 
@@ -1619,13 +1617,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     }
   }
 
-  HB_PROF_POP(prof_e);
+  TracyCZoneEnd(ctx);
 
   return true;
 }
 
 void demo_destroy(demo *d) {
-  HB_PROF_PUSH(prof_e, "demo_destroy", HB_PROF_CATEGORY_NONE);
+  TracyCZoneN(ctx, "demo_destroy", true);
 
   VkDevice device = d->device;
   VmaAllocator vma_alloc = d->vma_alloc;
@@ -1721,7 +1719,7 @@ void demo_destroy(demo *d) {
 
   igDestroyContext(d->ig_ctx);
 
-  HB_PROF_POP(prof_e);
+  TracyCZoneEnd(ctx);
 }
 
 void demo_upload_const_buffer(demo *d, const gpuconstbuffer *buffer) {
@@ -1816,8 +1814,7 @@ void demo_process_event(demo *d, const SDL_Event *e) {
 }
 
 void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
-  HB_PROF_PUSH(demo_render_frame_event, "demo_render_frame",
-               HB_PROF_CATEGORY_RENDERING)
+  TracyCZoneN(demo_render_frame_event, "demo_render_frame", true);
 
   VkResult err = VK_SUCCESS;
 
@@ -1835,18 +1832,16 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
   // Ensure no more than FRAME_LATENCY renderings are outstanding
   {
-    HB_PROF_PUSH(fence_wait_event, "demo_render_frame wait for fence",
-                 HB_PROF_CATEGORY_WAIT);
+    TracyCZoneN(fence_wait_event, "demo_render_frame wait for fence", true);
     vkWaitForFences(device, 1, &fences[frame_idx], VK_TRUE, UINT64_MAX);
-    HB_PROF_POP(fence_wait_event);
+    TracyCZoneEnd(fence_wait_event);
 
     vkResetFences(device, 1, &fences[frame_idx]);
   }
 
   // Acquire Image
   {
-    HB_PROF_PUSH(prof_e, "demo_render_frame acquire next image",
-                 HB_PROF_CATEGORY_RENDERING);
+    TracyCZoneN(ctx, "demo_render_frame acquire next image", true);
     do {
       err =
           vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, img_acquired_sem,
@@ -1868,15 +1863,15 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         assert(err == VK_SUCCESS);
       }
     } while (err != VK_SUCCESS);
-    HB_PROF_POP(prof_e);
+    TracyCZoneEnd(ctx);
   }
 
   uint32_t swap_img_idx = d->swap_img_idx;
 
   // Render
   {
-    HB_PROF_PUSH(demo_render_frame_render_event, "demo_render_frame render",
-                 HB_PROF_CATEGORY_RENDERING);
+    TracyCZoneN(demo_render_frame_render_event, "demo_render_frame render",
+                true);
 
     VkCommandPool command_pool = d->command_pools[frame_idx];
     vkResetCommandPool(device, command_pool, 0);
@@ -1888,9 +1883,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
     // Record
     {
-      HB_PROF_PUSH(record_upload_event,
-                   "demo_render_frame record upload commands",
-                   HB_PROF_CATEGORY_RENDERING);
+      TracyCZoneN(record_upload_event,
+                  "demo_render_frame record upload commands", true);
 
       // Upload
       if (d->const_buffer_upload_count > 0 || d->mesh_upload_count > 0 ||
@@ -2074,7 +2068,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         err = vkQueueSubmit(d->graphics_queue, 1, &submit_info, NULL);
         assert(err == VK_SUCCESS);
 
-        HB_PROF_POP(record_upload_event);
+        TracyCZoneEnd(record_upload_event);
       }
 
       VkCommandBufferBeginInfo begin_info = {
@@ -2216,17 +2210,17 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         {
           // ImGui Internal Render
           {
-            HB_PROF_PUSH(prof_e, "ImGui Internal", HB_PROF_CATEGORY_UI);
+            TracyCZoneN(ctx, "ImGui Internal", true);
             demo_imgui_update(d);
             igRender();
-            HB_PROF_POP(prof_e);
+            TracyCZoneEnd(ctx);
           }
 
           const ImDrawData *draw_data = igGetDrawData();
           if (draw_data->Valid) {
             // (Re)Create and upload ImGui geometry buffer
             {
-              HB_PROF_PUSH(prof_e, "ImGui CPU", HB_PROF_CATEGORY_UI);
+              TracyCZoneN(ctx, "ImGui CPU", true);
 
               // If imgui_gpu is empty, this is still safe to call
               destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu[frame_idx]);
@@ -2284,7 +2278,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 }
               }
 
-              HB_PROF_POP(prof_e);
+              TracyCZoneEnd(ctx);
             };
 
             // Record ImGui render commands
@@ -2396,8 +2390,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
     // Submit
     {
-      HB_PROF_PUSH(demo_render_frame_submit_event, "demo_render_frame submit",
-                   HB_PROF_CATEGORY_RENDERING);
+      TracyCZoneN(demo_render_frame_submit_event, "demo_render_frame submit",
+                  true);
 
       uint32_t wait_sem_count = 0;
       VkSemaphore wait_sems[16] = {0};
@@ -2425,16 +2419,16 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_idx]);
       assert(err == VK_SUCCESS);
 
-      HB_PROF_POP(demo_render_frame_submit_event);
+      TracyCZoneEnd(demo_render_frame_submit_event);
     }
 
-    HB_PROF_POP(demo_render_frame_render_event);
+    TracyCZoneEnd(demo_render_frame_render_event);
   }
 
   // Present
   {
-    HB_PROF_PUSH(demo_render_frame_present_event, "demo_render_frame present",
-                 HB_PROF_CATEGORY_RENDERING);
+    TracyCZoneN(demo_render_frame_present_event, "demo_render_frame present",
+                true);
 
     VkSemaphore wait_sem = render_complete_sem;
     if (d->separate_present_queue) {
@@ -2485,15 +2479,15 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
     HB_PROF_GPU_FLIP(&swapchain);
 
-    HB_PROF_POP(demo_render_frame_present_event);
+    TracyCZoneEnd(demo_render_frame_present_event);
   }
 
-  HB_PROF_POP(demo_render_frame_event);
+  TracyCZoneEnd(demo_render_frame_event);
 }
 
 bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
                      uint32_t *screenshot_size) {
-  HB_PROF_PUSH(prof_e, "demo_screenshot", HB_PROF_CATEGORY_RENDERING);
+  TracyCZoneN(ctx, "demo_screenshot", true);
   VkResult err = VK_SUCCESS;
 
   VkDevice device = d->device;
@@ -2518,7 +2512,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
   if (status == VK_NOT_READY) {
     err = vkWaitForFences(device, 1, &swap_fence, VK_TRUE, ~0ULL);
     if (err != VK_SUCCESS) {
-      HB_PROF_POP(prof_e);
+      TracyCZoneEnd(ctx);
       assert(0);
       return false;
     }
@@ -2528,7 +2522,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
   err = vkBeginCommandBuffer(screenshot_cmd, &begin_info);
   if (err != VK_SUCCESS) {
-    HB_PROF_POP(prof_e);
+    TracyCZoneEnd(ctx);
     assert(0);
     return false;
   }
@@ -2617,7 +2611,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
 
   err = vkEndCommandBuffer(screenshot_cmd);
   if (err != VK_SUCCESS) {
-    HB_PROF_POP(prof_e);
+    TracyCZoneEnd(ctx);
     assert(0);
     return false;
   }
@@ -2629,7 +2623,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
   };
   err = vkQueueSubmit(queue, 1, &submit_info, screenshot_fence);
   if (err != VK_SUCCESS) {
-    HB_PROF_POP(prof_e);
+    TracyCZoneEnd(ctx);
     assert(0);
     return false;
   }
@@ -2639,7 +2633,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
 
   err = vkWaitForFences(device, 1, &screenshot_fence, VK_TRUE, ~0ULL);
   if (err != VK_SUCCESS) {
-    HB_PROF_POP(prof_e);
+    TracyCZoneEnd(ctx);
     assert(0);
     return false;
   }
@@ -2656,7 +2650,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
   err =
       vmaMapMemory(vma_alloc, screenshot_image.alloc, (void **)&screenshot_mem);
   if (err != VK_SUCCESS) {
-    HB_PROF_POP(prof_e);
+    TracyCZoneEnd(ctx);
     assert(0);
     return false;
   }
@@ -2701,6 +2695,6 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
 
   vmaUnmapMemory(vma_alloc, screenshot_image.alloc);
 
-  HB_PROF_POP(prof_e);
+  TracyCZoneEnd(ctx);
   return true;
 }
