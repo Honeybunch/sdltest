@@ -16,7 +16,7 @@ call vcpkg install sdl2[vulkan]:arm64-android
 call vcpkg install sdl2-image:arm64-android
 call vcpkg install volk:arm64-android
 call vcpkg install vulkan-memory-allocator:arm64-android
-call vcpkg install optick:arm64-android
+call vcpkg install tracy:arm64-android
 
 REM Install x64 Android Deps
 call vcpkg install cgltf:x64-android
@@ -29,7 +29,7 @@ call vcpkg install sdl2[vulkan]:x64-android
 call vcpkg install sdl2-image:x64-android
 call vcpkg install volk:x64-android
 call vcpkg install vulkan-memory-allocator:x64-android
-call vcpkg install optick:x64-android
+call vcpkg install tracy:x64-android
 
 REM Return to starting directory
 cd %~dp0
