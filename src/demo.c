@@ -147,7 +147,8 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
                               VkDescriptorSet object_set,
                               VkDescriptorSet material_set, const float4x4 *vp,
                               demo *d) {
-  HB_PROF_PUSH(prof_e, "demo_render_scene", HB_PROF_CATEGORY_RENDERING);
+  TracyCZoneN(prof_e, "demo_render_scene", true);
+  TracyCZoneColor(prof_e, TracyCategoryColorRendering);
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     uint64_t components = s->components[i];
     scene_transform *scene_transform = &s->transforms[i];
@@ -218,6 +219,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
     }
   }
+  TracyCZoneEnd(prof_e);
   HB_PROF_POP(prof_e);
 }
 

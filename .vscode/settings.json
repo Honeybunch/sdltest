@@ -67,7 +67,8 @@
         "*.inc": "c",
         "scene.h": "c",
         "mimalloc.h": "c",
-        "tracyc.h": "c"
+        "tracyc.h": "c",
+        "profiling.h": "c"
     },
     "cmake.configureOnOpen": false
 }

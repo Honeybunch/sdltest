@@ -45,18 +45,24 @@ static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
                          VkSystemAllocationScope scope) {
   (void)scope;
   mi_heap_t *heap = (mi_heap_t *)pUserData;
-  return mi_heap_malloc_aligned(heap, size, alignment);
+  void *ptr = mi_heap_malloc_aligned(heap, size, alignment);
+  TracyCAllocN(ptr, size, "Vulkan");
+  return ptr;
 }
 
 static void *vk_realloc_fn(void *pUserData, void *pOriginal, size_t size,
                            size_t alignment, VkSystemAllocationScope scope) {
   (void)scope;
   mi_heap_t *heap = (mi_heap_t *)pUserData;
-  return mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
+  TracyCFreeN(pOriginal, "Vulkan");
+  void *ptr = mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
+  TracyCAllocN(ptr, size, "Vulkan");
+  return ptr;
 }
 
 static void vk_free_fn(void *pUserData, void *pMemory) {
   (void)pUserData;
+  TracyCFreeN(pMemory, "Vulkan");
   mi_free(pMemory);
 }
 
@@ -125,7 +131,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   mi_heap_t *vk_heap = mi_heap_new();
   VkAllocationCallbacks vk_alloc = create_vulkan_allocator(vk_heap);
-  standard_allocator std_alloc = create_standard_allocator();
+  standard_allocator std_alloc = create_standard_allocator("std_alloc");
 
   const VkAllocationCallbacks *vk_alloc_ptr = &vk_alloc;
 
@@ -310,6 +316,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
   while (running) {
     HB_PROF_NEXT_FRAME();
+    TracyCFrameMarkStart("Frame");
+    TracyCZoneN(trcy_ctx, "Frame", true);
 
     // Use SDL High Performance Counter to get timing info
     time = SDL_GetPerformanceCounter();
@@ -385,8 +393,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Update view camera constant buffer
     {
-      HB_PROF_PUSH(update_camera_event, "Update Light Const Buffer",
-                   HB_PROF_CATEGORY_RENDERING);
+      TracyCZoneN(trcy_camera_ctx, "Update Camera Const Buffer", true);
       camera_data.vp = vp;
       // TODO: camera_data.inv_vp = inv_vp;
       camera_data.view_pos = main_cam.transform.position;
@@ -407,13 +414,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       demo_upload_const_buffer(&d, &d.camera_const_buffer);
 
-      HB_PROF_POP(update_camera_event);
+      TracyCZoneEnd(trcy_camera_ctx);
     }
 
     // Update view light constant buffer
     {
-      HB_PROF_PUSH(update_light_event, "Update Light Const Buffer",
-                   HB_PROF_CATEGORY_RENDERING);
+      TracyCZoneN(trcy_light_ctx, "Update Light Const Buffer", true);
 
       CommonLightData light_data = {
           .light_dir = -sky_data.sun_dir,
@@ -435,12 +441,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       demo_upload_const_buffer(&d, &d.light_const_buffer);
 
-      HB_PROF_POP(update_light_event);
+      TracyCZoneEnd(trcy_light_ctx);
     }
 
     // Update sky constant buffer
     {
-      HB_PROF_PUSH(update_sky_event, "Update Sky", HB_PROF_CATEGORY_RENDERING);
+      TracyCZoneN(trcy_sky_ctx, "Update Sky", true);
 
       VmaAllocator vma_alloc = d.vma_alloc;
       VkBuffer sky_host = d.sky_const_buffer.host.buffer;
@@ -456,7 +462,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       vmaUnmapMemory(vma_alloc, sky_host_alloc);
 
       demo_upload_const_buffer(&d, &d.sky_const_buffer);
-      HB_PROF_POP(update_sky_event);
+      TracyCZoneEnd(trcy_sky_ctx);
     }
 
     demo_render_frame(&d, &vp, &sky_vp);
@@ -468,6 +474,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Reset the arena allocator
     reset_arena(arena, true); // Just allow it to grow for now
+
+    TracyCZoneEnd(trcy_ctx);
+    TracyCFrameMarkEnd("Frame");
   }
 
   SDL_DestroyWindow(window);

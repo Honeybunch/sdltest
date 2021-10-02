@@ -1,4 +1,8 @@
 #define HB_NO_PROFILING
+#define TRACY_ENABLE
+#include <TracyC.h>
+
+#define TracyCategoryColorRendering 0xFF000000
 
 #ifndef HB_NO_PROFILING
 

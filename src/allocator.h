@@ -44,7 +44,8 @@ void destroy_arena_allocator(arena_allocator a);
 typedef struct standard_allocator {
   mi_heap_t *heap;
   allocator alloc;
+  const char *name;
 } standard_allocator;
 
-standard_allocator create_standard_allocator();
+standard_allocator create_standard_allocator(const char* name);
 void destroy_standard_allocator(standard_allocator a);
