@@ -43,27 +43,36 @@ static bool check_layer(const char *check_name, uint32_t layer_count,
 
 static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
                          VkSystemAllocationScope scope) {
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
   (void)scope;
   mi_heap_t *heap = (mi_heap_t *)pUserData;
   void *ptr = mi_heap_malloc_aligned(heap, size, alignment);
   TracyCAllocN(ptr, size, "Vulkan");
+  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void *vk_realloc_fn(void *pUserData, void *pOriginal, size_t size,
                            size_t alignment, VkSystemAllocationScope scope) {
   (void)scope;
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
   mi_heap_t *heap = (mi_heap_t *)pUserData;
   TracyCFreeN(pOriginal, "Vulkan");
   void *ptr = mi_heap_realloc_aligned(heap, pOriginal, size, alignment);
   TracyCAllocN(ptr, size, "Vulkan");
+  TracyCZoneEnd(ctx);
   return ptr;
 }
 
 static void vk_free_fn(void *pUserData, void *pMemory) {
   (void)pUserData;
+  TracyCZone(ctx, true);
+  TracyCZoneColor(ctx, TracyCategoryColorMemory);
   TracyCFreeN(pMemory, "Vulkan");
   mi_free(pMemory);
+  TracyCZoneEnd(ctx);
 }
 
 static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
@@ -76,54 +85,8 @@ static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
   return ret;
 }
 
-void prof_init_thread_cb() {}
-
-// The intent is that g_screenshot_bytes will be allocated on a heap by the
-// renderer.
-static uint8_t *g_screenshot_bytes = NULL;
-static uint32_t g_screenshot_size = 0;
-static bool g_taking_screenshot = false;
-
-bool prof_state_changed_callback(HB_PROF_STATE_TYPE state) {
-  if (state == HB_PROF_STATE_STOPCAPTURE) {
-    // Request that we take a screenshot and store it in g_screenshot_bytes
-    g_taking_screenshot = true;
-  } else if (state == HB_PROF_STATE_DUMPCAPTURE) {
-    // Return false so optick knows that we *didn't* dump a capture
-    // In this case because we're waiting for the renderer to get a screenshot
-    // captured.
-    // Optick will consider the caputre un-dumped and will attempt to call
-    // this again
-    if (g_taking_screenshot) {
-      return false;
-    }
-    HB_PROF_ATTACH_SUMMARY("Engine", "SDLTest");
-    HB_PROF_ATTACH_SUMMARY("Author", "Honeybunch");
-    HB_PROF_ATTACH_SUMMARY("Game Version", HB_GAME_VERSION);
-    HB_PROF_ATTACH_SUMMARY("Engine Version", HB_ENGINE_VERSION);
-    // HB_PROF_ATTACH_SUMMARY("Configuration", HB_CONFIG);
-    HB_PROF_ATTACH_SUMMARY("Arch", HB_ARCH);
-    // HB_PROF_ATTACH_SUMMARY("GPU Manufacturer", "TODO");
-    // HB_PROF_ATTACH_SUMMARY("ISA Vulkan Version", "TODO");
-    // HB_PROF_ATTACH_SUMMARY("GPU Driver Version", "TODO");
-
-    HB_PROF_ATTACH_FILE(HB_PROF_FILE_TYPE_IMAGE, "Screenshot.png",
-                        g_screenshot_bytes, g_screenshot_size);
-  }
-  return true;
-}
-
 int32_t SDL_main(int32_t argc, char *argv[]) {
   static const float qtr_pi = 0.7853981625f;
-
-  HB_PROF_SET_ALLOCATOR(mi_malloc, mi_free, prof_init_thread_cb);
-
-  static const char thread_name[] = "Main Thread";
-  HB_PROF_REGISTER_THREAD(thread_name, sizeof(thread_name));
-
-  HB_PROF_SET_STATE_CHANGED_CALLBACK(prof_state_changed_callback);
-
-  HB_PROF_START_CAPTURE();
 
   // Create Temporary Arena Allocator
   static const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
@@ -253,47 +216,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                            vk_alloc_ptr, &d);
   assert(success);
 
-#ifndef HB_NO_PROFILING
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wincompatible-function-pointer-types"
-#endif
-  HB_VK_FN_STRUCT_TYPE prof_volk_funcs = {
-      .vkGetPhysicalDeviceProperties = vkGetPhysicalDeviceProperties,
-      .vkCreateQueryPool = vkCreateQueryPool,
-      .vkCreateCommandPool = vkCreateCommandPool,
-      .vkAllocateCommandBuffers = vkAllocateCommandBuffers,
-      .vkCreateFence = vkCreateFence,
-      .vkCmdResetQueryPool = vkCmdResetQueryPool,
-      .vkQueueSubmit = vkQueueSubmit,
-      .vkWaitForFences = vkWaitForFences,
-      .vkResetCommandBuffer = vkResetCommandBuffer,
-      .vkCmdWriteTimestamp = vkCmdWriteTimestamp,
-      .vkGetQueryPoolResults = vkGetQueryPoolResults,
-      .vkBeginCommandBuffer = vkBeginCommandBuffer,
-      .vkEndCommandBuffer = vkEndCommandBuffer,
-      .vkResetFences = vkResetFences,
-      .vkDestroyCommandPool = vkDestroyCommandPool,
-      .vkDestroyQueryPool = vkDestroyQueryPool,
-      .vkDestroyFence = vkDestroyFence,
-      .vkFreeCommandBuffers = vkFreeCommandBuffers,
-  };
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-  HB_PROF_GPU_INIT(&d.device, &d.gpu, &d.graphics_queue,
-                   &d.graphics_queue_family_index, 1, &prof_volk_funcs);
-#endif
-
-  transform cube_transform = {
-      .position = {0, 2, 0},
-      .scale = {1, 1, 1},
-      .rotation = {0, 0, 0},
-  };
-
-  float4x4 cube_obj_mat = {.row0 = {0}};
-  float4x4 cube_mvp = {.row0 = {0}};
-
   SkyData sky_data = {
       .sun_dir = {0, -1, 0},
       .turbidity = 3,
@@ -315,9 +237,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float delta_time_seconds = 0.0f;
 
   while (running) {
-    HB_PROF_NEXT_FRAME();
     TracyCFrameMarkStart("Frame");
     TracyCZoneN(trcy_ctx, "Frame", true);
+    TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
 
     // Use SDL High Performance Counter to get timing info
     time = SDL_GetPerformanceCounter();
@@ -337,14 +259,21 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     igNewFrame();
 
     // ImGui Test
-    igBegin("mainwindow", NULL, ImGuiWindowFlags_NoTitleBar);
-    static float f = 0.0f;
-    igText("Hello World!");
-    igSliderFloat("float", &f, 0.0f, 1.0f, "%.3f", 0);
-    igText("Application average %.3f ms/frame (%.1f FPS)",
-           1000.0f / d.ig_io->Framerate, d.ig_io->Framerate);
-    igEnd();
-    igShowDemoWindow(NULL);
+    {
+      TracyCZoneN(ctx, "UI Test", true);
+      TracyCZoneColor(ctx, TracyCategoryColorUI);
+
+      igBegin("mainwindow", NULL, ImGuiWindowFlags_NoTitleBar);
+      static float f = 0.0f;
+      igText("Hello World!");
+      igSliderFloat("float", &f, 0.0f, 1.0f, "%.3f", 0);
+      igText("Application average %.3f ms/frame (%.1f FPS)",
+             1000.0f / d.ig_io->Framerate, d.ig_io->Framerate);
+      igEnd();
+      igShowDemoWindow(NULL);
+
+      TracyCZoneEnd(ctx);
+    }
 
     // TODO: Handle events more gracefully
     // Mutliple events (or none) could happen in one frame but we only process
@@ -352,6 +281,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // while (SDL_PollEvent(&e))
     {
+      TracyCZoneN(ctx, "Handle Events", true);
+      TracyCZoneColor(ctx, TracyCategoryColorInput);
+
       SDL_Event e = {0};
       SDL_PollEvent(&e);
       if (e.type == SDL_QUIT) {
@@ -361,11 +293,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       demo_process_event(&d, &e);
 
       editor_camera_control(delta_time_seconds, &e, &controller, &main_cam);
-    }
 
-    // Spin cube
-    cube_transform.rotation[1] += 1.0f * delta_time_seconds;
-    transform_to_matrix(&cube_obj_mat, &cube_transform);
+      TracyCZoneEnd(ctx);
+    }
 
     float4x4 view = {.row0 = {0}};
     camera_view(&main_cam, &view);
@@ -381,8 +311,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     float4x4 sky_vp = {.row0 = {0}};
     mulmf44(&proj, &sky_view, &sky_vp);
-
-    mulmf44(&vp, &cube_obj_mat, &cube_mvp);
 
     // Change sun position
     {
@@ -467,11 +395,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     demo_render_frame(&d, &vp, &sky_vp);
 
-    if (g_taking_screenshot) {
-      g_taking_screenshot = !demo_screenshot(
-          &d, std_alloc.alloc, &g_screenshot_bytes, &g_screenshot_size);
-    }
-
     // Reset the arena allocator
     reset_arena(arena, true); // Just allow it to grow for now
 
@@ -485,17 +408,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   IMG_Quit();
   SDL_Quit();
 
-  HB_PROF_GPU_SHUTDOWN();
-
   demo_destroy(&d);
-
-  HB_PROF_SHUTDOWN();
-
-  if (g_screenshot_bytes != NULL) {
-    hb_free(std_alloc.alloc, g_screenshot_bytes);
-    g_screenshot_bytes = NULL;
-    g_screenshot_size = 0;
-  }
 
   vkDestroyInstance(instance, vk_alloc_ptr);
   instance = VK_NULL_HANDLE;

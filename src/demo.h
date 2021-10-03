@@ -109,6 +109,7 @@ typedef struct demo {
 
   gpumesh skydome_gpu;
 
+  size_t imgui_mesh_data_size[FRAME_LATENCY];
   uint8_t *imgui_mesh_data;
   gpumesh imgui_gpu[FRAME_LATENCY];
   gputexture imgui_atlas;

@@ -28,6 +28,8 @@ static VkDevice create_device(VkPhysicalDevice gpu,
                               uint32_t ext_count,
                               const VkAllocationCallbacks *vk_alloc,
                               const char *const *ext_names) {
+  TracyCZoneN(ctx, "create_device", true);
+
   float queue_priorities[1] = {0.0};
   VkDeviceQueueCreateInfo queues[2];
   queues[0].sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -65,10 +67,14 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   VkResult err = vkCreateDevice(gpu, &create_info, vk_alloc, &device);
   assert(err == VK_SUCCESS);
 
+  TracyCZoneEnd(ctx);
+
   return device;
 }
 
 static VkPhysicalDevice select_gpu(VkInstance instance, allocator tmp_alloc) {
+  TracyCZoneN(ctx, "select_gpu", true);
+
   uint32_t gpu_count = 0;
   VkResult err = vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
   assert(err == VK_SUCCESS);
@@ -119,6 +125,9 @@ static VkPhysicalDevice select_gpu(VkInstance instance, allocator tmp_alloc) {
   assert(gpu_idx >= 0);
   VkPhysicalDevice gpu = physical_devices[gpu_idx];
   hb_free(tmp_alloc, physical_devices);
+
+  TracyCZoneEnd(ctx);
+
   return gpu;
 }
 
@@ -170,6 +179,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       // HACK: Update object's constant buffer here
       {
         TracyCZoneN(update_object_ctx, "Update Object Const Buffer", true);
+        TracyCZoneColor(update_object_ctx, TracyCategoryColorRendering);
 
         VmaAllocator vma_alloc = d->vma_alloc;
         VkBuffer object_host = d->object_const_buffer.host.buffer;
@@ -1832,9 +1842,10 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
   // Ensure no more than FRAME_LATENCY renderings are outstanding
   {
-    TracyCZoneN(fence_wait_event, "demo_render_frame wait for fence", true);
+    TracyCZoneN(fence_ctx, "demo_render_frame wait for fence", true);
+    TracyCZoneColor(fence_ctx, TracyCategoryColorWait);
     vkWaitForFences(device, 1, &fences[frame_idx], VK_TRUE, UINT64_MAX);
-    TracyCZoneEnd(fence_wait_event);
+    TracyCZoneEnd(fence_ctx);
 
     vkResetFences(device, 1, &fences[frame_idx]);
   }
@@ -1885,6 +1896,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
     {
       TracyCZoneN(record_upload_event,
                   "demo_render_frame record upload commands", true);
+      TracyCZoneColor(record_upload_event, TracyCategoryColorRendering);
 
       // Upload
       if (d->const_buffer_upload_count > 0 || d->mesh_upload_count > 0 ||
@@ -2076,14 +2088,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       err = vkBeginCommandBuffer(graphics_buffer, &begin_info);
       assert(err == VK_SUCCESS);
 
-      HB_PROF_GPU_CONTEXT_TYPE prev_gpu_ctx = HB_PROF_GPU_SET_CONTEXT(
-          (HB_PROF_GPU_CONTEXT_TYPE){.cmdBuffer = graphics_buffer});
-
       // Transition Swapchain Image
       {
-        HB_PROF_GPU_PUSH(gpu_e, "Transition Swapchain Image",
-                         HB_PROF_CATEGORY_RENDERING);
-
         VkImageLayout old_layout = VK_IMAGE_LAYOUT_UNDEFINED;
         if (frame_idx >= FRAME_LATENCY) {
           old_layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -2105,7 +2111,6 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                              VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0,
                              0, NULL, 0, NULL, 1, &barrier);
-        HB_PROF_GPU_POP(gpu_e);
       }
 
       // Render main geometry pass
@@ -2149,7 +2154,6 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
           // Draw Scene
           {
-            HB_PROF_GPU_PUSH(gpu_e, "Duck", HB_PROF_CATEGORY_GPU_SCENE);
             // HACK: Known desired permutations
             uint32_t perm = GLTF_PERM_NONE;
             VkPipelineLayout pipe_layout = d->gltf_pipe_layout;
@@ -2163,12 +2167,10 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                               d->gltf_object_descriptor_sets[frame_idx],
                               d->gltf_material_descriptor_sets[frame_idx], vp,
                               d);
-            HB_PROF_GPU_POP(gpu_e);
           }
 
           // Draw Skydome
           {
-            HB_PROF_GPU_PUSH(gpu_e, "Skydome", HB_PROF_CATEGORY_GPU_SCENE);
             // Another hack to fiddle with the matrix we send to the shader
             // for the skydome
             SkyPushConstants sky_consts = {.vp = *sky_vp};
@@ -2200,7 +2202,6 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
             vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
             vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
-            HB_PROF_GPU_POP(gpu_e);
           }
 
           vkCmdEndRenderPass(graphics_buffer);
@@ -2211,6 +2212,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           // ImGui Internal Render
           {
             TracyCZoneN(ctx, "ImGui Internal", true);
+            TracyCZoneColor(ctx, TracyCategoryColorUI);
             demo_imgui_update(d);
             igRender();
             TracyCZoneEnd(ctx);
@@ -2220,10 +2222,10 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           if (draw_data->Valid) {
             // (Re)Create and upload ImGui geometry buffer
             {
-              TracyCZoneN(ctx, "ImGui CPU", true);
+              TracyCZoneN(ctx, "ImGui Mesh Creation", true);
+              TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
-              // If imgui_gpu is empty, this is still safe to call
-              destroy_gpumesh(device, d->vma_alloc, &d->imgui_gpu[frame_idx]);
+              bool realloc = false;
 
               uint32_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
               uint32_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
@@ -2231,8 +2233,18 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
               uint32_t imgui_size = idx_size + vtx_size;
 
               if (imgui_size > 0) {
-                d->imgui_mesh_data =
-                    hb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
+
+                if (imgui_size > d->imgui_mesh_data_size[frame_idx]) {
+
+                  destroy_gpumesh(device, d->vma_alloc,
+                                  &d->imgui_gpu[frame_idx]);
+
+                  d->imgui_mesh_data =
+                      hb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
+                  d->imgui_mesh_data_size[frame_idx] = imgui_size;
+
+                  realloc = true;
+                }
 
                 uint8_t *idx_dst = d->imgui_mesh_data;
                 uint8_t *vtx_dst = idx_dst + idx_size;
@@ -2255,15 +2267,28 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 idx_dst = d->imgui_mesh_data;
                 vtx_dst = idx_dst + idx_size;
 
-                cpumesh imgui_cpu = {.geom_size = imgui_size,
-                                     .index_count = draw_data->TotalIdxCount,
-                                     .index_size = idx_size,
-                                     .indices = (uint16_t *)idx_dst,
-                                     .vertex_count = draw_data->TotalVtxCount,
-                                     .vertices = vtx_dst};
+                if (realloc) {
+                  cpumesh imgui_cpu = {.geom_size = imgui_size,
+                                       .index_count = draw_data->TotalIdxCount,
+                                       .index_size = idx_size,
+                                       .indices = (uint16_t *)idx_dst,
+                                       .vertex_count = draw_data->TotalVtxCount,
+                                       .vertices = vtx_dst};
 
-                create_gpumesh(device, d->vma_alloc, &imgui_cpu,
-                               &d->imgui_gpu[frame_idx]);
+                  create_gpumesh(device, d->vma_alloc, &imgui_cpu,
+                                 &d->imgui_gpu[frame_idx]);
+                } else {
+                  // Map existing gpu mesh and copy data
+                  uint8_t *data = NULL;
+                  vmaMapMemory(d->vma_alloc, d->imgui_gpu[frame_idx].host.alloc,
+                               (void **)&data);
+
+                  // Copy Data
+                  memcpy(data, idx_dst, imgui_size);
+
+                  vmaUnmapMemory(d->vma_alloc,
+                                 d->imgui_gpu[frame_idx].host.alloc);
+                }
 
                 // Copy to gpu
                 {
@@ -2283,7 +2308,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
             // Record ImGui render commands
             {
-              HB_PROF_GPU_PUSH(gpu_e, "ImGui", HB_PROF_CATEGORY_GPU_UI);
+              TracyCZoneN(ctx, "Record ImGui Commands", true);
+              TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
               const float width = d->ig_io->DisplaySize.x;
               const float height = d->ig_io->DisplaySize.y;
@@ -2376,13 +2402,11 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
               vkCmdEndRenderPass(graphics_buffer);
 
-              HB_PROF_GPU_POP(gpu_e);
+              TracyCZoneEnd(ctx);
             }
           }
         }
       }
-
-      HB_PROF_GPU_SET_CONTEXT(prev_gpu_ctx);
 
       err = vkEndCommandBuffer(graphics_buffer);
       assert(err == VK_SUCCESS);
@@ -2392,6 +2416,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
     {
       TracyCZoneN(demo_render_frame_submit_event, "demo_render_frame submit",
                   true);
+      TracyCZoneColor(demo_render_frame_submit_event,
+                      TracyCategoryColorRendering);
 
       uint32_t wait_sem_count = 0;
       VkSemaphore wait_sems[16] = {0};
@@ -2429,6 +2455,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
   {
     TracyCZoneN(demo_render_frame_present_event, "demo_render_frame present",
                 true);
+    TracyCZoneColor(demo_render_frame_present_event,
+                    TracyCategoryColorRendering);
 
     VkSemaphore wait_sem = render_complete_sem;
     if (d->separate_present_queue) {
@@ -2477,8 +2505,6 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       assert(err == VK_SUCCESS);
     }
 
-    HB_PROF_GPU_FLIP(&swapchain);
-
     TracyCZoneEnd(demo_render_frame_present_event);
   }
 
@@ -2510,7 +2536,10 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
   */
   VkResult status = vkGetFenceStatus(device, swap_fence);
   if (status == VK_NOT_READY) {
+    TracyCZoneN(fence_ctx, "Wait for swap fence", true);
+    TracyCZoneColor(fence_ctx, TracyCategoryColorWait);
     err = vkWaitForFences(device, 1, &swap_fence, VK_TRUE, ~0ULL);
+    TracyCZoneEnd(fence_ctx);
     if (err != VK_SUCCESS) {
       TracyCZoneEnd(ctx);
       assert(0);
@@ -2630,7 +2659,6 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
 
   // Could move this to another place later on as it will take time for this
   // command to finish
-
   err = vkWaitForFences(device, 1, &screenshot_fence, VK_TRUE, ~0ULL);
   if (err != VK_SUCCESS) {
     TracyCZoneEnd(ctx);

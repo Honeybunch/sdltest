@@ -4,6 +4,10 @@
 #include <assert.h>
 #include <math.h>
 
+#include <stdbool.h>
+
+#include "profiling.h"
+
 float3 f4tof3(float4 f) { return (float3){f[0], f[1], f[2]}; }
 float4 f3tof4(float3 f, float w) { return (float4){f[0], f[1], f[2], w}; }
 
@@ -136,6 +140,8 @@ void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
 }
 
 void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
+  TracyCZoneN(ctx, "mulmf44", true);
+  TracyCZoneColor(ctx, TracyCategoryColorMath);
   assert(x);
   assert(y);
   assert(o);
@@ -151,6 +157,7 @@ void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
       o->rows[i][ii] = s;
     }
   }
+  TracyCZoneEnd(ctx);
 }
 
 void translate(transform *t, float3 p) {
@@ -167,8 +174,11 @@ void rotate(transform *t, float3 r) {
 }
 
 void transform_to_matrix(float4x4 *m, const transform *t) {
+  TracyCZoneN(ctx, "transform_to_matrix", true);
+  TracyCZoneColor(ctx, TracyCategoryColorMath);
   assert(m);
   assert(t);
+
   // Position matrix
   float4x4 p = {
       (float4){1, 0, 0, t->position[0]},
@@ -220,9 +230,13 @@ void transform_to_matrix(float4x4 *m, const transform *t) {
   float4x4 temp = {0};
   mulmf44(&p, &r, &temp);
   mulmf44(&s, &temp, m);
+
+  TracyCZoneEnd(ctx);
 }
 
 void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
+  TracyCZoneN(ctx, "look_forward", true);
+  TracyCZoneColor(ctx, TracyCategoryColorMath);
   assert(m);
 
   forward = normf3(forward);
@@ -235,6 +249,7 @@ void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up) {
       (float4){forward[0], forward[1], forward[2], -dotf3(forward, pos)},
       (float4){0, 0, 0, 1},
   };
+  TracyCZoneEnd(ctx);
 }
 
 // Left-Handed
