@@ -29,6 +29,9 @@
 #define WIDTH 1600
 #define HEIGHT 900
 
+#define _PI 3.14159265358f
+#define _2PI _PI * 2.0f
+
 static bool check_layer(const char *check_name, uint32_t layer_count,
                         VkLayerProperties *layers) {
   bool found = false;
@@ -229,12 +232,23 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Main loop
   bool running = true;
 
+  bool showImGui = true;
+  bool showSkyWindow = true;
+  bool showDemoWindow = false;
+  bool showMetricsWindow = false;
+
   uint64_t time = 0;
   uint64_t last_time = SDL_GetPerformanceCounter();
   uint64_t delta_time = 0;
   float time_seconds = 0.0f;
   float delta_time_ms = 0.0f;
   float delta_time_seconds = 0.0f;
+
+  // Controlled by ImGui and fed to the sky system
+  float timeOfDay = _PI;
+  float sunY = cosf(_PI + timeOfDay);
+  float sunX = sinf(_PI + timeOfDay);
+  float3 sunColor = (float3){1, 1, 1};
 
   while (running) {
     TracyCFrameMarkStart("Frame");
@@ -250,30 +264,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         (float)((double)time / (double)SDL_GetPerformanceFrequency());
     delta_time_ms = delta_time_ms * 1000.0f;
     last_time = time;
-
-    ImVec2 display_size;
-    display_size.x = WIDTH;
-    display_size.y = HEIGHT;
-    d.ig_io->DisplaySize = display_size;
-    d.ig_io->DeltaTime = delta_time_seconds;
-    igNewFrame();
-
-    // ImGui Test
-    {
-      TracyCZoneN(ctx, "UI Test", true);
-      TracyCZoneColor(ctx, TracyCategoryColorUI);
-
-      igBegin("mainwindow", NULL, ImGuiWindowFlags_NoTitleBar);
-      static float f = 0.0f;
-      igText("Hello World!");
-      igSliderFloat("float", &f, 0.0f, 1.0f, "%.3f", 0);
-      igText("Application average %.3f ms/frame (%.1f FPS)",
-             1000.0f / d.ig_io->Framerate, d.ig_io->Framerate);
-      igEnd();
-      igShowDemoWindow(NULL);
-
-      TracyCZoneEnd(ctx);
-    }
 
     // TODO: Handle events more gracefully
     // Mutliple events (or none) could happen in one frame but we only process
@@ -294,6 +284,64 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
       editor_camera_control(delta_time_seconds, &e, &controller, &main_cam);
 
+      if (e.type == SDL_KEYDOWN) {
+        const SDL_Keysym *keysym = &e.key.keysym;
+        SDL_Scancode scancode = keysym->scancode;
+        if (scancode == SDL_SCANCODE_GRAVE) {
+          showImGui = !showImGui;
+        }
+      }
+
+      TracyCZoneEnd(ctx);
+    }
+
+    ImVec2 display_size;
+    display_size.x = WIDTH;
+    display_size.y = HEIGHT;
+    d.ig_io->DisplaySize = display_size;
+    d.ig_io->DeltaTime = delta_time_seconds;
+    igNewFrame();
+
+    // ImGui Test
+
+    if (showImGui) {
+      TracyCZoneN(ctx, "UI Test", true);
+      TracyCZoneColor(ctx, TracyCategoryColorUI);
+
+      if (igBeginMainMenuBar()) {
+        if (igBeginMenu("Sky", true)) {
+          showSkyWindow = !showSkyWindow;
+          igEndMenu();
+        }
+        if (igBeginMenu("Metrics", true)) {
+          showMetricsWindow = !showMetricsWindow;
+          igEndMenu();
+        }
+        if (igBeginMenu("Demo", true)) {
+          showDemoWindow = !showDemoWindow;
+          igEndMenu();
+        }
+        igEndMainMenuBar();
+      }
+
+      if (showSkyWindow && igBegin("Sky Control", &showSkyWindow, 0)) {
+        if (igSliderFloat("Time of Day", &timeOfDay, 0.0f, _2PI, "%.3f", 0)) {
+          sunY = cosf(_PI + timeOfDay);
+          sunX = sinf(_PI + timeOfDay);
+        }
+        igText("Sun Y: %.3f", sunY);
+        igText("Sun X: %.3f", sunX);
+        igColorEdit3("Sun Color", &sunColor, 0);
+        igEnd();
+      }
+
+      if (showDemoWindow) {
+        igShowDemoWindow(&showDemoWindow);
+      }
+      if (showMetricsWindow) {
+        igShowMetricsWindow(&showMetricsWindow);
+      }
+
       TracyCZoneEnd(ctx);
     }
 
@@ -313,11 +361,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     mulmf44(&proj, &sky_view, &sky_vp);
 
     // Change sun position
-    {
-      float y = -cosf(time_seconds);
-      float z = sinf(time_seconds);
-      sky_data.sun_dir = (float3){0, y, z};
-    }
+    sky_data.sun_dir = (float3){sunX, sunY, 0};
 
     // Update view camera constant buffer
     {

@@ -167,9 +167,9 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       transform *t = &scene_transform->t;
 
       // Hack to fuck with the scale of the object
-      t->scale = (float3){0.01f, -0.01f, 0.01f};
+      // t->scale = (float3){0.01f, -0.01f, 0.01f};
       // t->scale = (float3){100.0f, -100.0f, 100.0f};
-      // t->scale = (float3){1.0f, -1.0f, 1.0f};
+      t->scale = (float3){1.0f, -1.0f, 1.0f};
 
       CommonObjectData object_data = {0};
 
@@ -1168,9 +1168,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
       device, vma_alloc, vk_alloc, sizeof(CommonLightData));
 
   // Load scene
-  scene *scene = NULL;
+  scene *duck_scene = NULL;
   load_scene(device, tmp_alloc, std_alloc, vk_alloc, vma_alloc, upload_mem_pool,
-             texture_mem_pool, "./assets/scenes/Duck.glb", &scene);
+             texture_mem_pool, "./assets/scenes/duck.glb", &duck_scene);
+
+  // Load Floor
+  scene *floor_scene = NULL;
+  load_scene(device, tmp_alloc, std_alloc, vk_alloc, vma_alloc, upload_mem_pool,
+             texture_mem_pool, "./assets/scenes/Floor.glb", &floor_scene);
 
   // Create resources for screenshots
   gpuimage screenshot_image = {0};
@@ -1254,13 +1259,15 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   d->upload_mem_pool = upload_mem_pool;
   d->texture_mem_pool = texture_mem_pool;
   d->skydome_gpu = skydome;
-  d->scene = scene;
+  d->duck_scene = duck_scene;
+  d->floor_scene = floor_scene;
   d->screenshot_image = screenshot_image;
   d->screenshot_fence = screenshot_fence;
   d->frame_idx = 0;
 
   demo_upload_mesh(d, &d->skydome_gpu);
-  demo_upload_scene(d, d->scene);
+  demo_upload_scene(d, d->duck_scene);
+  demo_upload_scene(d, d->floor_scene);
 
   // Create Semaphores
   {
@@ -1523,7 +1530,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     VkDescriptorImageInfo imgui_info = {
         NULL, d->imgui_atlas.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorImageInfo material_info = {
-        NULL, scene->textures[0].view,
+        NULL, d->floor_scene->textures[0].view,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorBufferInfo object_info = {object_const_buffer.gpu.buffer, 0,
                                           object_const_buffer.size};
@@ -1682,7 +1689,8 @@ void demo_destroy(demo *d) {
 
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
-  destroy_scene(device, d->std_alloc, vma_alloc, vk_alloc, d->scene);
+  destroy_scene(device, d->std_alloc, vma_alloc, vk_alloc, d->floor_scene);
+  destroy_scene(device, d->std_alloc, vma_alloc, vk_alloc, d->duck_scene);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->object_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
@@ -2162,7 +2170,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               pipe);
 
-            demo_render_scene(d->scene, graphics_buffer, pipe_layout,
+            demo_render_scene(d->floor_scene, graphics_buffer, pipe_layout,
                               d->gltf_view_descriptor_sets[frame_idx],
                               d->gltf_object_descriptor_sets[frame_idx],
                               d->gltf_material_descriptor_sets[frame_idx], vp,

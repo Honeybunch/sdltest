@@ -178,7 +178,7 @@ FragmentOut frag(Interpolators i) {
   float gamma = angle_of_dot(cos_gamma);
   float theta = angle_of_dot(cos_theta);
 
-  float sun_zenith = -sun_dir.y + 1;
+  float sun_zenith = clamp(((sun_dir.y - 1) * -0.5f) * M_PI, 0.0f, M_PI / 2.0f - 0.1f);
 
   float3 XYZ = sample_sky(gamma, theta, sky_data.albedo, sky_data.turbidity, sun_zenith);
   float3 RGB = XYZ_to_RGB(XYZ);

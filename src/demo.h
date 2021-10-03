@@ -114,7 +114,8 @@ typedef struct demo {
   gpumesh imgui_gpu[FRAME_LATENCY];
   gputexture imgui_atlas;
 
-  scene *scene;
+  scene *duck_scene;
+  scene *floor_scene;
 
   gpuimage screenshot_image;
   VkFence screenshot_fence;
