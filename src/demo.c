@@ -22,6 +22,20 @@
 
 #define MAX_EXT_COUNT 16
 
+static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
+                         VkDeviceMemory memory, VkDeviceSize size) {
+  (void)allocator;
+  (void)memoryType;
+  TracyCAllocN((void *)memory, size, "VMA");
+}
+static void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
+                        VkDeviceMemory memory, VkDeviceSize size) {
+  (void)allocator;
+  (void)memoryType;
+  (void)size;
+  TracyCFreeN((void *)memory, "VMA");
+}
+
 static VkDevice create_device(VkPhysicalDevice gpu,
                               uint32_t graphics_queue_family_index,
                               uint32_t present_queue_family_index,
@@ -559,12 +573,19 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     volk_functions.vkDestroyImage = vkDestroyImage;
     volk_functions.vkCmdCopyBuffer = vkCmdCopyBuffer;
 
+    VmaDeviceMemoryCallbacks vma_callbacks = {
+        vma_alloc_fn,
+        vma_free_fn,
+    };
+
     VmaAllocatorCreateInfo create_info = {0};
     create_info.physicalDevice = gpu;
     create_info.device = device;
     create_info.pVulkanFunctions = &volk_functions;
     create_info.instance = instance;
     create_info.vulkanApiVersion = VK_API_VERSION_1_0;
+    create_info.pAllocationCallbacks = vk_alloc;
+    create_info.pDeviceMemoryCallbacks = &vma_callbacks;
     err = vmaCreateAllocator(&create_info, &vma_alloc);
     assert(err == VK_SUCCESS);
   }
@@ -2378,33 +2399,42 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 VkDeviceSize vtx_offset =
                     draw_data->TotalIdxCount * sizeof(ImDrawIdx);
 
-                for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
-                  const ImDrawList *draw_list = draw_data->CmdLists[i];
+                {
+                  TracyCZoneN(draw_ctx, "Record ImGui Draw Commands", true);
+                  TracyCZoneColor(draw_ctx, TracyCategoryColorRendering);
+                  for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
+                    const ImDrawList *draw_list = draw_data->CmdLists[i];
 
-                  vkCmdBindIndexBuffer(graphics_buffer, imgui_mesh->gpu.buffer,
-                                       idx_offset,
-                                       (VkIndexType)imgui_mesh->idx_type);
-                  vkCmdBindVertexBuffers(graphics_buffer, 0, 1,
-                                         &imgui_mesh->gpu.buffer, &vtx_offset);
+                    vkCmdBindIndexBuffer(graphics_buffer,
+                                         imgui_mesh->gpu.buffer, idx_offset,
+                                         (VkIndexType)imgui_mesh->idx_type);
+                    vkCmdBindVertexBuffers(graphics_buffer, 0, 1,
+                                           &imgui_mesh->gpu.buffer,
+                                           &vtx_offset);
 
-                  for (int32_t ii = 0; ii < draw_list->CmdBuffer.Size; ++ii) {
-                    const ImDrawCmd *draw_cmd = &draw_list->CmdBuffer.Data[ii];
-                    // Set the scissor
-                    ImVec4 clip_rect = draw_cmd->ClipRect;
-                    scissor = (VkRect2D){
-                        {(int32_t)clip_rect.x, (int32_t)clip_rect.y},
-                        {(uint32_t)clip_rect.z, (uint32_t)clip_rect.w}};
-                    vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
+                    for (int32_t ii = 0; ii < draw_list->CmdBuffer.Size; ++ii) {
+                      const ImDrawCmd *draw_cmd =
+                          &draw_list->CmdBuffer.Data[ii];
+                      // Set the scissor
+                      ImVec4 clip_rect = draw_cmd->ClipRect;
+                      scissor = (VkRect2D){
+                          {(int32_t)clip_rect.x, (int32_t)clip_rect.y},
+                          {(uint32_t)clip_rect.z, (uint32_t)clip_rect.w}};
+                      vkCmdSetScissor(graphics_buffer, 0, 1, &scissor);
 
-                    // Issue the draw
-                    vkCmdDrawIndexed(graphics_buffer, draw_cmd->ElemCount, 1,
-                                     draw_cmd->IdxOffset, draw_cmd->VtxOffset,
-                                     0);
+                      // Issue the draw
+                      vkCmdDrawIndexed(graphics_buffer, draw_cmd->ElemCount, 1,
+                                       draw_cmd->IdxOffset, draw_cmd->VtxOffset,
+                                       0);
+                    }
+
+                    // Adjust offsets
+                    idx_offset += draw_list->IdxBuffer.Size * sizeof(ImDrawIdx);
+                    vtx_offset +=
+                        draw_list->VtxBuffer.Size * sizeof(ImDrawVert);
                   }
 
-                  // Adjust offsets
-                  idx_offset += draw_list->IdxBuffer.Size * sizeof(ImDrawIdx);
-                  vtx_offset += draw_list->VtxBuffer.Size * sizeof(ImDrawVert);
+                  TracyCZoneEnd(draw_ctx);
                 }
               }
 

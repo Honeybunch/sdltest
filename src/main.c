@@ -91,6 +91,12 @@ static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
 int32_t SDL_main(int32_t argc, char *argv[]) {
   static const float qtr_pi = 0.7853981625f;
 
+  {
+    const char *app_info = HB_APP_INFO_STR;
+    size_t app_info_len = strlen(app_info);
+    TracyCAppInfo(app_info, app_info_len);
+  }
+
   // Create Temporary Arena Allocator
   static const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
   arena_allocator arena = create_arena_allocator(arena_alloc_size);
@@ -248,7 +254,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float timeOfDay = _PI;
   float sunY = cosf(_PI + timeOfDay);
   float sunX = sinf(_PI + timeOfDay);
-  float3 sunColor = (float3){1, 1, 1};
 
   while (running) {
     TracyCFrameMarkStart("Frame");
@@ -331,7 +336,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         }
         igText("Sun Y: %.3f", sunY);
         igText("Sun X: %.3f", sunX);
-        igColorEdit3("Sun Color", &sunColor, 0);
         igEnd();
       }
 

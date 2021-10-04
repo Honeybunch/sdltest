@@ -68,7 +68,10 @@
         "scene.h": "c",
         "mimalloc.h": "c",
         "tracyc.h": "c",
-        "profiling.h": "c"
+        "profiling.h": "c",
+        "vk_mem_alloc.h": "c",
+        "allocator.h": "c",
+        "volk.h": "c"
     },
     "cmake.configureOnOpen": false
 }
