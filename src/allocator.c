@@ -90,6 +90,7 @@ void reset_arena(arena_allocator a, bool allow_grow) {
 }
 
 void destroy_arena_allocator(arena_allocator a) {
+  TracyCFreeN(a.data, "Arena");
   mi_free(a.data);
   mi_heap_destroy(a.heap);
 }
