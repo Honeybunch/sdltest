@@ -44,6 +44,32 @@ static bool check_layer(const char *check_name, uint32_t layer_count,
   return found;
 }
 
+#ifdef VALIDATION
+static VkBool32
+vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                  VkDebugUtilsMessageTypeFlagsEXT messageTypes,
+                  const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
+                  void *pUserData) {
+  (void)messageTypes;
+  (void)pUserData;
+
+  if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT) {
+    SDL_LogVerbose(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+  } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT) {
+    SDL_LogInfo(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+  } else if (messageSeverity &
+             VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
+    SDL_LogWarn(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+  } else if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) {
+    SDL_LogError(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+  } else {
+    SDL_LogDebug(SDL_LOG_CATEGORY_RENDER, "%s", pCallbackData->pMessage);
+  }
+
+  return false;
+}
+#endif
+
 static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
                          VkSystemAllocationScope scope) {
   TracyCZone(ctx, true);
@@ -137,6 +163,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     int32_t flags = IMG_INIT_PNG;
     res = IMG_Init(flags);
     assert(res & IMG_INIT_PNG);
+
+    SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
   }
 
   SDL_Window *window = SDL_CreateWindow("SDL Test", SDL_WINDOWPOS_CENTERED,
@@ -219,6 +247,22 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     assert(err == VK_SUCCESS);
     volkLoadInstance(instance);
   }
+
+#ifdef VALIDATION
+  VkDebugUtilsMessengerEXT debug_utils_messenger = VK_NULL_HANDLE;
+  // Load debug callback
+  {
+    VkDebugUtilsMessengerCreateInfoEXT ext_info = {0};
+    ext_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+    ext_info.messageSeverity =
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_FLAG_BITS_MAX_ENUM_EXT;
+    ext_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_FLAG_BITS_MAX_ENUM_EXT;
+    ext_info.pfnUserCallback = vk_debug_callback;
+    err = vkCreateDebugUtilsMessengerEXT(instance, &ext_info, vk_alloc_ptr,
+                                         &debug_utils_messenger);
+    assert(err == VK_SUCCESS);
+  }
+#endif
 
   demo d = {0};
   bool success = demo_init(window, instance, std_alloc.alloc, arena.alloc,
@@ -457,6 +501,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   SDL_Quit();
 
   demo_destroy(&d);
+
+#ifdef VALIDATION
+  vkDestroyDebugUtilsMessengerEXT(instance, debug_utils_messenger,
+                                  vk_alloc_ptr);
+  debug_utils_messenger = VK_NULL_HANDLE;
+#endif
 
   vkDestroyInstance(instance, vk_alloc_ptr);
   instance = VK_NULL_HANDLE;
