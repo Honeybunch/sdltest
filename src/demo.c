@@ -500,6 +500,15 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     device_ext_names[device_ext_count++] = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
   }
 
+#ifdef TRACY_ENABLE
+  // Enable calibrated timestamps
+  {
+    assert(device_ext_count + 1 < MAX_EXT_COUNT);
+    device_ext_names[device_ext_count++] =
+        VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME;
+  }
+#endif
+
   // TODO: Check for Raytracing Support
   /*
   {
@@ -1440,6 +1449,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     VkCommandPoolCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     create_info.queueFamilyIndex = graphics_queue_family_index;
+    create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       err = vkCreateCommandPool(device, &create_info, vk_alloc,
@@ -1467,6 +1477,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
                                      &d->screenshot_buffers[i]);
       assert(err == VK_SUCCESS);
     }
+  }
+
+  // Create profiling contexts
+  for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+    d->tracy_gpu_contexts[i] = TracyCVkContextExt(
+        d->gpu, d->device, d->graphics_queue, d->graphics_buffers[i],
+        vkGetPhysicalDeviceCalibrateableTimeDomainsEXT,
+        vkGetCalibratedTimestampsEXT);
   }
 
   // Create Descriptor Set Pools
@@ -1691,6 +1709,8 @@ void demo_destroy(demo *d) {
   }
 
   for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+    TracyCVkContextDestroy(d->tracy_gpu_contexts[i]);
+
     vkDestroyImageView(device, d->depth_buffer_views[i], vk_alloc);
     vkDestroyDescriptorPool(device, d->descriptor_pools[i], vk_alloc);
     vkDestroyFence(device, d->fences[i], vk_alloc);
@@ -1919,6 +1939,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
     VkCommandBuffer upload_buffer = d->upload_buffers[frame_idx];
     VkCommandBuffer graphics_buffer = d->graphics_buffers[frame_idx];
 
+    TracyCGPUContext *gpu_gfx_ctx = d->tracy_gpu_contexts[frame_idx];
+
     VkSemaphore upload_sem = VK_NULL_HANDLE;
 
     // Record
@@ -1934,6 +1956,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
         err = vkBeginCommandBuffer(upload_buffer, &begin_info);
         assert(err == VK_SUCCESS);
+
+        TracyCVkNamedZone(gpu_gfx_ctx, upload_scope, upload_buffer, "Upload", 1,
+                          true);
 
         // Issue const buffer uploads
         {
@@ -2094,6 +2119,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           // TODO: If sky data has changed only...
         }
 
+        TracyCVkZoneEnd(upload_scope);
+        TracyCVkCollect(gpu_gfx_ctx, upload_buffer);
+
         err = vkEndCommandBuffer(upload_buffer);
 
         upload_sem = d->upload_complete_sems[frame_idx];
@@ -2116,6 +2144,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
       err = vkBeginCommandBuffer(graphics_buffer, &begin_info);
       assert(err == VK_SUCCESS);
+
+      TracyCVkNamedZone(gpu_gfx_ctx, frame_scope, graphics_buffer, "Render", 1,
+                        true);
 
       // Transition Swapchain Image
       {
@@ -2148,6 +2179,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
         // Main Geometry Pass
         {
+          TracyCVkNamedZone(gpu_gfx_ctx, main_scope, graphics_buffer,
+                            "Main Pass", 2, true);
           const float width = d->swap_width;
           const float height = d->swap_height;
 
@@ -2191,15 +2224,22 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               pipe);
 
+            TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, graphics_buffer,
+                              "Draw Scene", 3, true);
+
             demo_render_scene(d->floor_scene, graphics_buffer, pipe_layout,
                               d->gltf_view_descriptor_sets[frame_idx],
                               d->gltf_object_descriptor_sets[frame_idx],
                               d->gltf_material_descriptor_sets[frame_idx], vp,
                               d);
+
+            TracyCVkZoneEnd(scene_scope);
           }
 
           // Draw Skydome
           {
+            TracyCVkNamedZone(gpu_gfx_ctx, skydome_scope, graphics_buffer,
+                              "Draw Skydome", 3, true);
             // Another hack to fiddle with the matrix we send to the shader
             // for the skydome
             SkyPushConstants sky_consts = {.vp = *sky_vp};
@@ -2231,13 +2271,19 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             vkCmdBindIndexBuffer(graphics_buffer, b, 0, VK_INDEX_TYPE_UINT16);
             vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
             vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
+
+            TracyCVkZoneEnd(skydome_scope);
           }
 
           vkCmdEndRenderPass(graphics_buffer);
+
+          TracyCVkZoneEnd(main_scope);
         }
 
         // ImGui Render Pass
         {
+          TracyCVkNamedZone(gpu_gfx_ctx, imgui_scope, graphics_buffer, "ImGui",
+                            2, true);
           // ImGui Internal Render
           {
             TracyCZoneN(ctx, "ImGui Internal", true);
@@ -2264,7 +2310,6 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
               if (imgui_size > 0) {
 
                 if (imgui_size > d->imgui_mesh_data_size[frame_idx]) {
-
                   destroy_gpumesh(device, d->vma_alloc,
                                   &d->imgui_gpu[frame_idx]);
 
@@ -2395,22 +2440,24 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
                 gpumesh *imgui_mesh = &d->imgui_gpu[frame_idx];
 
-                VkDeviceSize idx_offset = 0;
-                VkDeviceSize vtx_offset =
+                uint32_t idx_offset = 0;
+                uint32_t vtx_offset = 0;
+
+                VkDeviceSize vtx_buffer_offset =
                     draw_data->TotalIdxCount * sizeof(ImDrawIdx);
 
                 {
                   TracyCZoneN(draw_ctx, "Record ImGui Draw Commands", true);
                   TracyCZoneColor(draw_ctx, TracyCategoryColorRendering);
+
+                  vkCmdBindIndexBuffer(graphics_buffer, imgui_mesh->gpu.buffer,
+                                       0, (VkIndexType)imgui_mesh->idx_type);
+                  vkCmdBindVertexBuffers(graphics_buffer, 0, 1,
+                                         &imgui_mesh->gpu.buffer,
+                                         &vtx_buffer_offset);
+
                   for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
                     const ImDrawList *draw_list = draw_data->CmdLists[i];
-
-                    vkCmdBindIndexBuffer(graphics_buffer,
-                                         imgui_mesh->gpu.buffer, idx_offset,
-                                         (VkIndexType)imgui_mesh->idx_type);
-                    vkCmdBindVertexBuffers(graphics_buffer, 0, 1,
-                                           &imgui_mesh->gpu.buffer,
-                                           &vtx_offset);
 
                     for (int32_t ii = 0; ii < draw_list->CmdBuffer.Size; ++ii) {
                       const ImDrawCmd *draw_cmd =
@@ -2424,14 +2471,13 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
                       // Issue the draw
                       vkCmdDrawIndexed(graphics_buffer, draw_cmd->ElemCount, 1,
-                                       draw_cmd->IdxOffset, draw_cmd->VtxOffset,
-                                       0);
+                                       draw_cmd->IdxOffset + idx_offset,
+                                       draw_cmd->VtxOffset + vtx_offset, 0);
                     }
 
                     // Adjust offsets
-                    idx_offset += draw_list->IdxBuffer.Size * sizeof(ImDrawIdx);
-                    vtx_offset +=
-                        draw_list->VtxBuffer.Size * sizeof(ImDrawVert);
+                    idx_offset += draw_list->IdxBuffer.Size;
+                    vtx_offset += draw_list->VtxBuffer.Size;
                   }
 
                   TracyCZoneEnd(draw_ctx);
@@ -2443,8 +2489,14 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
               TracyCZoneEnd(ctx);
             }
           }
+
+          TracyCVkZoneEnd(imgui_scope);
         }
       }
+
+      TracyCVkZoneEnd(frame_scope);
+
+      TracyCVkCollect(gpu_gfx_ctx, graphics_buffer);
 
       err = vkEndCommandBuffer(graphics_buffer);
       assert(err == VK_SUCCESS);

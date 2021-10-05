@@ -17,6 +17,7 @@
 #define TEXTURE_UPLOAD_QUEUE_SIZE 16
 
 typedef union SDL_Event SDL_Event;
+typedef struct TracyCGPUContext TracyCGPUContext;
 
 typedef struct demo {
   allocator std_alloc;
@@ -92,6 +93,8 @@ typedef struct demo {
   VkCommandBuffer upload_buffers[FRAME_LATENCY];
   VkCommandBuffer graphics_buffers[FRAME_LATENCY];
   VkCommandBuffer screenshot_buffers[FRAME_LATENCY];
+
+  TracyCGPUContext *tracy_gpu_contexts[FRAME_LATENCY];
 
   // For allowing the currently processed frame to access
   // resources being uploaded this frame

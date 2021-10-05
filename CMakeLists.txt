@@ -176,7 +176,8 @@ set(source "${CMAKE_CURRENT_LIST_DIR}/src/allocator.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/scene.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/simd.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/skydome.c"
-           "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp")
+           "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp"
+           "${CMAKE_CURRENT_LIST_DIR}/src/profiling.cpp")
 if(WIN32)
   add_executable(sdltest WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.rc")
   target_link_options(sdltest PRIVATE -Wl,/subsystem:windows)
