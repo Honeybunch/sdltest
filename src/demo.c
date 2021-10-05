@@ -2304,8 +2304,10 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
               uint32_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
               uint32_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
+              const uint32_t alignment = 8;
+              uint32_t align_padding = idx_size % alignment;
 
-              uint32_t imgui_size = idx_size + vtx_size;
+              uint32_t imgui_size = idx_size + align_padding + vtx_size;
 
               if (imgui_size > 0) {
 
@@ -2321,7 +2323,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 }
 
                 uint8_t *idx_dst = d->imgui_mesh_data;
-                uint8_t *vtx_dst = idx_dst + idx_size;
+                uint8_t *vtx_dst = idx_dst + idx_size + align_padding;
+
+                size_t test_size = 0;
 
                 // Organize all mesh data into a single cpu-side buffer
                 for (int32_t i = 0; i < draw_data->CmdListsCount; ++i) {
@@ -2332,6 +2336,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                   size_t vtx_byte_count =
                       cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
 
+                  test_size += idx_byte_count;
+                  test_size += vtx_byte_count;
+
                   memcpy(idx_dst, cmd_list->IdxBuffer.Data, idx_byte_count);
                   memcpy(vtx_dst, cmd_list->VtxBuffer.Data, vtx_byte_count);
 
@@ -2339,10 +2346,12 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                   vtx_dst += vtx_byte_count;
                 }
                 idx_dst = d->imgui_mesh_data;
-                vtx_dst = idx_dst + idx_size;
+                vtx_dst = idx_dst + idx_size + align_padding;
+
+                assert(test_size + align_padding == imgui_size);
 
                 if (realloc) {
-                  cpumesh imgui_cpu = {.geom_size = imgui_size,
+                  cpumesh imgui_cpu = {.geom_size = vtx_size,
                                        .index_count = draw_data->TotalIdxCount,
                                        .index_size = idx_size,
                                        .indices = (uint16_t *)idx_dst,
@@ -2443,8 +2452,11 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 uint32_t idx_offset = 0;
                 uint32_t vtx_offset = 0;
 
+                const uint32_t alignment = 8;
+
                 VkDeviceSize vtx_buffer_offset =
                     draw_data->TotalIdxCount * sizeof(ImDrawIdx);
+                vtx_buffer_offset += vtx_buffer_offset % alignment;
 
                 {
                   TracyCZoneN(draw_ctx, "Record ImGui Draw Commands", true);
