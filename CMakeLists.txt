@@ -71,6 +71,14 @@ endif()
 
 set(host_triple ${host_arch}-${host})
 
+# Set install prefix if not already overridden
+set(sdltest_install "${CMAKE_CURRENT_SOURCE_DIR}/install/${platform}")
+if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set (CMAKE_INSTALL_PREFIX ${sdltest_install} CACHE PATH "Default Install Path" FORCE )
+else()
+    set(sdltest_install ${CMAKE_INSTALL_PREFIX})
+endif()
+
 # Clang & GNU only for now
 if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "Clang" AND
    NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "AppleClang" AND
@@ -230,10 +238,12 @@ endif()
 
 target_compile_features(sdltest PRIVATE c_std_11)
 
+set(assets_dest "assets")
 if(ANDROID)
+  set(assets_dest "$<CONFIG>/assets")
   install(TARGETS sdltest
-          RUNTIME DESTINATION "lib/${arch}"
-          LIBRARY DESTINATION "lib/${arch}")
+          RUNTIME DESTINATION "$<CONFIG>/lib/${arch}"
+          LIBRARY DESTINATION "$<CONFIG>/lib/${arch}")
 else()
   install(TARGETS sdltest
           RUNTIME DESTINATION "."
@@ -273,10 +283,10 @@ add_custom_command(TARGET sdltest POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_CURRENT_LIST_DIR}/assets ${CMAKE_CFG_INTDIR}/assets)
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/scenes
-                   DESTINATION assets)
+                   DESTINATION ${assets_dest})
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/assets/textures
-                  DESTINATION assets
+                  DESTINATION ${assets_dest}
                   FILES_MATCHING PATTERN "*.ktx2")
 
 # Install dlls on dynamic builds
@@ -313,11 +323,12 @@ if(NOT STATIC AND WIN32)
 endif()
 
 if(ANDROID)
+  # CPack has no support for APKs, so we do it manually
   add_subdirectory(android)
 elseif(IOS)
   # TODO: custom iOS build steps
-endif()
-  # Destkop OS Packaging
+else()
+  # CPack Packaging
   set(CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})
   set(CPACK_PACKAGE_DESCRIPTION ${CMAKE_PROJECT_DESCRIPTION})
   set(CPACK_PACKAGE_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
@@ -334,6 +345,7 @@ endif()
   set(CPACK_PACKAGE_EXECUTABLES sdltest "SDLTest")
   set(CPACK_PACKAGE_INSTALL_DIRECTORY "sdltest")
 
+  # Desktop OSes
   if(WIN32)
     find_package(WIX REQUIRED)
 
@@ -359,3 +371,4 @@ endif()
   endif()
 
   include(CPack)
+endif()
