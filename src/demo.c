@@ -2304,6 +2304,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
               uint32_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
               uint32_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
+              // We know to use 8 for the alignment because the vertex attribute
+              // layout starts with a float2
               const uint32_t alignment = 8;
               uint32_t align_padding = idx_size % alignment;
 
@@ -2397,6 +2399,10 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
               const float width = d->ig_io->DisplaySize.x;
               const float height = d->ig_io->DisplaySize.y;
 
+              // We know to use 8 for the alignment because the vertex attribute
+              // layout starts with a float2
+              const uint32_t alignment = 8;
+
               // Set Render Pass
               {
                 VkFramebuffer framebuffer = d->ui_pass_framebuffers[frame_idx];
@@ -2451,8 +2457,6 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
                 uint32_t idx_offset = 0;
                 uint32_t vtx_offset = 0;
-
-                const uint32_t alignment = 8;
 
                 VkDeviceSize vtx_buffer_offset =
                     draw_data->TotalIdxCount * sizeof(ImDrawIdx);
