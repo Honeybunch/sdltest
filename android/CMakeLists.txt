@@ -39,6 +39,7 @@ add_custom_target(copy_so ALL
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libSDL2.so ${sdl_build_path}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libSDL2_image.so ${sdl_build_path}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libz.so ${sdl_build_path}
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libTracyClient.so ${sdl_build_path}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libzstd$<$<CONFIG:Debug>:d>.so ${sdl_build_path}
     COMMAND ${CMAKE_COMMAND} -E copy ${libcppshared_path} ${sdl_build_path})
 # Bring along the validation layers
@@ -58,11 +59,12 @@ endif()
 install(FILES 
         ${sdl_build_path}/libhidapi.so
         ${sdl_build_path}/libktx.so
-        ${sdl_build_path}/libmimalloc$<$<CONFIG:Debug>:-$<LOWER_CASE:$<CONFIG>>>.so 
-        ${sdl_build_path}/libSDL2.so 
-        ${sdl_build_path}/libSDL2_image.so 
-        ${sdl_build_path}/libz.so 
-        ${sdl_build_path}/libzstd$<$<CONFIG:Debug>:d>.so 
+        ${sdl_build_path}/libmimalloc$<$<CONFIG:Debug>:-$<LOWER_CASE:$<CONFIG>>>.so
+        ${sdl_build_path}/libSDL2.so
+        ${sdl_build_path}/libSDL2_image.so
+        ${sdl_build_path}/libz.so
+        ${sdl_build_path}/libTracyClient.so
+        ${sdl_build_path}/libzstd$<$<CONFIG:Debug>:d>.so
         ${sdl_build_path}/libc++_shared.so
         DESTINATION $<CONFIG>/lib/${arch})
 
@@ -91,6 +93,7 @@ add_custom_command(
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libSDL2.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libSDL2_image.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libz.so
+    COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libTracyClient.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libzstd$<$<CONFIG:Debug>:d>.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libc++_shared.so
     COMMAND ${aapt_path} ARGS add -v ${unaligned_apk_path} lib/${arch}/libsdltest.so
