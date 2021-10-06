@@ -23,16 +23,20 @@
 #define MAX_EXT_COUNT 16
 
 static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
-                         VkDeviceMemory memory, VkDeviceSize size) {
+                         VkDeviceMemory memory, VkDeviceSize size,
+                         void *pUserData) {
   (void)allocator;
   (void)memoryType;
+  (void)pUserData;
   TracyCAllocN((void *)memory, size, "VMA");
 }
 static void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
-                        VkDeviceMemory memory, VkDeviceSize size) {
+                        VkDeviceMemory memory, VkDeviceSize size,
+                        void *pUserData) {
   (void)allocator;
   (void)memoryType;
   (void)size;
+  (void)pUserData;
   TracyCFreeN((void *)memory, "VMA");
 }
 

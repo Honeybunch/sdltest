@@ -2,8 +2,9 @@
 
 cd ./vcpkg
 
+REM For now, get DXC from Vulkan SDK, which is still kind of required
 REM Install Windows Tools
-call vcpkg install tool-dxc:x64-windows
+REM call vcpkg install tool-dxc:x64-windows
 
 REM Install Windows Deps
 call vcpkg install cgltf:x64-windows
