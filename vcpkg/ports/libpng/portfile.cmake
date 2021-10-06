@@ -1,3 +1,5 @@
+vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
+
 set(LIBPNG_VER 1.6.37)
 
 # Download the apng patch
