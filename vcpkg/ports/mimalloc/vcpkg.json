@@ -3,7 +3,7 @@
     "version": "1.7.2",
     "description": "Compact general purpose allocator with excellent performance",
     "homepage": "https://github.com/microsoft/mimalloc",
-    "supports": "!(arm | uwp)",
+    "supports": "!(uwp)",
     "dependencies": [
         {
             "name": "vcpkg-cmake",

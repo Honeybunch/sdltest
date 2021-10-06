@@ -45,6 +45,7 @@ static bool check_layer(const char *check_name, uint32_t layer_count,
 }
 
 #ifdef VALIDATION
+#ifndef __ANDROID__
 static VkBool32
 vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                   VkDebugUtilsMessageTypeFlagsEXT messageTypes,
@@ -68,6 +69,7 @@ vk_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
 
   return false;
 }
+#endif
 #endif
 
 static void *vk_alloc_fn(void *pUserData, size_t size, size_t alignment,
@@ -148,7 +150,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
               .scale = {1, 1, 1},
           },
       .aspect = (float)WIDTH / (float)HEIGHT,
-      .fov = qtr_pi,
+      .fov = qtr_pi * 2,
       .near = 0.01f,
       .far = 100.0f,
   };
@@ -218,10 +220,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
 // Add debug ext
 #ifdef VALIDATION
+#ifndef __ANDROID__
     {
       assert(ext_count + 1 < MAX_EXT_COUNT);
       ext_names[ext_count++] = VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
     }
+#endif
 #endif
 
     VkApplicationInfo app_info = {0};
@@ -250,7 +254,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
 #ifdef VALIDATION
   VkDebugUtilsMessengerEXT debug_utils_messenger = VK_NULL_HANDLE;
-  // Load debug callback
+// Load debug callback
+#ifndef __ANDROID__
   {
     VkDebugUtilsMessengerCreateInfoEXT ext_info = {0};
     ext_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -262,6 +267,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
                                          &debug_utils_messenger);
     assert(err == VK_SUCCESS);
   }
+#endif
 #endif
 
   demo d = {0};
@@ -324,9 +330,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       TracyCZoneColor(ctx, TracyCategoryColorInput);
 
       SDL_Event e = {0};
-      SDL_PollEvent(&e);
+      {
+        TracyCZoneN(sdl_ctx, "SDL_PollEvent", true);
+        SDL_PollEvent(&e);
+        TracyCZoneEnd(sdl_ctx);
+      }
       if (e.type == SDL_QUIT) {
         running = false;
+        TracyCZoneEnd(ctx);
         break;
       }
       demo_process_event(&d, &e);
@@ -503,9 +514,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   demo_destroy(&d);
 
 #ifdef VALIDATION
+#ifndef __ANDROID__
   vkDestroyDebugUtilsMessengerEXT(instance, debug_utils_messenger,
                                   vk_alloc_ptr);
   debug_utils_messenger = VK_NULL_HANDLE;
+#endif
 #endif
 
   vkDestroyInstance(instance, vk_alloc_ptr);

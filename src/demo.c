@@ -501,12 +501,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   }
 
 #ifdef TRACY_ENABLE
+#ifndef __ANDROID__
   // Enable calibrated timestamps
   {
     assert(device_ext_count + 1 < MAX_EXT_COUNT);
     device_ext_names[device_ext_count++] =
         VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME;
   }
+#endif
 #endif
 
   // TODO: Check for Raytracing Support
@@ -1813,6 +1815,8 @@ void demo_upload_scene(demo *d, const scene *s) {
 }
 
 void demo_process_event(demo *d, const SDL_Event *e) {
+  TracyCZoneN(ctx, "demo_process_event", true);
+  TracyCZoneColor(ctx, TracyCategoryColorInput);
   ImGuiIO *io = d->ig_io;
 
   switch (e->type) {
@@ -1825,7 +1829,7 @@ void demo_process_event(demo *d, const SDL_Event *e) {
       io->MouseWheel += 1;
     if (e->wheel.y < 0)
       io->MouseWheel -= 1;
-    return;
+    break;
   }
   case SDL_MOUSEBUTTONDOWN: {
     // Don't handle global mouse events for now
@@ -1840,11 +1844,11 @@ void demo_process_event(demo *d, const SDL_Event *e) {
       bd->MousePressed[2] = true;
     }
     */
-    return;
+    break;
   }
   case SDL_TEXTINPUT: {
     ImGuiIO_AddInputCharactersUTF8(io, e->text.text);
-    return;
+    break;
   }
   case SDL_KEYDOWN:
   case SDL_KEYUP: {
@@ -1859,7 +1863,7 @@ void demo_process_event(demo *d, const SDL_Event *e) {
 #else
     io->KeySuper = ((SDL_GetModState() & KMOD_GUI) != 0);
 #endif
-    return;
+    break;
   }
   case SDL_WINDOWEVENT: {
     // TODO: Update ImGui to support this
@@ -1867,9 +1871,11 @@ void demo_process_event(demo *d, const SDL_Event *e) {
     //  ImGuiIO_AddFocusEvent(io, true);
     // else if (e->window.event == SDL_WINDOWEVENT_FOCUS_LOST)
     //  ImGuiIO_AddFocusEvent(io, false);
-    return;
+    break;
   }
   }
+
+  TracyCZoneEnd(ctx);
 }
 
 void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {

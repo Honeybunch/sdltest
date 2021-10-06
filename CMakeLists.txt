@@ -212,7 +212,7 @@ else()
 endif()
 #set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;unofficial::vulkan-memory-allocator::vulkan-memory-allocator;imgui::imgui;Optick::OptickCore;mimalloc;mimalloc-static;KTX::ktx;Tracy::TracyClient")
+set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;unofficial::vulkan-memory-allocator::vulkan-memory-allocator;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;Tracy::TracyClient")
 
 target_link_libraries(sdltest PRIVATE ${library_list})
 
