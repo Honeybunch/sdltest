@@ -20,6 +20,12 @@
 #include "simd.h"
 #include "skydome.h"
 
+#ifdef __ANDROID__
+#define ASSET_PREFIX
+#else
+#define ASSET_PREFIX "./assets/"
+#endif
+
 #define MAX_EXT_COUNT 16
 
 static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
@@ -622,6 +628,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   VkFormat swapchain_image_format = VK_FORMAT_UNDEFINED;
   VkColorSpaceKHR swapchain_color_space = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
   uint32_t swap_img_count = FRAME_LATENCY;
+
   {
     uint32_t format_count = 0;
     err =
@@ -741,7 +748,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     VkSwapchainCreateInfoKHR create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
     create_info.surface = surface;
+    // On Android, vkGetSwapchainImagesKHR is always returning 1 more image than
+    // our min image count
+#ifdef __ANDROID__
+    create_info.minImageCount = swap_img_count - 1;
+#else
     create_info.minImageCount = swap_img_count;
+#endif
     create_info.imageFormat = swapchain_image_format;
     create_info.imageColorSpace = swapchain_color_space;
     create_info.imageExtent = swapchain_extent;
@@ -868,7 +881,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     if (cache_file != NULL) {
       data_size = (size_t)SDL_RWsize(cache_file);
 
-      data = mi_malloc(data_size);
+      data = hb_alloc(std_alloc, data_size);
 
       SDL_RWread(cache_file, data, data_size, 1);
 
@@ -884,7 +897,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     assert(err == VK_SUCCESS);
 
     if (data) {
-      mi_free(data);
+      hb_free(std_alloc, data);
     }
     TracyCZoneEnd(pipe_cache_ctx);
   }
@@ -919,46 +932,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     err = vkCreateSampler(device, &create_info, vk_alloc, &sampler);
     assert(err == VK_SUCCESS);
   }
-
-  // Create Skydome Descriptor Set Layout
-  VkDescriptorSetLayout skydome_layout = VK_NULL_HANDLE;
-  {
-    // Note: binding 1 is for the displacement map, which is useful only in
-    // the vertex stage
-    VkDescriptorSetLayoutBinding bindings[1] = {
-        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-    };
-
-    VkDescriptorSetLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    create_info.bindingCount = 1;
-    create_info.pBindings = bindings;
-    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &skydome_layout);
-    assert(err == VK_SUCCESS);
-  }
-
-  // Create Skydome Pipeline Layout
-  VkPipelineLayout skydome_pipe_layout = VK_NULL_HANDLE;
-  {
-    VkPipelineLayoutCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.setLayoutCount = 1;
-    create_info.pSetLayouts = &skydome_layout;
-    create_info.pushConstantRangeCount = 1;
-    create_info.pPushConstantRanges = &sky_const_range;
-
-    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
-                                 &skydome_pipe_layout);
-    assert(err == VK_SUCCESS);
-  }
-
-  // Create Skydome Pipeline
-  VkPipeline skydome_pipeline = VK_NULL_HANDLE;
-  err = create_skydome_pipeline(device, vk_alloc, pipeline_cache, render_pass,
-                                width, height, skydome_pipe_layout,
-                                &skydome_pipeline);
-  assert(err == VK_SUCCESS);
 
   // Create Common Object DescriptorSet Layout
   VkDescriptorSetLayout gltf_object_set_layout = VK_NULL_HANDLE;
@@ -1074,6 +1047,46 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
                                  &gltf_rt_pipe_layout);
     assert(err == VK_SUCCESS);
   }
+
+  // Create Skydome Descriptor Set Layout
+  VkDescriptorSetLayout skydome_layout = VK_NULL_HANDLE;
+  {
+    // Note: binding 1 is for the displacement map, which is useful only in
+    // the vertex stage
+    VkDescriptorSetLayoutBinding bindings[1] = {
+        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = 1;
+    create_info.pBindings = bindings;
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
+                                      &skydome_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Skydome Pipeline Layout
+  VkPipelineLayout skydome_pipe_layout = VK_NULL_HANDLE;
+  {
+    VkPipelineLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    create_info.setLayoutCount = 1;
+    create_info.pSetLayouts = &skydome_layout;
+    create_info.pushConstantRangeCount = 1;
+    create_info.pPushConstantRanges = &sky_const_range;
+
+    err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
+                                 &skydome_pipe_layout);
+    assert(err == VK_SUCCESS);
+  }
+
+  // Create Skydome Pipeline
+  VkPipeline skydome_pipeline = VK_NULL_HANDLE;
+  err = create_skydome_pipeline(device, vk_alloc, pipeline_cache, render_pass,
+                                width, height, skydome_pipe_layout,
+                                &skydome_pipeline);
+  assert(err == VK_SUCCESS);
 
   // HACK: Get this function here...
   PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR =
@@ -1206,12 +1219,12 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Load scene
   scene *duck_scene = NULL;
   load_scene(device, tmp_alloc, std_alloc, vk_alloc, vma_alloc, upload_mem_pool,
-             texture_mem_pool, "./assets/scenes/duck.glb", &duck_scene);
+             texture_mem_pool, ASSET_PREFIX "scenes/duck.glb", &duck_scene);
 
   // Load Floor
   scene *floor_scene = NULL;
   load_scene(device, tmp_alloc, std_alloc, vk_alloc, vma_alloc, upload_mem_pool,
-             texture_mem_pool, "./assets/scenes/Floor.glb", &floor_scene);
+             texture_mem_pool, ASSET_PREFIX "scenes/Floor.glb", &floor_scene);
 
   // Create resources for screenshots
   gpuimage screenshot_image = {0};

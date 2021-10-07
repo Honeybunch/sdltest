@@ -2,6 +2,9 @@
 #include "cpuresources.h"
 #include "gpuresources.h"
 
+#include <SDL2/SDL_log.h>
+#include <SDL2/SDL_rwops.h>
+
 #include <assert.h>
 #include <malloc.h>
 #include <stdbool.h>
@@ -134,13 +137,65 @@ void parse_child_counts(cgltf_node *node, uint32_t *child_counts,
   }
 }
 
+cgltf_result sdl_read_gltf(const struct cgltf_memory_options *memory_options,
+                           const struct cgltf_file_options *file_options,
+                           const char *path, cgltf_size *size, void **data) {
+  SDL_RWops *file = (SDL_RWops *)file_options->user_data;
+  cgltf_size file_size = SDL_RWsize(file);
+
+  void *mem = memory_options->alloc(memory_options->user_data, file_size);
+  if (mem == NULL) {
+    assert(0);
+    return cgltf_result_out_of_memory;
+  }
+
+  if (SDL_RWread(file, mem, file_size, 1) == 0) {
+    return cgltf_result_io_error;
+  }
+
+  *size = file_size;
+  *data = mem;
+
+  return cgltf_result_success;
+}
+void sdl_release_gltf(const struct cgltf_memory_options *memory_options,
+                      const struct cgltf_file_options *file_options,
+                      void *data) {
+  SDL_RWops *file = (SDL_RWops *)file_options->user_data;
+
+  memory_options->free(memory_options->user_data, data);
+
+  if (SDL_RWclose(file) != 0) {
+    assert(0);
+  }
+}
+
 int32_t load_scene(VkDevice device, allocator tmp_alloc, allocator std_alloc,
                    const VkAllocationCallbacks *vk_alloc,
                    VmaAllocator vma_alloc, VmaPool up_pool, VmaPool tex_pool,
                    const char *filename, scene **out_scene) {
   // We really only want to handle glbs; gltfs should be pre-packed
-  cgltf_options options = {.type = cgltf_file_type_glb};
+  SDL_RWops *gltf_file = SDL_RWFromFile(filename, "rb");
+
+  if (gltf_file == NULL) {
+    SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", SDL_GetError());
+    assert(0);
+  }
+
+  cgltf_options options = {.type = cgltf_file_type_glb,
+                           .memory =
+                               {
+                                   .user_data = std_alloc.user_data,
+                                   .alloc = std_alloc.alloc,
+                                   .free = std_alloc.free,
+                               },
+                           .file = {
+                               .read = sdl_read_gltf,
+                               .release = sdl_release_gltf,
+                               .user_data = gltf_file,
+                           }};
   cgltf_data *data = NULL;
+  // Parse file loaded via SDL
   cgltf_result res = cgltf_parse_file(&options, filename, &data);
   assert(res == cgltf_result_success);
 

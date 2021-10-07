@@ -11,7 +11,11 @@
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include <cimgui.h>
 
+#ifdef __ANDROID__
+#define FRAME_LATENCY 4
+#else
 #define FRAME_LATENCY 3
+#endif
 #define CONST_BUFFER_UPLOAD_QUEUE_SIZE 16
 #define MESH_UPLOAD_QUEUE_SIZE 16
 #define TEXTURE_UPLOAD_QUEUE_SIZE 16

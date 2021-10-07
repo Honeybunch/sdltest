@@ -291,7 +291,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   bool showImGui = true;
   bool showSkyWindow = true;
   bool showDemoWindow = false;
-  bool showMetricsWindow = false;
+  bool showMetricsWindow = true;
 
   uint64_t time = 0;
   uint64_t last_time = SDL_GetPerformanceCounter();

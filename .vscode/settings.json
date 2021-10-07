@@ -69,9 +69,9 @@
         "mimalloc.h": "c",
         "tracyc.h": "c",
         "profiling.h": "c",
-        "vk_mem_alloc.h": "c",
         "allocator.h": "c",
-        "volk.h": "c"
+        "volk.h": "c",
+        "sdl_rwops.h": "c"
     },
     "cmake.configureOnOpen": false
 }

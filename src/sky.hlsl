@@ -192,3 +192,39 @@ FragmentOut frag(Interpolators i) {
   return o;
 }
 
+// No-op version of this shader for debugging shader compiler crashes
+/*
+#include "common.hlsli"
+
+[[vk::push_constant]]
+ConstantBuffer<SkyPushConstants> consts : register(b0);
+
+struct SkyData {
+  float turbidity;
+  float albedo;
+  float3 sun_dir;
+};
+ConstantBuffer<SkyData> sky_data : register(b1, space0); // Fragment Stage Only
+
+struct VertexIn {
+  float3 local_pos : SV_POSITION;
+};
+
+struct Interpolators {
+};
+
+struct FragmentOut {
+  float4 color : SV_TARGET;
+};
+
+Interpolators vert(VertexIn i) {
+  Interpolators o;
+  return o;
+}
+
+FragmentOut frag(Interpolators i) {  
+  FragmentOut o;
+  o.color = float4(1.0, 0.0, 0.0, 1.0);
+  return o;
+}
+*/
