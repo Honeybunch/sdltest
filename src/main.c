@@ -301,9 +301,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   float delta_time_seconds = 0.0f;
 
   // Controlled by ImGui and fed to the sky system
-  float timeOfDay = _PI;
-  float sunY = cosf(_PI + timeOfDay);
-  float sunX = sinf(_PI + timeOfDay);
+  float time_of_day = _PI;
+  float sun_y = cosf(_PI + time_of_day);
+  float sun_x = sinf(_PI + time_of_day);
 
   while (running) {
     TracyCFrameMarkStart("Frame");
@@ -385,12 +385,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       }
 
       if (showSkyWindow && igBegin("Sky Control", &showSkyWindow, 0)) {
-        if (igSliderFloat("Time of Day", &timeOfDay, 0.0f, _2PI, "%.3f", 0)) {
-          sunY = cosf(_PI + timeOfDay);
-          sunX = sinf(_PI + timeOfDay);
+        if (igSliderFloat("Time of Day", &time_of_day, 0.0f, _2PI, "%.3f", 0)) {
+          sun_y = cosf(_PI + time_of_day);
+          sun_x = sinf(_PI + time_of_day);
         }
-        igText("Sun Y: %.3f", sunY);
-        igText("Sun X: %.3f", sunX);
+        igSliderInt("Albedo", (int32_t *)&sky_data.albedo, 0, 1, "%u", 0);
+        igSliderInt("Turbidity", (int32_t *)&sky_data.turbidity, 1, 10, "%u",
+                    0);
         igEnd();
       }
 
@@ -420,7 +421,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     mulmf44(&proj, &sky_view, &sky_vp);
 
     // Change sun position
-    sky_data.sun_dir = (float3){sunX, sunY, 0};
+    sky_data.sun_dir = (float3){sun_x, sun_y, 0};
 
     // Update view camera constant buffer
     {

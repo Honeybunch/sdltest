@@ -100,6 +100,9 @@ void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer);
 gpuconstbuffer create_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
                                      const VkAllocationCallbacks *vk_alloc,
                                      uint64_t size);
+gpuconstbuffer create_gpustoragebuffer(VkDevice device, VmaAllocator allocator,
+                                       const VkAllocationCallbacks *vk_alloc,
+                                       uint64_t size);
 void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
                             const VkAllocationCallbacks *vk_alloc,
                             gpuconstbuffer cb);

@@ -4,7 +4,7 @@
 #include "hosek.hlsli"
 
 [[vk::push_constant]]
-ConstantBuffer<SkyPushConstants> consts : register(b0);
+ConstantBuffer<SkyPushConstants> consts : register(b0, space0);
 
 #define CIE_X 0
 #define CIE_Y 1
@@ -12,11 +12,12 @@ ConstantBuffer<SkyPushConstants> consts : register(b0);
 #define M_PI 3.1415926535897932384626433832795
 
 struct SkyData {
-  float turbidity;
-  float albedo;
+  uint32_t turbidity;
+  uint32_t albedo;
   float3 sun_dir;
 };
 ConstantBuffer<SkyData> sky_data : register(b1, space0); // Fragment Stage Only
+TextureBuffer<SkyHosekData> hosek_data : register(t0, space1); // Fragment Stage Only
 
 struct VertexIn {
   float3 local_pos : SV_POSITION;
@@ -42,17 +43,17 @@ Interpolators vert(VertexIn i) {
 
 float sample_coeff(int channel, int albedo, int turbidity, int quintic_coeff, int coeff) {
     int index =  540 * albedo + 54 * turbidity + 9 * quintic_coeff + coeff;
-  if (channel == CIE_X) return kHosekCoeffsX[index];
-  if (channel == CIE_Y) return kHosekCoeffsY[index];
-  if (channel == CIE_Z) return kHosekCoeffsZ[index];
+  if (channel == CIE_X) return hosek_data.coeffsX[index];
+  if (channel == CIE_Y) return hosek_data.coeffsY[index];
+  if (channel == CIE_Z) return hosek_data.coeffsZ[index];
   return 0;
 }
 
 float sample_radiance(int channel, int albedo, int turbidity, int quintic_coeff) {
     int index = 60 * albedo + 6 * turbidity + quintic_coeff;
-  if (channel == CIE_X) return kHosekRadX[index];
-  if (channel == CIE_Y) return kHosekRadY[index];
-  if (channel == CIE_Z) return kHosekRadZ[index];
+  if (channel == CIE_X) return hosek_data.radX[index];
+  if (channel == CIE_Y) return hosek_data.radY[index];
+  if (channel == CIE_Z) return hosek_data.radZ[index];
   return 0;
 }
 
@@ -147,7 +148,7 @@ float angle(float z1, float a1, float z2, float a2) {
     cos(z1) * cos(z2));
 }
 
-float3 sample_sky(float gamma, float theta, float albedo, float turbidity, float sun_zenith) {
+float3 sample_sky(float gamma, float theta, uint32_t albedo, uint32_t turbidity, float sun_zenith) {
   return spectral_radiance(theta, gamma, albedo, turbidity, sun_zenith) * mean_spectral_radiance(albedo, turbidity, sun_zenith);
 }
 

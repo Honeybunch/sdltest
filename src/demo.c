@@ -14,6 +14,7 @@
 #include <vk_mem_alloc.h>
 
 #include "cpuresources.h"
+#include "hosek.h"
 #include "pipelines.h"
 #include "profiling.h"
 #include "shadercommon.h"
@@ -206,7 +207,6 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
         TracyCZoneColor(update_object_ctx, TracyCategoryColorRendering);
 
         VmaAllocator vma_alloc = d->vma_alloc;
-        VkBuffer object_host = d->object_const_buffer.host.buffer;
         VmaAllocation object_host_alloc = d->object_const_buffer.host.alloc;
 
         uint8_t *data = NULL;
@@ -1051,8 +1051,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Create Skydome Descriptor Set Layout
   VkDescriptorSetLayout skydome_layout = VK_NULL_HANDLE;
   {
-    // Note: binding 1 is for the displacement map, which is useful only in
-    // the vertex stage
     VkDescriptorSetLayoutBinding bindings[1] = {
         {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
     };
@@ -1066,13 +1064,34 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     assert(err == VK_SUCCESS);
   }
 
+  // Create Descriptor Set for Hosek coeff data
+  VkDescriptorSetLayout hosek_layout = VK_NULL_HANDLE;
+  {
+    VkDescriptorSetLayoutBinding bindings[1] = {
+        {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+    };
+
+    VkDescriptorSetLayoutCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    create_info.bindingCount = 1;
+    create_info.pBindings = bindings;
+    err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
+                                      &hosek_layout);
+    assert(err == VK_SUCCESS);
+  }
+
   // Create Skydome Pipeline Layout
   VkPipelineLayout skydome_pipe_layout = VK_NULL_HANDLE;
   {
+    VkDescriptorSetLayout layouts[] = {
+        skydome_layout,
+        hosek_layout,
+    };
+
     VkPipelineLayoutCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    create_info.setLayoutCount = 1;
-    create_info.pSetLayouts = &skydome_layout;
+    create_info.setLayoutCount = 2;
+    create_info.pSetLayouts = layouts;
     create_info.pushConstantRangeCount = 1;
     create_info.pPushConstantRanges = &sky_const_range;
 
@@ -1204,6 +1223,10 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   gpuconstbuffer sky_const_buffer =
       create_gpuconstbuffer(device, vma_alloc, vk_alloc, sizeof(SkyData));
 
+  // Create Storage buffer for hosek data
+  gpuconstbuffer hosek_const_buffer = create_gpustoragebuffer(
+      device, vma_alloc, vk_alloc, sizeof(SkyHosekData));
+
   // Create Uniform buffer for object data
   gpuconstbuffer object_const_buffer = create_gpuconstbuffer(
       device, vma_alloc, vk_alloc, sizeof(CommonObjectData));
@@ -1288,9 +1311,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   d->pipeline_cache = pipeline_cache;
   d->sampler = sampler;
   d->skydome_layout = skydome_layout;
+  d->hosek_layout = hosek_layout;
   d->skydome_pipe_layout = skydome_pipe_layout;
   d->skydome_pipeline = skydome_pipeline;
   d->sky_const_buffer = sky_const_buffer;
+  d->hosek_const_buffer = hosek_const_buffer;
   d->object_const_buffer = object_const_buffer;
   d->camera_const_buffer = camera_const_buffer;
   d->light_const_buffer = light_const_buffer;
@@ -1313,6 +1338,29 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   d->screenshot_image = screenshot_image;
   d->screenshot_fence = screenshot_fence;
   d->frame_idx = 0;
+
+  // Setup data for hosek buffer
+  {
+    TracyCZoneN(hosek_ctx, "Update Hosek Data", true);
+
+    VkBuffer hosek_host = d->hosek_const_buffer.host.buffer;
+    VmaAllocation hosek_host_alloc = d->hosek_const_buffer.host.alloc;
+
+    uint8_t *data = NULL;
+    err = vmaMapMemory(vma_alloc, hosek_host_alloc, (void **)&data);
+    if (err != VK_SUCCESS) {
+      assert(0);
+      return false;
+    }
+    SkyHosekData hosek_data = {0};
+    init_hosek_data(&hosek_data);
+
+    SDL_memcpy(data, &hosek_data, sizeof(SkyHosekData));
+    vmaUnmapMemory(vma_alloc, hosek_host_alloc);
+
+    demo_upload_const_buffer(d, &d->hosek_const_buffer);
+    TracyCZoneEnd(hosek_ctx);
+  }
 
   demo_upload_mesh(d, &d->skydome_gpu);
   demo_upload_scene(d, d->duck_scene);
@@ -1516,7 +1564,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
 
     VkDescriptorPoolCreateInfo create_info = {0};
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    create_info.maxSets = 6;
+    create_info.maxSets = 7;
     create_info.poolSizeCount = pool_sizes_count;
     create_info.pPoolSizes = pool_sizes;
 
@@ -1538,6 +1586,15 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
       alloc_info.descriptorPool = d->descriptor_pools[i];
       err = vkAllocateDescriptorSets(device, &alloc_info,
                                      &d->skydome_descriptor_sets[i]);
+      assert(err == VK_SUCCESS);
+    }
+
+    // Only need one descriptor set for the hosek data
+    alloc_info.pSetLayouts = &hosek_layout;
+    {
+      alloc_info.descriptorPool = d->descriptor_pools[0];
+      err = vkAllocateDescriptorSets(device, &alloc_info,
+                                     &d->hosek_descriptor_set);
       assert(err == VK_SUCCESS);
     }
 
@@ -1679,6 +1736,21 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     }
   }
 
+  // Write Hosek descriptor set seperately
+  {
+    VkDescriptorBufferInfo hosek_info = {hosek_const_buffer.gpu.buffer, 0,
+                                         hosek_const_buffer.size};
+    VkWriteDescriptorSet write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .pBufferInfo = &hosek_info,
+        .dstSet = d->hosek_descriptor_set,
+    };
+    vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
+  }
+
   // Create Fences
   {
     VkFenceCreateInfo create_info = {
@@ -1751,6 +1823,7 @@ void demo_destroy(demo *d) {
 
   destroy_scene(device, d->std_alloc, vma_alloc, vk_alloc, d->floor_scene);
   destroy_scene(device, d->std_alloc, vma_alloc, vk_alloc, d->duck_scene);
+  destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->hosek_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->object_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
@@ -1767,6 +1840,7 @@ void demo_destroy(demo *d) {
   hb_free(d->std_alloc, d->queue_props);
   vkDestroySampler(device, d->sampler, vk_alloc);
 
+  vkDestroyDescriptorSetLayout(device, d->hosek_layout, vk_alloc);
   vkDestroyDescriptorSetLayout(device, d->skydome_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->skydome_pipe_layout, vk_alloc);
   vkDestroyPipeline(device, d->skydome_pipeline, vk_alloc);
@@ -2281,6 +2355,11 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                 d->skydome_pipe_layout, 0, 1,
                 &d->skydome_descriptor_sets[frame_idx], 0, NULL);
+
+            vkCmdBindDescriptorSets(graphics_buffer,
+                                    VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                    d->skydome_pipe_layout, 1, 1,
+                                    &d->hosek_descriptor_set, 0, NULL);
 
             VkBuffer b = d->skydome_gpu.gpu.buffer;
 

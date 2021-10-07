@@ -15,7 +15,7 @@ _Static_assert(sizeof(ImGuiPushConstants) <= PUSH_CONSTANT_BYTES,
                "Too Many Push Constants");
 
 typedef struct SkyData {
-  float turbidity;
-  float albedo;
+  uint32_t turbidity;
+  uint32_t albedo;
   float3 sun_dir;
 } SkyData;

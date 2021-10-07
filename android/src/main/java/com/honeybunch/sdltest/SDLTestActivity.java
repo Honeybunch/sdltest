@@ -26,7 +26,8 @@ public class SDLTestActivity extends SDLActivity {
         return new String[] {
                 "hidapi",
                 "SDL2",
-                "sdltest"
+                "TracyClient",
+                "sdltest",
         };
     }
 }

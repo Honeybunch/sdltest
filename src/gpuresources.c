@@ -42,9 +42,9 @@ void destroy_gpubuffer(VmaAllocator allocator, const gpubuffer *buffer) {
   vmaDestroyBuffer(allocator, buffer->buffer, buffer->alloc);
 }
 
-gpuconstbuffer create_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
-                                     const VkAllocationCallbacks *vk_alloc,
-                                     uint64_t size) {
+gpuconstbuffer create_gpushaderbuffer(VkDevice device, VmaAllocator allocator,
+                                      const VkAllocationCallbacks *vk_alloc,
+                                      uint64_t size, VkBufferUsageFlags usage) {
   gpubuffer host_buffer = {0};
   VkResult err =
       create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
@@ -53,8 +53,7 @@ gpuconstbuffer create_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
 
   gpubuffer device_buffer = {0};
   err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
-                         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-                             VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                         usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                          &device_buffer);
   assert(err == VK_SUCCESS);
 
@@ -74,6 +73,20 @@ gpuconstbuffer create_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
       .updated = sem,
   };
   return cb;
+}
+
+gpuconstbuffer create_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
+                                     const VkAllocationCallbacks *vk_alloc,
+                                     uint64_t size) {
+  return create_gpushaderbuffer(device, allocator, vk_alloc, size,
+                                VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+}
+
+gpuconstbuffer create_gpustoragebuffer(VkDevice device, VmaAllocator allocator,
+                                       const VkAllocationCallbacks *vk_alloc,
+                                       uint64_t size) {
+  return create_gpushaderbuffer(device, allocator, vk_alloc, size,
+                                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
 }
 
 void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
