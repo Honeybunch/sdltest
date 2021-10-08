@@ -20,6 +20,7 @@
 #include "shadercommon.h"
 #include "simd.h"
 #include "skydome.h"
+#include "vkdbg.h"
 
 #ifdef __ANDROID__
 #define ASSET_PREFIX
@@ -224,6 +225,8 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
         TracyCZoneEnd(update_object_ctx);
       }
 
+      cmd_begin_label(cmd, "demo_render_scene", (float4){0.5, 0.1, 0.1, 1.0});
+
       vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0,
                               1, &material_set, 0, NULL);
 
@@ -250,6 +253,8 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       vkCmdBindVertexBuffers(cmd, 2, 1, &buffer, &offset);
 
       vkCmdDrawIndexed(cmd, idx_count, 1, 0, 0, 0);
+
+      cmd_end_label(cmd);
     }
   }
   TracyCZoneEnd(ctx);
@@ -2056,9 +2061,12 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
         TracyCVkNamedZone(gpu_gfx_ctx, upload_scope, upload_buffer, "Upload", 1,
                           true);
+        cmd_begin_label(upload_buffer, "upload", (float4){0.1, 0.5, 0.1, 1.0});
 
         // Issue const buffer uploads
-        {
+        if (d->const_buffer_upload_count > 0) {
+          cmd_begin_label(upload_buffer, "upload const buffers",
+                          (float4){0.1, 0.4, 0.1, 1.0});
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->const_buffer_upload_count; ++i) {
             gpuconstbuffer constbuffer = d->const_buffer_upload_queue[i];
@@ -2067,10 +2075,13 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                             constbuffer.gpu.buffer, 1, &region);
           }
           d->const_buffer_upload_count = 0;
+          cmd_end_label(upload_buffer);
         }
 
         // Issue mesh uploads
-        {
+        if (d->mesh_upload_count > 0) {
+          cmd_begin_label(upload_buffer, "upload meshes",
+                          (float4){0.1, 0.4, 0.1, 1.0});
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
             gpumesh mesh = d->mesh_upload_queue[i];
@@ -2079,11 +2090,13 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                             &region);
           }
           d->mesh_upload_count = 0;
+          cmd_end_label(upload_buffer);
         }
 
         // Issue texture uploads
-        {
-
+        if (d->texture_upload_count > 0) {
+          cmd_begin_label(upload_buffer, "upload textures",
+                          (float4){0.1, 0.4, 0.1, 1.0});
           VkImageMemoryBarrier barrier = {0};
           barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
           barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -2209,6 +2222,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             }
           }
           d->texture_upload_count = 0;
+          cmd_end_label(upload_buffer);
         }
 
         // Issue Const Data Updates
@@ -2219,20 +2233,29 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         TracyCVkZoneEnd(upload_scope);
         TracyCVkCollect(gpu_gfx_ctx, upload_buffer);
 
+        cmd_end_label(upload_buffer);
+
         err = vkEndCommandBuffer(upload_buffer);
 
         upload_sem = d->upload_complete_sems[frame_idx];
         assert(err == VK_SUCCESS);
 
         // Submit upload
-        VkSubmitInfo submit_info = {0};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &upload_buffer;
-        submit_info.signalSemaphoreCount = 1;
-        submit_info.pSignalSemaphores = &upload_sem;
-        err = vkQueueSubmit(d->graphics_queue, 1, &submit_info, NULL);
-        assert(err == VK_SUCCESS);
+        {
+          VkSubmitInfo submit_info = {0};
+          submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+          submit_info.commandBufferCount = 1;
+          submit_info.pCommandBuffers = &upload_buffer;
+          submit_info.signalSemaphoreCount = 1;
+          submit_info.pSignalSemaphores = &upload_sem;
+
+          queue_begin_label(d->graphics_queue, "upload",
+                            (float4){0.1, 1.0, 0.1, 1.0});
+          err = vkQueueSubmit(d->graphics_queue, 1, &submit_info, NULL);
+          queue_end_label(d->graphics_queue);
+
+          assert(err == VK_SUCCESS);
+        }
 
         TracyCZoneEnd(record_upload_event);
       }
@@ -2280,6 +2303,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                             "Main Pass", 2, true);
           const float width = d->swap_width;
           const float height = d->swap_height;
+
+          cmd_begin_label(graphics_buffer, "main pass",
+                          (float4){0.5, 0.1, 0.1, 1.0});
 
           // Set Render Pass
           {
@@ -2337,6 +2363,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           {
             TracyCVkNamedZone(gpu_gfx_ctx, skydome_scope, graphics_buffer,
                               "Draw Skydome", 3, true);
+
+            cmd_begin_label(graphics_buffer, "skydome",
+                            (float4){0.4, 0.1, 0.1, 1.0});
             // Another hack to fiddle with the matrix we send to the shader
             // for the skydome
             SkyPushConstants sky_consts = {.vp = *sky_vp};
@@ -2374,10 +2403,13 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             vkCmdBindVertexBuffers(graphics_buffer, 0, 1, buffers, offsets);
             vkCmdDrawIndexed(graphics_buffer, idx_count, 1, 0, 0, 0);
 
+            cmd_end_label(graphics_buffer);
             TracyCVkZoneEnd(skydome_scope);
           }
 
           vkCmdEndRenderPass(graphics_buffer);
+
+          cmd_end_label(graphics_buffer);
 
           TracyCVkZoneEnd(main_scope);
         }
@@ -2498,6 +2530,9 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
               TracyCZoneN(ctx, "Record ImGui Commands", true);
               TracyCZoneColor(ctx, TracyCategoryColorRendering);
 
+              cmd_begin_label(graphics_buffer, "imgui",
+                              (float4){0.1, 0.1, 0.5, 1.0});
+
               const float width = d->ig_io->DisplaySize.x;
               const float height = d->ig_io->DisplaySize.y;
 
@@ -2604,6 +2639,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
               vkCmdEndRenderPass(graphics_buffer);
 
+              cmd_end_label(graphics_buffer);
+
               TracyCZoneEnd(ctx);
             }
           }
@@ -2639,19 +2676,22 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         wait_stage_flags[wait_sem_count++] = VK_PIPELINE_STAGE_TRANSFER_BIT;
       }
 
-      VkPipelineStageFlags pipe_stage_flags =
-          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-      VkSubmitInfo submit_info = {0};
-      submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-      submit_info.waitSemaphoreCount = wait_sem_count;
-      submit_info.pWaitSemaphores = wait_sems;
-      submit_info.pWaitDstStageMask = wait_stage_flags;
-      submit_info.commandBufferCount = 1;
-      submit_info.pCommandBuffers = &graphics_buffer;
-      submit_info.signalSemaphoreCount = 1;
-      submit_info.pSignalSemaphores = &render_complete_sem;
-      err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_idx]);
-      assert(err == VK_SUCCESS);
+      {
+        VkSubmitInfo submit_info = {0};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.waitSemaphoreCount = wait_sem_count;
+        submit_info.pWaitSemaphores = wait_sems;
+        submit_info.pWaitDstStageMask = wait_stage_flags;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &graphics_buffer;
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = &render_complete_sem;
+        queue_begin_label(graphics_queue, "raster",
+                          (float4){1.0, 0.1, 0.1, 1.0});
+        err = vkQueueSubmit(graphics_queue, 1, &submit_info, fences[frame_idx]);
+        queue_end_label(graphics_queue);
+        assert(err == VK_SUCCESS);
+      }
 
       TracyCZoneEnd(demo_render_frame_submit_event);
     }

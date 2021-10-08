@@ -93,7 +93,6 @@ endif()
 find_package(SDL2 REQUIRED)
 find_package(sdl2-image CONFIG REQUIRED)
 find_package(volk CONFIG REQUIRED)
-find_package(unofficial-vulkan-memory-allocator CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(mimalloc 1.6 CONFIG REQUIRED)
 find_package(zstd CONFIG REQUIRED)
@@ -181,11 +180,12 @@ set(source "${CMAKE_CURRENT_LIST_DIR}/src/allocator.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/pattern.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/pipelines.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/plane.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/profiling.cpp"
            "${CMAKE_CURRENT_LIST_DIR}/src/scene.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/simd.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/skydome.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/vma.cpp"
-           "${CMAKE_CURRENT_LIST_DIR}/src/profiling.cpp")
+           "${CMAKE_CURRENT_LIST_DIR}/src/vkdbg.c")
 if(WIN32)
   add_executable(sdltest WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.rc")
   target_link_options(sdltest PRIVATE -Wl,/subsystem:windows)
@@ -212,7 +212,7 @@ else()
 endif()
 #set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;unofficial::vulkan-memory-allocator::vulkan-memory-allocator;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;Tracy::TracyClient")
+set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;Tracy::TracyClient")
 
 target_link_libraries(sdltest PRIVATE ${library_list})
 
