@@ -124,7 +124,7 @@ float4 frag(Interpolators i) : SV_TARGET
         float3 Lo = float3(0.0, 0.0, 0.0);
         //for each light
         {
-            float3 lightColor = float3(1, 1, 1);
+            float3 light_color = float3(1, 1, 1);
 
             float3 L = normalize(light_data.light_dir);
             float3 H = normalize(V + L);
@@ -132,7 +132,7 @@ float4 frag(Interpolators i) : SV_TARGET
             // float distance = length(light_data.light_pos - i.world_pos);
             float distance = 1.0;
             float attenuation = 1.0 / (distance * distance);
-            float3 radiance = lightColor * attenuation;
+            float3 radiance = light_color * attenuation;
 
             // cook-torrance brdf
             float NDF = distributionGGX(N, H, roughness);
@@ -163,7 +163,7 @@ float4 frag(Interpolators i) : SV_TARGET
 
         // for each light
         {
-            float3 lightColor = float3(1, 1, 1);
+            float3 light_color = float3(1, 1, 1);
 
             // Lighting calcs
             float3 L = normalize(light_data.light_dir);
@@ -173,7 +173,7 @@ float4 frag(Interpolators i) : SV_TARGET
 
             // Calc diffuse Light
             float lambert = saturate(dot(N, L));
-            float3 diffuse = lightColor * lambert * albedo;
+            float3 diffuse = light_color * lambert * albedo;
 
             // Calc specular light
             float3 H = normalize(L + V);
@@ -181,7 +181,7 @@ float4 frag(Interpolators i) : SV_TARGET
             float3 specular_exponent = exp2(gloss * 11) + 2;
             float3 specular = saturate(dot(H, N)) * (lambert > 0); // Blinn-Phong
             specular = pow(specular, specular_exponent) * gloss;
-            specular *= lightColor;
+            specular *= light_color;
 
             color = ambient + diffuse + specular;
         }
