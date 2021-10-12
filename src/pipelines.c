@@ -23,7 +23,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "volk.h"
+#include "vkdbg.h"
+#include <volk.h>
 
 uint32_t create_fractal_pipeline(VkDevice device,
                                  const VkAllocationCallbacks *vk_alloc,
@@ -276,6 +277,9 @@ uint32_t create_color_mesh_pipeline(VkDevice device,
     err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
                                     &color_mesh_pipeline);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)color_mesh_pipeline, VK_OBJECT_TYPE_PIPELINE,
+                "color mesh pipeline");
 
     // Can destroy shaders
     vkDestroyShaderModule(device, vert_mod, vk_alloc);
@@ -550,6 +554,9 @@ uint32_t create_skydome_pipeline(VkDevice device,
     err = vkCreateGraphicsPipelines(device, cache, 1, &create_info, vk_alloc,
                                     &pipeline);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)pipeline, VK_OBJECT_TYPE_PIPELINE,
+                "skydome pipeline");
 
     // Can destroy shaders
     vkDestroyShaderModule(device, vert_mod, vk_alloc);

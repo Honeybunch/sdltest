@@ -35,3 +35,31 @@ void cmd_end_label(VkCommandBuffer cmd) {
     vkCmdEndDebugUtilsLabelEXT(cmd);
   }
 }
+
+void set_vk_name(VkDevice device, uint64_t object, uint32_t type,
+                 const char *name) {
+  if (vkSetDebugUtilsObjectNameEXT) {
+    VkDebugUtilsObjectNameInfoEXT info = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .objectType = type,
+        .objectHandle = object,
+        .pObjectName = name,
+    };
+    vkSetDebugUtilsObjectNameEXT(device, &info);
+  }
+}
+
+void set_vk_tag(VkDevice device, uint64_t object, uint32_t type,
+                uint64_t tag_id, uint64_t tag_size, const void *tag) {
+  if (vkSetDebugUtilsObjectTagEXT) {
+    VkDebugUtilsObjectTagInfoEXT info = {
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_TAG_INFO_EXT,
+        .objectType = type,
+        .objectHandle = object,
+        .tagName = tag_id,
+        .tagSize = tag_size,
+        .pTag = tag,
+    };
+    vkSetDebugUtilsObjectTagEXT(device, &info);
+  }
+}

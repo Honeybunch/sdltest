@@ -71,7 +71,8 @@
         "profiling.h": "c",
         "allocator.h": "c",
         "volk.h": "c",
-        "sdl_rwops.h": "c"
+        "sdl_rwops.h": "c",
+        "vkdbg.h": "c"
     },
     "cmake.configureOnOpen": false
 }

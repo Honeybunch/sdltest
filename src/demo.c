@@ -829,6 +829,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     create_info.pDependencies = &subpass_dep;
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &render_pass);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)render_pass, VK_OBJECT_TYPE_RENDER_PASS,
+                "main render pass");
   }
 
   // Create ImGui Render Pass
@@ -872,6 +875,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     create_info.pDependencies = &subpass_dep;
     err = vkCreateRenderPass(device, &create_info, vk_alloc, &imgui_pass);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)imgui_pass, VK_OBJECT_TYPE_RENDER_PASS,
+                "imgui render pass");
   }
 
   // Create Pipeline Cache
@@ -900,6 +906,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     err =
         vkCreatePipelineCache(device, &create_info, vk_alloc, &pipeline_cache);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)pipeline_cache, VK_OBJECT_TYPE_PIPELINE_CACHE,
+                "pipeline cache");
 
     if (data) {
       hb_free(std_alloc, data);
@@ -936,6 +945,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     create_info.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK;
     err = vkCreateSampler(device, &create_info, vk_alloc, &sampler);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)sampler, VK_OBJECT_TYPE_SAMPLER,
+                "immutable sampler");
   }
 
   // Create Common Object DescriptorSet Layout
@@ -952,6 +964,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_object_set_layout);
     assert(err == VK_SUCCESS);
+    set_vk_name(device, (uint64_t)gltf_object_set_layout,
+                VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "gltf object set layout");
   }
 
   // Create Common Per-View DescriptorSet Layout
@@ -969,6 +983,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_view_set_layout);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)gltf_view_set_layout,
+                VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "gltf view set layout");
   }
 
   // Create GLTF Descriptor Set Layout
@@ -989,6 +1006,10 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
                                       &gltf_material_set_layout);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)gltf_material_set_layout,
+                VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+                "gltf material set layout");
   }
 
   // Create GLTF Pipeline Layout
@@ -1009,6 +1030,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
 
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &gltf_pipe_layout);
+    set_vk_name(device, (uint64_t)gltf_pipe_layout,
+                VK_OBJECT_TYPE_PIPELINE_LAYOUT, "gltf pipeline layout");
     assert(err == VK_SUCCESS);
   }
 
@@ -1054,7 +1077,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   }
 
   // Create Skydome Descriptor Set Layout
-  VkDescriptorSetLayout skydome_layout = VK_NULL_HANDLE;
+  VkDescriptorSetLayout skydome_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[1] = {
         {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -1065,12 +1088,15 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     create_info.bindingCount = 1;
     create_info.pBindings = bindings;
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &skydome_layout);
+                                      &skydome_set_layout);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)skydome_set_layout,
+                VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "skydome set layout");
   }
 
   // Create Descriptor Set for Hosek coeff data
-  VkDescriptorSetLayout hosek_layout = VK_NULL_HANDLE;
+  VkDescriptorSetLayout hosek_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[1] = {
         {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
@@ -1081,16 +1107,19 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     create_info.bindingCount = 1;
     create_info.pBindings = bindings;
     err = vkCreateDescriptorSetLayout(device, &create_info, vk_alloc,
-                                      &hosek_layout);
+                                      &hosek_set_layout);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)hosek_set_layout,
+                VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, "hosek set layout");
   }
 
   // Create Skydome Pipeline Layout
   VkPipelineLayout skydome_pipe_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayout layouts[] = {
-        skydome_layout,
-        hosek_layout,
+        skydome_set_layout,
+        hosek_set_layout,
     };
 
     VkPipelineLayoutCreateInfo create_info = {0};
@@ -1103,6 +1132,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     err = vkCreatePipelineLayout(device, &create_info, vk_alloc,
                                  &skydome_pipe_layout);
     assert(err == VK_SUCCESS);
+
+    set_vk_name(device, (uint64_t)skydome_pipe_layout,
+                VK_OBJECT_TYPE_PIPELINE_LAYOUT, "skydome pipeline layout");
   }
 
   // Create Skydome Pipeline
@@ -1315,8 +1347,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   d->imgui_pass = imgui_pass;
   d->pipeline_cache = pipeline_cache;
   d->sampler = sampler;
-  d->skydome_layout = skydome_layout;
-  d->hosek_layout = hosek_layout;
+  d->skydome_layout = skydome_set_layout;
+  d->hosek_layout = hosek_set_layout;
   d->skydome_pipe_layout = skydome_pipe_layout;
   d->skydome_pipeline = skydome_pipeline;
   d->sky_const_buffer = sky_const_buffer;
@@ -1526,6 +1558,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       err = vkCreateCommandPool(device, &create_info, vk_alloc,
                                 &d->command_pools[i]);
+      set_vk_name(device, (uint64_t)d->command_pools[i],
+                  VK_OBJECT_TYPE_COMMAND_POOL, "command pool");
       assert(err == VK_SUCCESS);
     }
   }
@@ -1586,7 +1620,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     alloc_info.descriptorSetCount = 1;
 
-    alloc_info.pSetLayouts = &skydome_layout;
+    alloc_info.pSetLayouts = &skydome_set_layout;
     for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
       alloc_info.descriptorPool = d->descriptor_pools[i];
       err = vkAllocateDescriptorSets(device, &alloc_info,
@@ -1595,7 +1629,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     }
 
     // Only need one descriptor set for the hosek data
-    alloc_info.pSetLayouts = &hosek_layout;
+    alloc_info.pSetLayouts = &hosek_set_layout;
     {
       alloc_info.descriptorPool = d->descriptor_pools[0];
       err = vkAllocateDescriptorSets(device, &alloc_info,
@@ -2040,6 +2074,14 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
     VkCommandBuffer upload_buffer = d->upload_buffers[frame_idx];
     VkCommandBuffer graphics_buffer = d->graphics_buffers[frame_idx];
+
+    // Set names after resetting the parent pool
+    {
+      set_vk_name(device, (uint64_t)upload_buffer,
+                  VK_OBJECT_TYPE_COMMAND_BUFFER, "upload command buffer");
+      set_vk_name(device, (uint64_t)graphics_buffer,
+                  VK_OBJECT_TYPE_COMMAND_BUFFER, "graphics command buffer");
+    }
 
     TracyCGPUContext *gpu_gfx_ctx = d->tracy_gpu_contexts[frame_idx];
 
