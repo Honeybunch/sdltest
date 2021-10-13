@@ -1,15 +1,8 @@
 // Adapted from: https://github.com/shff/opengl_sky
 #include "common.hlsli"
 
-#include "hosek.hlsli"
-
 [[vk::push_constant]]
 ConstantBuffer<SkyPushConstants> consts : register(b0, space0);
-
-#define CIE_X 0
-#define CIE_Y 1
-#define CIE_Z 2
-#define M_PI 3.1415926535897932384626433832795
 
 struct SkyData {
   float time;
