@@ -6,6 +6,7 @@
 
 #include "allocator.h"
 #include "gpuresources.h"
+#include "profiling.h"
 #include "scene.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -21,7 +22,6 @@
 #define TEXTURE_UPLOAD_QUEUE_SIZE 16
 
 typedef union SDL_Event SDL_Event;
-typedef struct TracyCGPUContext TracyCGPUContext;
 
 typedef struct demo {
   allocator std_alloc;

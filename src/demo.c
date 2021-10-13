@@ -16,7 +16,6 @@
 #include "cpuresources.h"
 #include "hosek.h"
 #include "pipelines.h"
-#include "profiling.h"
 #include "shadercommon.h"
 #include "simd.h"
 #include "skydome.h"

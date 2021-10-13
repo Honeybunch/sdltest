@@ -276,9 +276,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   assert(success);
 
   SkyData sky_data = {
+      .cirrus = 0.4,
+      .cumulus = 0.8,
       .sun_dir = {0, -1, 0},
-      .turbidity = 3,
-      .albedo = 1,
   };
 
   CommonCameraData camera_data = {
@@ -294,6 +294,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   bool showMetricsWindow = true;
 
   uint64_t time = 0;
+  uint64_t start_time = SDL_GetPerformanceCounter();
   uint64_t last_time = SDL_GetPerformanceCounter();
   uint64_t delta_time = 0;
   float time_seconds = 0.0f;
@@ -311,13 +312,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCZoneColor(trcy_ctx, TracyCategoryColorCore);
 
     // Use SDL High Performance Counter to get timing info
-    time = SDL_GetPerformanceCounter();
+    time = SDL_GetPerformanceCounter() - start_time;
     delta_time = time - last_time;
     delta_time_seconds =
         (float)((double)delta_time / (double)SDL_GetPerformanceFrequency());
     time_seconds =
         (float)((double)time / (double)SDL_GetPerformanceFrequency());
-    delta_time_ms = delta_time_ms * 1000.0f;
+    delta_time_ms = delta_time_seconds * 1000.0f;
     last_time = time;
 
     // TODO: Handle events more gracefully
@@ -359,7 +360,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     display_size.x = WIDTH;
     display_size.y = HEIGHT;
     d.ig_io->DisplaySize = display_size;
-    d.ig_io->DeltaTime = delta_time_seconds;
+    d.ig_io->DeltaTime = delta_time_ms;
     igNewFrame();
 
     // ImGui Test
@@ -389,9 +390,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           sun_y = cosf(_PI + time_of_day);
           sun_x = sinf(_PI + time_of_day);
         }
-        igSliderInt("Albedo", (int32_t *)&sky_data.albedo, 0, 1, "%u", 0);
-        igSliderInt("Turbidity", (int32_t *)&sky_data.turbidity, 1, 10, "%u",
-                    0);
+        igSliderFloat("Cirrus", &sky_data.cirrus, 0.0f, 1.0f, "%.3f", 0);
+        igSliderFloat("Cumulus", &sky_data.cumulus, 0.0f, 1.0f, "%.3f", 0);
+        igLabelText("Frame Time (ms)", "%f", delta_time_ms);
+        igLabelText("Framerate (fps)", "%f", (1000.0f / delta_time_ms));
         igEnd();
       }
 
@@ -422,6 +424,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     // Change sun position
     sky_data.sun_dir = (float3){sun_x, sun_y, 0};
+    sky_data.time = time_seconds;
 
     // Update view camera constant buffer
     {

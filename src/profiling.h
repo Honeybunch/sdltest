@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-#define TRACY_ENABLE
+//#define TRACY_ENABLE
 #include <TracyC.h>
 
 #define TracyCategoryColorCore 0xe066ff
@@ -56,7 +56,9 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
 
 #define TracyCGPUContext int
 #define TracyCGPUScope int
+#define TracyCGPUContext int
 
+#define TracyCVkContextExt(...) 0
 #define TracyCVkContext(...) 0
 #define TracyCVkContextDestroy(...)
 #define TracyCVkContextName(...)
