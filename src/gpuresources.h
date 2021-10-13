@@ -147,17 +147,18 @@ void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
 
 int32_t create_gfx_pipeline(VkDevice device,
                             const VkAllocationCallbacks *vk_alloc,
-                            allocator tmp_alloc, VkPipelineCache cache,
-                            uint32_t perm_count,
+                            allocator tmp_alloc, allocator std_alloc,
+                            VkPipelineCache cache, uint32_t perm_count,
                             VkGraphicsPipelineCreateInfo *create_info_base,
                             gpupipeline **p);
 int32_t create_rt_pipeline(
     VkDevice device, const VkAllocationCallbacks *vk_alloc, allocator tmp_alloc,
-    VkPipelineCache cache,
+    allocator std_alloc, VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
     gpupipeline **p);
-void destroy_gpupipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
+void destroy_gpupipeline(VkDevice device, allocator alloc,
+                         const VkAllocationCallbacks *vk_alloc,
                          const gpupipeline *p);
 
 int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,

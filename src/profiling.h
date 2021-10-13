@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-//#define TRACY_ENABLE
+#define TRACY_ENABLE
 #include <TracyC.h>
 
 #define TracyCategoryColorCore 0xe066ff

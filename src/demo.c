@@ -1036,9 +1036,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
 
   // Create GLTF Pipeline
   gpupipeline *gltf_pipeline = NULL;
-  err = create_gltf_pipeline(device, vk_alloc, tmp_alloc, pipeline_cache,
-                             render_pass, width, height, gltf_pipe_layout,
-                             &gltf_pipeline);
+  err = create_gltf_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
+                             pipeline_cache, render_pass, width, height,
+                             gltf_pipe_layout, &gltf_pipeline);
   assert(err == VK_SUCCESS);
 
   // Create GLTF RT Pipeline Layout
@@ -1151,7 +1151,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Create GLTF Ray Tracing Pipeline
   // gpupipeline *gltf_rt_pipeline = NULL;
   // err = create_gltf_rt_pipeline(
-  //    device, vk_alloc, tmp_alloc, pipeline_cache,
+  //    device, vk_alloc, tmp_alloc, std_alloc, pipeline_cache,
   //    vkCreateRayTracingPipelinesKHR, render_pass, width, height,
   //    gltf_rt_pipe_layout, &gltf_rt_pipeline);
   // assert(err == VK_SUCCESS);
@@ -1891,7 +1891,7 @@ void demo_destroy(demo *d) {
   vkDestroyDescriptorSetLayout(device, d->gltf_object_set_layout, vk_alloc);
   vkDestroyDescriptorSetLayout(device, d->gltf_view_set_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->gltf_pipe_layout, vk_alloc);
-  destroy_gpupipeline(device, vk_alloc, d->gltf_pipeline);
+  destroy_gpupipeline(device, d->std_alloc, vk_alloc, d->gltf_pipeline);
 
   vkDestroyDescriptorSetLayout(device, d->imgui_layout, vk_alloc);
   vkDestroyPipelineLayout(device, d->imgui_pipe_layout, vk_alloc);

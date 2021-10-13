@@ -11,7 +11,6 @@ struct SkyData {
   float3 sun_dir;
 };
 ConstantBuffer<SkyData> sky_data : register(b1, space0); // Fragment Stage Only
-TextureBuffer<SkyHosekData> hosek_data : register(t0, space1); // Fragment Stage Only
 
 struct VertexIn {
   float3 local_pos : SV_POSITION;

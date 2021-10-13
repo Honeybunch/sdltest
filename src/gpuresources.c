@@ -840,12 +840,12 @@ void destroy_texture(VkDevice device, VmaAllocator vma_alloc,
   vkDestroyImageView(device, t->view, vk_alloc);
 }
 
-static gpupipeline *alloc_gpupipeline(uint32_t perm_count) {
+static gpupipeline *alloc_gpupipeline(allocator alloc, uint32_t perm_count) {
   size_t pipe_handles_size = sizeof(VkPipeline) * perm_count;
   size_t flags_size = sizeof(uint32_t) * perm_count;
   size_t pipeline_size = sizeof(gpupipeline);
   size_t alloc_size = pipeline_size + pipe_handles_size + flags_size;
-  gpupipeline *p = (gpupipeline *)calloc(1, alloc_size);
+  gpupipeline *p = (gpupipeline *)hb_alloc(alloc, alloc_size);
   uint8_t *mem = (uint8_t *)p;
   assert(p);
   p->pipeline_count = perm_count;
@@ -863,12 +863,12 @@ static gpupipeline *alloc_gpupipeline(uint32_t perm_count) {
 
 int32_t create_gfx_pipeline(VkDevice device,
                             const VkAllocationCallbacks *vk_alloc,
-                            allocator tmp_alloc, VkPipelineCache cache,
-                            uint32_t perm_count,
+                            allocator tmp_alloc, allocator std_alloc,
+                            VkPipelineCache cache, uint32_t perm_count,
                             VkGraphicsPipelineCreateInfo *create_info_base,
                             gpupipeline **p) {
   TracyCZoneN(prof_e, "create_gfx_pipeline", true);
-  gpupipeline *pipe = alloc_gpupipeline(perm_count);
+  gpupipeline *pipe = alloc_gpupipeline(std_alloc, perm_count);
   VkResult err = VK_SUCCESS;
 
   VkGraphicsPipelineCreateInfo *pipe_create_info =
@@ -928,12 +928,12 @@ int32_t create_gfx_pipeline(VkDevice device,
 
 int32_t create_rt_pipeline(
     VkDevice device, const VkAllocationCallbacks *vk_alloc, allocator tmp_alloc,
-    VkPipelineCache cache,
+    allocator std_alloc, VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     uint32_t perm_count, VkRayTracingPipelineCreateInfoKHR *create_info_base,
     gpupipeline **p) {
   TracyCZoneN(prof_e, "create_rt_pipeline", true);
-  gpupipeline *pipe = alloc_gpupipeline(perm_count);
+  gpupipeline *pipe = alloc_gpupipeline(std_alloc, perm_count);
   VkResult err = VK_SUCCESS;
 
   VkRayTracingPipelineCreateInfoKHR *pipe_create_info =
@@ -990,12 +990,14 @@ int32_t create_rt_pipeline(
   return err;
 }
 
-void destroy_gpupipeline(VkDevice device, const VkAllocationCallbacks *vk_alloc,
+void destroy_gpupipeline(VkDevice device, allocator alloc,
+                         const VkAllocationCallbacks *vk_alloc,
                          const gpupipeline *p) {
   for (uint32_t i = 0; i < p->pipeline_count; ++i) {
     vkDestroyPipeline(device, p->pipelines[i], vk_alloc);
   }
-  free((void *)p);
+
+  hb_free(alloc, (void *)p);
 }
 
 int32_t create_gpumaterial_cgltf(VkDevice device, VmaAllocator vma_alloc,

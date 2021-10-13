@@ -55,13 +55,14 @@ enum GLTF_PERMUTATIONS {
 
 uint32_t create_gltf_pipeline(VkDevice device,
                               const VkAllocationCallbacks *vk_alloc,
-                              allocator tmp_alloc, VkPipelineCache cache,
-                              VkRenderPass pass, uint32_t w, uint32_t h,
-                              VkPipelineLayout layout, gpupipeline **pipe);
+                              allocator tmp_alloc, allocator std_alloc,
+                              VkPipelineCache cache, VkRenderPass pass,
+                              uint32_t w, uint32_t h, VkPipelineLayout layout,
+                              gpupipeline **pipe);
 
 uint32_t create_gltf_rt_pipeline(
     VkDevice device, const VkAllocationCallbacks *vk_alloc, allocator tmp_alloc,
-    VkPipelineCache cache,
+    allocator std_alloc, VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
     VkRenderPass pass, uint32_t w, uint32_t h, VkPipelineLayout layout,
     gpupipeline **pipe);
