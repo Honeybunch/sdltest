@@ -169,9 +169,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
   }
 
-  SDL_Window *window = SDL_CreateWindow("SDL Test", SDL_WINDOWPOS_CENTERED,
-                                        SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT,
-                                        SDL_WINDOW_VULKAN);
+  SDL_Window *window = SDL_CreateWindow(
+      "SDL Test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT,
+      SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
     char msg[500] = {0};
     SDL_GetErrorMsg(msg, 500);
@@ -325,6 +325,9 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     // Mutliple events (or none) could happen in one frame but we only process
     // the latest one
 
+    // Make sure the camera's Aspect Ratio is always up to date
+    main_cam.fov = (float)d.swap_info.width / (float)d.swap_info.height;
+
     // while (SDL_PollEvent(&e))
     {
       TracyCZoneN(ctx, "Handle Events", true);
@@ -357,8 +360,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     }
 
     ImVec2 display_size;
-    display_size.x = WIDTH;
-    display_size.y = HEIGHT;
+    display_size.x = d.swap_info.width;
+    display_size.y = d.swap_info.height;
     d.ig_io->DisplaySize = display_size;
     d.ig_io->DeltaTime = delta_time_ms;
     igNewFrame();
@@ -394,6 +397,8 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         igSliderFloat("Cumulus", &sky_data.cumulus, 0.0f, 1.0f, "%.3f", 0);
         igLabelText("Frame Time (ms)", "%f", delta_time_ms);
         igLabelText("Framerate (fps)", "%f", (1000.0f / delta_time_ms));
+        igLabelText("Resolution", "%d x %d", d.swap_info.width,
+                    d.swap_info.height);
         igEnd();
       }
 

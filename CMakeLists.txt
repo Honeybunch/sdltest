@@ -177,6 +177,7 @@ set(source "${CMAKE_CURRENT_LIST_DIR}/src/allocator.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/gpuresources.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/hosek.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/main.c"
+           "${CMAKE_CURRENT_LIST_DIR}/src/material.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/pattern.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/pipelines.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/plane.c"
@@ -188,7 +189,9 @@ set(source "${CMAKE_CURRENT_LIST_DIR}/src/allocator.c"
            "${CMAKE_CURRENT_LIST_DIR}/src/vkdbg.c")
 if(WIN32)
   add_executable(sdltest WIN32 ${source} "${CMAKE_CURRENT_LIST_DIR}/src/res/sdltest.rc")
-  target_link_options(sdltest PRIVATE -Wl,/subsystem:windows)
+  if(NOT ${CMAKE_CXX_COMPILER_ID} MATCHES "GNU")
+    target_link_options(sdltest PRIVATE -Wl,/subsystem:windows)
+  endif()
 elseif(ANDROID)
   add_library(sdltest SHARED ${source})
 elseif(UNIX)

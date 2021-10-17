@@ -333,6 +333,337 @@ static void demo_imgui_update(demo *d) {
   { io->MousePos = (ImVec2){(float)mouse_x_local, (float)mouse_y_local}; }
 }
 
+static swapchain_info init_swapchain(SDL_Window *window, VkDevice device,
+                                     VkPhysicalDevice gpu, VkSurfaceKHR surface,
+                                     VkSwapchainKHR *swapchain,
+                                     const VkAllocationCallbacks *vk_alloc,
+                                     allocator tmp_alloc) {
+  swapchain_info swap_info = {0};
+
+  int32_t width = 0;
+  int32_t height = 0;
+  SDL_Vulkan_GetDrawableSize(window, &width, &height);
+
+  uint32_t format_count = 0;
+  VkResult err =
+      vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
+  assert(err == VK_SUCCESS);
+  VkSurfaceFormatKHR *surface_formats =
+      hb_alloc_nm_tp(tmp_alloc, format_count, VkSurfaceFormatKHR);
+  err = vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count,
+                                             surface_formats);
+  assert(err == VK_SUCCESS);
+  VkSurfaceFormatKHR surface_format =
+      pick_surface_format(surface_formats, format_count);
+
+  VkSurfaceCapabilitiesKHR surf_caps;
+  err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surf_caps);
+  assert(err == VK_SUCCESS);
+
+  uint32_t present_mode_count = 0;
+  err = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface,
+                                                  &present_mode_count, NULL);
+  assert(err == VK_SUCCESS);
+  VkPresentModeKHR *present_modes =
+      hb_alloc_nm_tp(tmp_alloc, present_mode_count, VkPresentModeKHR);
+  assert(present_modes);
+  err = vkGetPhysicalDeviceSurfacePresentModesKHR(
+      gpu, surface, &present_mode_count, present_modes);
+  assert(err == VK_SUCCESS);
+
+  VkExtent2D swapchain_extent = {
+      .width = (uint32_t)width,
+      .height = (uint32_t)height,
+  };
+
+  // The FIFO present mode is guaranteed by the spec to be supported
+  // and to have no tearing.  It's a great default present mode to use.
+  VkPresentModeKHR swapchain_present_mode = VK_PRESENT_MODE_FIFO_KHR;
+  VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+  if (present_mode != swapchain_present_mode) {
+    for (size_t i = 0; i < present_mode_count; ++i) {
+      if (present_modes[i] == present_mode) {
+        swapchain_present_mode = present_mode;
+        break;
+      }
+    }
+  }
+  if (swapchain_present_mode != present_mode) {
+    // The desired present mode was not found, just use the first one
+    present_mode = present_modes[0];
+  }
+  hb_free(tmp_alloc, present_modes);
+  present_modes = NULL;
+
+  // Determine the number of VkImages to use in the swap chain.
+  // Application desires to acquire 3 images at a time for triple
+  // buffering
+  uint32_t image_count = FRAME_LATENCY;
+  if (image_count < surf_caps.minImageCount) {
+    image_count = surf_caps.minImageCount;
+  }
+  // If maxImageCount is 0, we can ask for as many images as we want;
+  // otherwise we're limited to maxImageCount
+  if ((surf_caps.maxImageCount > 0) &&
+      (image_count > surf_caps.maxImageCount)) {
+    // Application must settle for fewer images than desired:
+    image_count = surf_caps.maxImageCount;
+  }
+
+  VkSurfaceTransformFlagsKHR pre_transform;
+  if (surf_caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
+    pre_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+  } else {
+    pre_transform = surf_caps.currentTransform;
+  }
+
+  // Find a supported composite alpha mode - one of these is guaranteed to
+  // be set
+  VkCompositeAlphaFlagBitsKHR composite_alpha =
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  VkCompositeAlphaFlagBitsKHR composite_alpha_flags[4] = {
+      VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+      VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
+      VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
+      VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
+  };
+  for (uint32_t i = 0; i < 4; i++) {
+    if (surf_caps.supportedCompositeAlpha & composite_alpha_flags[i]) {
+      composite_alpha = composite_alpha_flags[i];
+      break;
+    }
+  }
+
+  VkSwapchainCreateInfoKHR create_info = {0};
+  create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+  create_info.surface = surface;
+  // On Android, vkGetSwapchainImagesKHR is always returning 1 more image than
+  // our min image count
+#ifdef __ANDROID__
+  create_info.minImageCount = image_count - 1;
+#else
+  create_info.minImageCount = image_count;
+#endif
+  create_info.imageFormat = surface_format.format;
+  create_info.imageColorSpace = surface_format.colorSpace;
+  create_info.imageExtent = swapchain_extent;
+  create_info.imageArrayLayers = 1;
+  create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  create_info.compositeAlpha = composite_alpha;
+  create_info.preTransform = pre_transform;
+  create_info.presentMode = present_mode;
+  create_info.surface = surface;
+  create_info.oldSwapchain = *swapchain;
+
+  err = vkCreateSwapchainKHR(device, &create_info, vk_alloc, swapchain);
+  assert(err == VK_SUCCESS);
+
+  swap_info = (swapchain_info){
+      .valid = true,
+      .format = surface_format.format,
+      .color_space = surface_format.colorSpace,
+      .present_mode = present_mode,
+      .image_count = image_count,
+      .width = swapchain_extent.width,
+      .height = swapchain_extent.height,
+  };
+
+  hb_free(tmp_alloc, surface_formats);
+
+  return swap_info;
+}
+
+static bool demo_init_image_views(demo *d) {
+  VkResult err = VK_SUCCESS;
+  // Get Swapchain Images
+  {
+    uint32_t img_count = 0;
+    err = vkGetSwapchainImagesKHR(d->device, d->swapchain, &img_count, NULL);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+
+    // Device may really want us to have called vkGetSwapchainImagesKHR
+    // For now just assert that making that call doesn't change our desired
+    // swapchain images
+    if (d->swap_info.image_count != img_count) {
+      assert(false);
+      return false;
+    }
+
+    err =
+        vkGetSwapchainImagesKHR(d->device, d->swapchain,
+                                &d->swap_info.image_count, d->swapchain_images);
+    if (err != VK_SUCCESS && err == VK_INCOMPLETE) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Image Views
+  {
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      if (d->depth_buffer_views[i]) {
+        vkDestroyImageView(d->device, d->swapchain_image_views[i], d->vk_alloc);
+      }
+    }
+
+    VkImageViewCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    create_info.format = d->swap_info.format;
+    create_info.components = (VkComponentMapping){
+        VK_COMPONENT_SWIZZLE_R,
+        VK_COMPONENT_SWIZZLE_G,
+        VK_COMPONENT_SWIZZLE_B,
+        VK_COMPONENT_SWIZZLE_A,
+    };
+    create_info.subresourceRange = (VkImageSubresourceRange){
+        VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1,
+    };
+
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      create_info.image = d->swapchain_images[i];
+      err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
+                              &d->swapchain_image_views[i]);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+  }
+
+  // Create Depth Buffers
+  {
+    if (d->depth_buffers.image != VK_NULL_HANDLE) {
+      destroy_gpuimage(d->vma_alloc, &d->depth_buffers);
+    }
+
+    VkImageCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    create_info.imageType = VK_IMAGE_TYPE_2D;
+    create_info.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+    create_info.extent =
+        (VkExtent3D){d->swap_info.width, d->swap_info.height, 1};
+    create_info.mipLevels = 1;
+    create_info.arrayLayers = FRAME_LATENCY;
+    create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+    VmaAllocationCreateInfo alloc_info = {0};
+    alloc_info.flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
+    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+    alloc_info.pUserData = (void *)("Depth Buffer Memory");
+    err = create_gpuimage(d->vma_alloc, &create_info, &alloc_info,
+                          &d->depth_buffers);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create Depth Buffer Views
+  {
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      if (d->depth_buffer_views[i]) {
+        vkDestroyImageView(d->device, d->depth_buffer_views[i], d->vk_alloc);
+      }
+    }
+
+    VkImageViewCreateInfo create_info = {0};
+    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    create_info.image = d->depth_buffers.image;
+    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    create_info.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
+    create_info.components = (VkComponentMapping){
+        VK_COMPONENT_SWIZZLE_R,
+        VK_COMPONENT_SWIZZLE_G,
+        VK_COMPONENT_SWIZZLE_B,
+        VK_COMPONENT_SWIZZLE_A,
+    };
+    create_info.subresourceRange = (VkImageSubresourceRange){
+        VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, 1, 0, 1,
+    };
+
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      create_info.subresourceRange.baseArrayLayer = i;
+      err = vkCreateImageView(d->device, &create_info, d->vk_alloc,
+                              &d->depth_buffer_views[i]);
+      if (err != VK_SUCCESS) {
+        assert(false);
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+static bool demo_init_framebuffers(demo *d) {
+  VkResult err = VK_SUCCESS;
+
+  // Cleanup previous framebuffers
+  {
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      if (d->main_pass_framebuffers[i]) {
+        vkDestroyFramebuffer(d->device, d->main_pass_framebuffers[i],
+                             d->vk_alloc);
+      }
+    }
+    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+      if (d->main_pass_framebuffers[i]) {
+        vkDestroyFramebuffer(d->device, d->ui_pass_framebuffers[i],
+                             d->vk_alloc);
+      }
+    }
+  }
+
+  VkFramebufferCreateInfo create_info = {0};
+  create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  create_info.renderPass = d->render_pass;
+  create_info.attachmentCount = 2;
+  create_info.width = d->swap_info.width;
+  create_info.height = d->swap_info.height;
+  create_info.layers = 1;
+
+  // Create main pass framebuffers
+  for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+    VkImageView attachments[2] = {
+        d->swapchain_image_views[i],
+        d->depth_buffer_views[i],
+    };
+
+    create_info.pAttachments = attachments;
+    err = vkCreateFramebuffer(d->device, &create_info, d->vk_alloc,
+                              &d->main_pass_framebuffers[i]);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  // Create ui pass framebuffers
+  for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
+    VkImageView attachments[1] = {
+        d->swapchain_image_views[i],
+    };
+
+    create_info.attachmentCount = 1;
+    create_info.pAttachments = attachments;
+    create_info.renderPass = d->imgui_pass;
+    err = vkCreateFramebuffer(d->device, &create_info, d->vk_alloc,
+                              &d->ui_pass_framebuffers[i]);
+    if (err != VK_SUCCESS) {
+      assert(false);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 static bool demo_init_imgui(demo *d, SDL_Window *window) {
   ImGuiContext *ctx = igCreateContext(NULL);
   ImGuiIO *io = igGetIO();
@@ -454,9 +785,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   VkPhysicalDeviceMemoryProperties gpu_mem_props;
   vkGetPhysicalDeviceMemoryProperties(gpu, &gpu_mem_props);
 
-  // Create vulkan surface
   VkSurfaceKHR surface = VK_NULL_HANDLE;
-  SDL_Vulkan_CreateSurface(window, instance, &surface);
+  if (!SDL_Vulkan_CreateSurface(window, instance, &surface)) {
+    assert(false);
+    return false;
+  }
 
   uint32_t graphics_queue_family_index = UINT32_MAX;
   uint32_t present_queue_family_index = UINT32_MAX;
@@ -627,155 +960,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
 
   // Create Swapchain
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-
-  VkPresentModeKHR present_mode = VK_PRESENT_MODE_IMMEDIATE_KHR;
-  VkFormat swapchain_image_format = VK_FORMAT_UNDEFINED;
-  VkColorSpaceKHR swapchain_color_space = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-  uint32_t swap_img_count = FRAME_LATENCY;
-
-  {
-    uint32_t format_count = 0;
-    err =
-        vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
-    assert(err == VK_SUCCESS);
-    VkSurfaceFormatKHR *surface_formats =
-        hb_alloc_nm_tp(tmp_alloc, format_count, VkSurfaceFormatKHR);
-    err = vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count,
-                                               surface_formats);
-    assert(err == VK_SUCCESS);
-    VkSurfaceFormatKHR surface_format =
-        pick_surface_format(surface_formats, format_count);
-    swapchain_image_format = surface_format.format;
-    swapchain_color_space = surface_format.colorSpace;
-    hb_free(tmp_alloc, surface_formats);
-    surface_formats = NULL;
-
-    VkSurfaceCapabilitiesKHR surf_caps;
-    err = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu, surface, &surf_caps);
-    assert(err == VK_SUCCESS);
-
-    uint32_t present_mode_count = 0;
-    err = vkGetPhysicalDeviceSurfacePresentModesKHR(gpu, surface,
-                                                    &present_mode_count, NULL);
-    assert(err == VK_SUCCESS);
-    VkPresentModeKHR *present_modes =
-        hb_alloc_nm_tp(tmp_alloc, present_mode_count, VkPresentModeKHR);
-    assert(present_modes);
-    err = vkGetPhysicalDeviceSurfacePresentModesKHR(
-        gpu, surface, &present_mode_count, present_modes);
-    assert(err == VK_SUCCESS);
-
-    VkExtent2D swapchain_extent;
-    // width and height are either both 0xFFFFFFFF, or both not 0xFFFFFFFF.
-    if (surf_caps.currentExtent.width == 0xFFFFFFFF) {
-      // If the surface size is undefined, the size is set to the size
-      // of the images requested, which must fit within the minimum and
-      // maximum values.
-      swapchain_extent.width = width;
-      swapchain_extent.height = height;
-
-      if (swapchain_extent.width < surf_caps.minImageExtent.width) {
-        swapchain_extent.width = surf_caps.minImageExtent.width;
-      } else if (swapchain_extent.width > surf_caps.maxImageExtent.width) {
-        swapchain_extent.width = surf_caps.maxImageExtent.width;
-      }
-
-      if (swapchain_extent.height < surf_caps.minImageExtent.height) {
-        swapchain_extent.height = surf_caps.minImageExtent.height;
-      } else if (swapchain_extent.height > surf_caps.maxImageExtent.height) {
-        swapchain_extent.height = surf_caps.maxImageExtent.height;
-      }
-    } else {
-      // If the surface size is defined, the swap chain size must match
-      swapchain_extent = surf_caps.currentExtent;
-      width = surf_caps.currentExtent.width;
-      height = surf_caps.currentExtent.height;
-    }
-
-    // The FIFO present mode is guaranteed by the spec to be supported
-    // and to have no tearing.  It's a great default present mode to use.
-    VkPresentModeKHR swapchain_present_mode = VK_PRESENT_MODE_FIFO_KHR;
-
-    if (present_mode != swapchain_present_mode) {
-      for (size_t i = 0; i < present_mode_count; ++i) {
-        if (present_modes[i] == present_mode) {
-          swapchain_present_mode = present_mode;
-          break;
-        }
-      }
-    }
-    if (swapchain_present_mode != present_mode) {
-      // The desired present mode was not found, just use the first one
-      present_mode = present_modes[0];
-    }
-    hb_free(tmp_alloc, present_modes);
-    present_modes = NULL;
-
-    // Determine the number of VkImages to use in the swap chain.
-    // Application desires to acquire 3 images at a time for triple
-    // buffering
-    if (swap_img_count < surf_caps.minImageCount) {
-      swap_img_count = surf_caps.minImageCount;
-    }
-    // If maxImageCount is 0, we can ask for as many images as we want;
-    // otherwise we're limited to maxImageCount
-    if ((surf_caps.maxImageCount > 0) &&
-        (swap_img_count > surf_caps.maxImageCount)) {
-      // Application must settle for fewer images than desired:
-      swap_img_count = surf_caps.maxImageCount;
-    }
-
-    VkSurfaceTransformFlagsKHR pre_transform;
-    if (surf_caps.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
-      pre_transform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-    } else {
-      pre_transform = surf_caps.currentTransform;
-    }
-
-    // Find a supported composite alpha mode - one of these is guaranteed to
-    // be set
-    VkCompositeAlphaFlagBitsKHR composite_alpha =
-        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    VkCompositeAlphaFlagBitsKHR composite_alpha_flags[4] = {
-        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-        VK_COMPOSITE_ALPHA_PRE_MULTIPLIED_BIT_KHR,
-        VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR,
-        VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
-    };
-    for (uint32_t i = 0; i < 4; i++) {
-      if (surf_caps.supportedCompositeAlpha & composite_alpha_flags[i]) {
-        composite_alpha = composite_alpha_flags[i];
-        break;
-      }
-    }
-
-    VkSwapchainCreateInfoKHR create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    create_info.surface = surface;
-    // On Android, vkGetSwapchainImagesKHR is always returning 1 more image than
-    // our min image count
-#ifdef __ANDROID__
-    create_info.minImageCount = swap_img_count - 1;
-#else
-    create_info.minImageCount = swap_img_count;
-#endif
-    create_info.imageFormat = swapchain_image_format;
-    create_info.imageColorSpace = swapchain_color_space;
-    create_info.imageExtent = swapchain_extent;
-    create_info.imageArrayLayers = 1;
-    create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-    create_info.compositeAlpha = composite_alpha;
-    create_info.preTransform = pre_transform;
-    create_info.presentMode = present_mode;
-
-    vkCreateSwapchainKHR(device, &create_info, vk_alloc, &swapchain);
-  }
+  swapchain_info swap_info = init_swapchain(window, device, gpu, surface,
+                                            &swapchain, vk_alloc, tmp_alloc);
 
   // Create Render Pass
   VkRenderPass render_pass = VK_NULL_HANDLE;
   {
     VkAttachmentDescription color_attachment = {0};
-    color_attachment.format = swapchain_image_format;
+    color_attachment.format = swap_info.format;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
     color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -837,7 +1029,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   VkRenderPass imgui_pass = VK_NULL_HANDLE;
   {
     VkAttachmentDescription color_attachment = {0};
-    color_attachment.format = swapchain_image_format;
+    color_attachment.format = swap_info.format;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
     color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -1321,6 +1513,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   // Apply to output var
   d->tmp_alloc = tmp_alloc;
   d->std_alloc = std_alloc;
+  d->window = window;
   d->vk_alloc = vk_alloc;
   d->instance = instance;
   d->gpu = gpu;
@@ -1338,10 +1531,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   d->device = device;
   d->present_queue = present_queue;
   d->graphics_queue = graphics_queue;
+  d->swap_info = swap_info;
   d->swapchain = swapchain;
-  d->swapchain_image_count = swap_img_count;
-  d->swap_width = width;
-  d->swap_height = height;
   d->render_pass = render_pass;
   d->imgui_pass = imgui_pass;
   d->pipeline_cache = pipeline_cache;
@@ -1422,129 +1613,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     }
   }
 
-  // Get Swapchain Images
-  {
-    uint32_t img_count = 0;
-    err = vkGetSwapchainImagesKHR(device, swapchain, &img_count, NULL);
-    assert(err == VK_SUCCESS);
-
-    // Device may really want us to have called vkGetSwapchainImagesKHR
-    // For now just assert that making that call doesn't change our desired
-    // swapchain images
-    assert(swap_img_count == img_count);
-
-    err = vkGetSwapchainImagesKHR(device, swapchain, &swap_img_count,
-                                  d->swapchain_images);
-    assert(err == VK_SUCCESS || err == VK_INCOMPLETE);
+  if (!demo_init_image_views(d)) {
+    assert(false);
+    return false;
   }
 
-  // Create Image Views
-  {
-    VkImageViewCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    create_info.format = swapchain_image_format;
-    create_info.components = (VkComponentMapping){
-        VK_COMPONENT_SWIZZLE_R,
-        VK_COMPONENT_SWIZZLE_G,
-        VK_COMPONENT_SWIZZLE_B,
-        VK_COMPONENT_SWIZZLE_A,
-    };
-    create_info.subresourceRange = (VkImageSubresourceRange){
-        VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1,
-    };
-
-    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      create_info.image = d->swapchain_images[i];
-      err = vkCreateImageView(device, &create_info, vk_alloc,
-                              &d->swapchain_image_views[i]);
-      assert(err == VK_SUCCESS);
-    }
-  }
-
-  // Create Depth Buffers
-  {
-    VkImageCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    create_info.imageType = VK_IMAGE_TYPE_2D;
-    create_info.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-    create_info.extent = (VkExtent3D){d->swap_width, d->swap_height, 1};
-    create_info.mipLevels = 1;
-    create_info.arrayLayers = FRAME_LATENCY;
-    create_info.samples = VK_SAMPLE_COUNT_1_BIT;
-    create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    create_info.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
-
-    VmaAllocationCreateInfo alloc_info = {0};
-    alloc_info.flags = VMA_ALLOCATION_CREATE_USER_DATA_COPY_STRING_BIT;
-    alloc_info.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    alloc_info.pUserData = (void *)("Depth Buffer Memory");
-    err = create_gpuimage(vma_alloc, &create_info, &alloc_info,
-                          &d->depth_buffers);
-    assert(err == VK_SUCCESS);
-  }
-
-  // Create Depth Buffer Views
-  {
-    VkImageViewCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    create_info.image = d->depth_buffers.image;
-    create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    create_info.format = VK_FORMAT_D32_SFLOAT_S8_UINT;
-    create_info.components = (VkComponentMapping){
-        VK_COMPONENT_SWIZZLE_R,
-        VK_COMPONENT_SWIZZLE_G,
-        VK_COMPONENT_SWIZZLE_B,
-        VK_COMPONENT_SWIZZLE_A,
-    };
-    create_info.subresourceRange = (VkImageSubresourceRange){
-        VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, 1, 0, 1,
-    };
-
-    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      create_info.subresourceRange.baseArrayLayer = i;
-      err = vkCreateImageView(device, &create_info, vk_alloc,
-                              &d->depth_buffer_views[i]);
-      assert(err == VK_SUCCESS);
-    }
-  }
-
-  // Create Framebuffers
-  {
-    VkFramebufferCreateInfo create_info = {0};
-    create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-    create_info.renderPass = render_pass;
-    create_info.attachmentCount = 2;
-    create_info.width = width;
-    create_info.height = height;
-    create_info.layers = 1;
-
-    // Create main pass framebuffers
-    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      VkImageView attachments[2] = {
-          d->swapchain_image_views[i],
-          d->depth_buffer_views[i],
-      };
-
-      create_info.pAttachments = attachments;
-      err = vkCreateFramebuffer(device, &create_info, vk_alloc,
-                                &d->main_pass_framebuffers[i]);
-      assert(err == VK_SUCCESS);
-    }
-
-    // Create ui pass framebuffers
-    for (uint32_t i = 0; i < FRAME_LATENCY; ++i) {
-      VkImageView attachments[1] = {
-          d->swapchain_image_views[i],
-      };
-
-      create_info.attachmentCount = 1;
-      create_info.pAttachments = attachments;
-      create_info.renderPass = imgui_pass;
-      err = vkCreateFramebuffer(device, &create_info, vk_alloc,
-                                &d->ui_pass_framebuffers[i]);
-      assert(err == VK_SUCCESS);
-    }
+  if (!demo_init_framebuffers(d)) {
+    assert(false);
+    return false;
   }
 
   // Create Command Pools
@@ -2007,6 +2083,25 @@ void demo_process_event(demo *d, const SDL_Event *e) {
   TracyCZoneEnd(ctx);
 }
 
+void demo_resize(demo *d) {
+  TracyCZoneN(ctx, "demo_resize", true);
+  VkResult err = vkDeviceWaitIdle(d->device);
+  (void)err;
+
+  d->swap_info = init_swapchain(d->window, d->device, d->gpu, d->surface,
+                                &d->swapchain, d->vk_alloc, d->tmp_alloc);
+
+  demo_init_image_views(d);
+
+  demo_init_framebuffers(d);
+
+  // Reset frame index so that the rendering routine knows that the
+  // swapchain images need to be transitioned again
+  d->frame_idx = 0;
+
+  TracyCZoneEnd(ctx);
+}
+
 void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
   TracyCZoneN(demo_render_frame_event, "demo_render_frame", true);
 
@@ -2044,7 +2139,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
       if (err == VK_ERROR_OUT_OF_DATE_KHR) {
         // demo->swapchain is out of date (e.g. the window was resized) and
         // must be recreated:
-        // resize(d);
+        demo_resize(d);
       } else if (err == VK_SUBOPTIMAL_KHR) {
         // demo->swapchain is not as optimal as it could be, but the
         // platform's presentation engine will still present the image
@@ -2342,8 +2437,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
         {
           TracyCVkNamedZone(gpu_gfx_ctx, main_scope, graphics_buffer,
                             "Main Pass", 2, true);
-          const float width = d->swap_width;
-          const float height = d->swap_height;
+          const float width = d->swap_info.width;
+          const float height = d->swap_info.height;
 
           cmd_begin_label(graphics_buffer, "main pass",
                           (float4){0.5, 0.1, 0.1, 1.0});
@@ -2479,8 +2574,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
               uint32_t idx_size = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
               uint32_t vtx_size = draw_data->TotalVtxCount * sizeof(ImDrawVert);
-              // We know to use 8 for the alignment because the vertex attribute
-              // layout starts with a float2
+              // We know to use 8 for the alignment because the vertex
+              // attribute layout starts with a float2
               const uint32_t alignment = 8;
               uint32_t align_padding = idx_size % alignment;
 
@@ -2577,8 +2672,8 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
               const float width = d->ig_io->DisplaySize.x;
               const float height = d->ig_io->DisplaySize.y;
 
-              // We know to use 8 for the alignment because the vertex attribute
-              // layout starts with a float2
+              // We know to use 8 for the alignment because the vertex
+              // attribute layout starts with a float2
               const uint32_t alignment = 8;
 
               // Set Render Pass
@@ -2782,7 +2877,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
     if (err == VK_ERROR_OUT_OF_DATE_KHR) {
       // demo->swapchain is out of date (e.g. the window was resized) and
       // must be recreated:
-      // resize(d);
+      demo_resize(d);
     } else if (err == VK_SUBOPTIMAL_KHR) {
       // demo->swapchain is not as optimal as it could be, but the platform's
       // presentation engine will still present the image correctly.
@@ -2895,7 +2990,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
       .dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                          .layerCount = 1},
       .dstOffset = {0, 0, 0},
-      .extent = {d->swap_width, d->swap_height, 1},
+      .extent = {d->swap_info.width, d->swap_info.height, 1},
   };
   vkCmdCopyImage(screenshot_cmd, swap_image,
                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, screenshot_image.image,
@@ -2997,10 +3092,10 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
 #endif
     // Note ^ We're assuming that the swapchain is BGR
 
-    int32_t pitch = d->swap_width * 4;
+    int32_t pitch = d->swap_info.width * 4;
     SDL_Surface *img = SDL_CreateRGBSurfaceFrom(
-        (screenshot_mem + sub_resource_layout.offset), d->swap_width,
-        d->swap_height, 32, pitch, rmask, gmask, bmask, amask);
+        (screenshot_mem + sub_resource_layout.offset), d->swap_info.width,
+        d->swap_info.height, 32, pitch, rmask, gmask, bmask, amask);
     assert(img);
 
     SDL_RWops *ops =

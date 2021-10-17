@@ -22,10 +22,23 @@
 #define TEXTURE_UPLOAD_QUEUE_SIZE 16
 
 typedef union SDL_Event SDL_Event;
+typedef struct SDL_Window SDL_Window;
+
+typedef struct swapchain_info {
+  bool valid;
+  uint32_t image_count;
+  VkFormat format;
+  VkColorSpaceKHR color_space;
+  VkPresentModeKHR present_mode;
+  uint32_t width;
+  uint32_t height;
+} swapchain_info;
 
 typedef struct demo {
   allocator std_alloc;
   allocator tmp_alloc;
+
+  SDL_Window *window;
 
   const VkAllocationCallbacks *vk_alloc;
   VmaAllocator vma_alloc;
@@ -48,11 +61,8 @@ typedef struct demo {
   VkQueue present_queue;
   VkQueue graphics_queue;
 
-  VkFormat swapchain_image_format;
+  swapchain_info swap_info;
   VkSwapchainKHR swapchain;
-  uint32_t swapchain_image_count;
-  uint32_t swap_width;
-  uint32_t swap_height;
 
   VkRenderPass render_pass;
   VkRenderPass imgui_pass;
@@ -149,8 +159,6 @@ typedef struct demo {
   ImGuiContext *ig_ctx;
   ImGuiIO *ig_io;
 } demo;
-
-typedef struct SDL_Window SDL_Window;
 
 bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
                allocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
