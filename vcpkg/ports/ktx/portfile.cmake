@@ -11,6 +11,7 @@ vcpkg_from_github(
     FILE_DISAMBIGUATOR 1
     PATCHES
         0001-Use-vcpkg-zstd.patch
+        0002-Switch-Hack.patch
 )
 
 if(VCPKG_TARGET_IS_WINDOWS)
@@ -37,6 +38,10 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
         vulkan KTX_FEATURE_VULKAN
 )
 
+if(VCPKG_TARGET_IS_SWITCH)
+    set(SWITCH 1)
+endif()
+
 vcpkg_configure_cmake(
     SOURCE_PATH ${SOURCE_PATH}
     PREFER_NINJA
@@ -45,6 +50,7 @@ vcpkg_configure_cmake(
         -DKTX_FEATURE_TESTS=OFF
         -DKTX_FEATURE_LOADTEST_APPS=OFF
         -DKTX_FEATURE_STATIC_LIBRARY=${ENABLE_STATIC}
+        -DSWITCH=${SWITCH}
         ${FEATURE_OPTIONS}
 )
 

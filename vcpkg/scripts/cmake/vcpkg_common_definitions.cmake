@@ -52,6 +52,8 @@ elseif(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
 elseif(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "MinGW")
     set(VCPKG_TARGET_IS_WINDOWS ON)
     set(VCPKG_TARGET_IS_MINGW ON)
+elseif(VCPKG_CMAKE_SYSTEM_NAME STREQUAL "Switch")
+    set(VCPKG_TARGET_IS_SWITCH ON)
 endif()
 
 #Helper variables to identify the host system name
