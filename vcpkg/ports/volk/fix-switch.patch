@@ -1,0 +1,22 @@
+diff --git a/volk.c b/volk.c
+index 4de06d9..4115881 100644
+--- a/volk.c
++++ b/volk.c
+@@ -10,7 +10,7 @@
+ 	#else
+ 		typedef int (__stdcall* FARPROC)(void);
+ 	#endif
+-#else
++#elif !defined(__SWITCH__)
+ #	include <dlfcn.h>
+ #endif
+ 
+@@ -57,6 +57,8 @@ VkResult volkInitialize(void)
+ 		return VK_ERROR_INITIALIZATION_FAILED;
+ 
+ 	vkGetInstanceProcAddr = (PFN_vkGetInstanceProcAddr)dlsym(module, "vkGetInstanceProcAddr");
++#elif defined(__SWITCH__)
++	// Vulkan driver must be statically linked
+ #else
+ 	void* module = dlopen("libvulkan.so", RTLD_NOW | RTLD_LOCAL);
+ 	if (!module)

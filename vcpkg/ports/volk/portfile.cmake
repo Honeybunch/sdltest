@@ -7,6 +7,8 @@ vcpkg_from_github(
     REF 5a605f5d6997bd929b666700a36ca3d9bd1d7a47
     SHA512 ed6faf13828f3e47c4f12f8d19952c94589420539e98405bf2a4b7959518357dcc2f210746f3683d3862ac8c80821f3c863d49f4625e2dac85d2a680567e4f00
     HEAD_REF master
+    PATCHES
+        fix-switch.patch
 )
 
 vcpkg_configure_cmake(
