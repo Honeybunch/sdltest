@@ -23,7 +23,7 @@ vcpkg_from_github(
     SHA512 ${SDL_HASH}
     HEAD_REF ${SDL_HEAD_REF}
     PATCHES
-        
+        ${SDL_PATCHES}
 )
 
 string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" SDL_STATIC)

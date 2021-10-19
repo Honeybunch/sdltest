@@ -4,6 +4,8 @@ vcpkg_from_github(
 	REF 07778badcced109b8190805fbf2d7abfaef0d3b9
 	SHA512 17f52d2b9558a2a6ebada5a405f74a8c6eb51c8dfb794a182cf7635cbe48206e1edce3bf6f5e9358ec8b24e9c0cba4019c8eb14bb37524ea762a80aece04652f
 	HEAD_REF master
+	PATCHES
+		fix-switch.patch
 )
 
 file(COPY ${CMAKE_CURRENT_LIST_DIR}/CMakeLists.txt DESTINATION ${SOURCE_PATH})

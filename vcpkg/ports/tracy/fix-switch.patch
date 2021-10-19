@@ -1,0 +1,82 @@
+diff --git a/client/TracyProfiler.cpp b/client/TracyProfiler.cpp
+index b4973791..deafca1f 100644
+--- a/client/TracyProfiler.cpp
++++ b/client/TracyProfiler.cpp
+@@ -116,6 +116,11 @@ extern "C" typedef BOOL (WINAPI *t_GetLogicalProcessorInformationEx)( LOGICAL_PR
+ #  include <mutex>
+ #endif
+ 
++#if __SWITCH__
++#define _POSIX_HOST_NAME_MAX 260
++#define _POSIX_LOGIN_NAME_MAX 260
++#endif
++
+ namespace tracy
+ {
+ 
+@@ -388,7 +393,7 @@ static const char* GetHostInfo()
+     char user[_POSIX_LOGIN_NAME_MAX]{};
+ 
+     gethostname( hostname, _POSIX_HOST_NAME_MAX );
+-#  if defined __ANDROID__
++#  if defined __ANDROID__ || defined __SWITCH__
+     const auto login = getlogin();
+     if( login )
+     {
+diff --git a/client/tracy_rpmalloc.cpp b/client/tracy_rpmalloc.cpp
+index c2628d79..8c6747af 100644
+--- a/client/tracy_rpmalloc.cpp
++++ b/client/tracy_rpmalloc.cpp
+@@ -1698,14 +1698,18 @@ rp_thread_destructor(void* value) {
+ #endif
+ 
+ #if PLATFORM_POSIX
+-#  include <sys/mman.h>
+-#  include <sched.h>
+-#  ifdef __FreeBSD__
+-#    include <sys/sysctl.h>
+-#    define MAP_HUGETLB MAP_ALIGNED_SUPER
+-#  endif
+-#  ifndef MAP_UNINITIALIZED
+-#    define MAP_UNINITIALIZED 0
++#  if __SWITCH__
++#    include <malloc.h>
++#  else
++#    include <sys/mman.h>
++#    include <sched.h>
++#    ifdef __FreeBSD__
++#      include <sys/sysctl.h>
++#      define MAP_HUGETLB MAP_ALIGNED_SUPER
++#    endif
++#    ifndef MAP_UNINITIALIZED
++#      define MAP_UNINITIALIZED 0
++#    endif
+ #  endif
+ #endif
+ #include <errno.h>
+@@ -2048,6 +2052,8 @@ _memory_map_os(size_t size, size_t* offset) {
+ 		assert(!"Failed to map virtual memory block");
+ 		return 0;
+ 	}
++#elif __SWITCH__
++	void* ptr = malloc(size + padding);
+ #else
+ 	int flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_UNINITIALIZED;
+ #  if defined(__APPLE__)
+@@ -2101,9 +2107,13 @@ _memory_unmap_os(void* address, size_t size, size_t offset, size_t release) {
+ 	}
+ #else
+ 	if (release) {
+-		if (munmap(address, release)) {
+-			assert("Failed to unmap virtual memory block" == 0);
+-		}
++		#if __SWITCH__
++			free(address);
++		#else
++			if (munmap(address, release)) {
++				assert("Failed to unmap virtual memory block" == 0);
++			}
++		#endif
+ 	}
+ 	else {
+ #if defined(POSIX_MADV_FREE)
