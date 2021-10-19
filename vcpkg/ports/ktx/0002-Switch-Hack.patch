@@ -1,18 +1,3 @@
-diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 0bdb7088..74d4bf51 100644
---- a/CMakeLists.txt
-+++ b/CMakeLists.txt
-@@ -356,6 +356,10 @@ macro(commom_lib_settings lib write)
-         target_compile_definitions( ${lib} PRIVATE KTX_OMIT_VULKAN=1 )
-     endif()
- 
-+    if(SWITCH)
-+        target_compile_definitions(${lib} PUBLIC SWITCH)
-+    endif()
-+
- endmacro(commom_lib_settings)
- 
- set(KTX_BUILD_DIR "${CMAKE_BINARY_DIR}")
 diff --git a/lib/basisu/encoder/basisu_enc.cpp b/lib/basisu/encoder/basisu_enc.cpp
 index f02fb62c..c02e689a 100644
 --- a/lib/basisu/encoder/basisu_enc.cpp
@@ -34,7 +19,7 @@ index bce164c3..422a5f8f 100644
  #if WINDOWS
  #define WINDOWS_LEAN_AND_MEAN
  #include <windows.h>
-+#elif SWITCH
++#elif __SWITCH__
 +// Do nothing
 +#define WINAPI
  #else
@@ -44,7 +29,7 @@ index bce164c3..422a5f8f 100644
  #define LoadProcAddr(lib, proc) emscripten_GetProcAddress(proc)
  #define LIBRARY_NAME "unused"
  void* ktxOpenGLModuleHandle;
-+#elif SWITCH
++#elif __SWITCH__
 +// Do nothing; GL must be statically linked
 +void* ktxOpenGLModuleHandle;
  #else
@@ -82,7 +67,7 @@ index 0c8f6cce..98c54314 100644
  #ifndef _GL_FUNCS_H_
  #define _GL_FUNCS_H_
  
-+#ifdef SWITCH
++#ifdef __SWITCH__
 +//#define KTX_USE_FUNCPTRS_FOR_OPENGL 0
 +#elif !defined(KTX_USE_FUNCPTRS_FOR_OPENGL)
 +#define KTX_USE_FUNCPTRS_FOR_OPENGL 1
@@ -100,7 +85,7 @@ index b1c9c870..660b7715 100644
  #define _VK_FUNCS_H_
  
 -#if !defined(KTX_USE_FUNCPTRS_FOR_VULKAN)
-+#ifdef SWITCH
++#ifdef __SWITCH__
 +//#define KTX_USE_FUNCPTRS_FOR_VULKAN 0
 +#elif !defined(KTX_USE_FUNCPTRS_FOR_VULKAN)
  #define KTX_USE_FUNCPTRS_FOR_VULKAN 1

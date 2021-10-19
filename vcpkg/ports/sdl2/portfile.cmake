@@ -1,15 +1,29 @@
 set(SDL2_VERSION 2.0.16)
+
+set(SDL_REPO libsdl-org/SDL)
+set(SDL_HASH 45ce71f77b01f5fd886f92e5b3d96f1f72c7e0f70c09e615384a900533b941cad65bf6b54a125a9eeb8499e2056e9a8e54d4e654bccfca9730584792a2b18fbc)
+set(SDL_REF release-2.0.16)
+set(SDL_HEAD_REF master)
+set(SDL_PATCHES 0001-sdl2-Enable-creation-of-pkg-cfg-file-on-windows.patch
+                0002-sdl2-skip-ibus-on-linux.patch
+                0003-sdl2-disable-sdlmain-target-search-on-uwp.patch
+                0004-sdl2-alias-on-static-build.patch)
+if(VCPKG_TARGET_IS_SWITCH)
+    set(SDL_REPO devkitPro/SDL)
+    set(SDL_HASH 45649715af6aa5acc5b72b93e596f487326e556d22a2b61f85588af8c966ce33bfafa011a0554c0cf08427cf6c1e506fffe2a96856e47a9aa54d885a31facadd)
+    set(SDL_REF switch-sdl2)
+    set(SDL_HEAD_REF main)
+    set(SDL_PATCHES )
+endif()
+
 vcpkg_from_github(
     OUT_SOURCE_PATH SOURCE_PATH
-    REPO libsdl-org/SDL
-    REF release-2.0.16
-    SHA512 45ce71f77b01f5fd886f92e5b3d96f1f72c7e0f70c09e615384a900533b941cad65bf6b54a125a9eeb8499e2056e9a8e54d4e654bccfca9730584792a2b18fbc
-    HEAD_REF master
+    REPO ${SDL_REPO}
+    REF ${SDL_REF}
+    SHA512 ${SDL_HASH}
+    HEAD_REF ${SDL_HEAD_REF}
     PATCHES
-        0001-sdl2-Enable-creation-of-pkg-cfg-file-on-windows.patch
-        0002-sdl2-skip-ibus-on-linux.patch
-        0003-sdl2-disable-sdlmain-target-search-on-uwp.patch
-        0004-sdl2-alias-on-static-build.patch
+        
 )
 
 string(COMPARE EQUAL "${VCPKG_LIBRARY_LINKAGE}" "static" SDL_STATIC)
@@ -74,7 +88,11 @@ if(NOT VCPKG_CMAKE_SYSTEM_NAME)
     endforeach()
 endif()
 
-configure_file(${SOURCE_PATH}/LICENSE.txt ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
+if(VCPKG_TARGET_IS_SWITCH)
+    configure_file(${SOURCE_PATH}/COPYING.txt ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
+else()
+    configure_file(${SOURCE_PATH}/LICENSE.txt ${CURRENT_PACKAGES_DIR}/share/${PORT}/copyright COPYONLY)
+endif()
 vcpkg_copy_pdbs()
 
 set(DYLIB_COMPATIBILITY_VERSION_REGEX "set\\(DYLIB_COMPATIBILITY_VERSION (.+)\\)")

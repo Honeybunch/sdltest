@@ -9,6 +9,7 @@ vcpkg_from_github(
     PATCHES
         fix-cmake.patch
         fix-android.patch
+        fix-switch.patch
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
