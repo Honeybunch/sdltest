@@ -27,9 +27,14 @@ target_link_libraries(
     TracyClient
     PRIVATE
         Threads::Threads
-    PUBLIC
-        ${CMAKE_DL_LIBS}
 )
+if(NOT SWITCH)
+    target_link_libraries(
+        TracyClient
+        PUBLIC
+            ${CMAKE_DL_LIBS}
+    )
+endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
     find_library(EXECINFO_LIBRARY NAMES execinfo REQUIRED)

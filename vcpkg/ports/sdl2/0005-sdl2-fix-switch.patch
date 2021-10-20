@@ -1,0 +1,15 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6f2f02df7..531b20df0 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -297,6 +297,10 @@ if(EMSCRIPTEN)
+   set(SDL_CPUINFO_ENABLED_BY_DEFAULT OFF)
+   set(SDL_DLOPEN_ENABLED_BY_DEFAULT OFF)
+ endif()
++if(SWITCH)
++  set(SDL_LOADSO_ENABLED_BY_DEFAULT OFF)
++  set(SDL_DLOPEN_ENABLED_BY_DEFAULT OFF)
++endif()
+ 
+ # When defined, respect CMake's BUILD_SHARED_LIBS setting:
+ set(SDL_STATIC_ENABLED_BY_DEFAULT ON)

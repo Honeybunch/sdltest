@@ -13,7 +13,7 @@ if(VCPKG_TARGET_IS_SWITCH)
     set(SDL_HASH 45649715af6aa5acc5b72b93e596f487326e556d22a2b61f85588af8c966ce33bfafa011a0554c0cf08427cf6c1e506fffe2a96856e47a9aa54d885a31facadd)
     set(SDL_REF switch-sdl2)
     set(SDL_HEAD_REF main)
-    set(SDL_PATCHES )
+    set(SDL_PATCHES 0005-sdl2-fix-switch.patch)
 endif()
 
 vcpkg_from_github(
