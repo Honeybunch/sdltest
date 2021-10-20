@@ -1,3 +1,18 @@
+diff --git a/client/TracyProfiler.cpp b/client/TracyProfiler.cpp
+index b4973791..6948ae23 100644
+--- a/client/TracyProfiler.cpp
++++ b/client/TracyProfiler.cpp
+@@ -50,6 +50,10 @@
+ #  include <vector>
+ #endif
+ 
++#ifdef __SWITCH__
++#include <unistd.h>
++#endif
++
+ #include <algorithm>
+ #include <assert.h>
+ #include <atomic>
 diff --git a/TracyVulkan.hpp b/TracyVulkan.hpp
 index d19cbdee..0c0255a8 100644
 --- a/TracyVulkan.hpp
@@ -50,15 +65,15 @@ index b4973791..deafca1f 100644
  namespace tracy
  {
  
-@@ -388,7 +393,7 @@ static const char* GetHostInfo()
-     char user[_POSIX_LOGIN_NAME_MAX]{};
- 
-     gethostname( hostname, _POSIX_HOST_NAME_MAX );
--#  if defined __ANDROID__
-+#  if defined __ANDROID__ || defined __SWITCH__
-     const auto login = getlogin();
-     if( login )
+@@ -398,6 +407,8 @@ static const char* GetHostInfo()
      {
+         memcpy( user, "(?)", 4 );
+     }
++# elif defined __SWITCH__
++    // do nothing
+ #  else
+     getlogin_r( user, _POSIX_LOGIN_NAME_MAX );
+ #  endif
 diff --git a/client/tracy_rpmalloc.cpp b/client/tracy_rpmalloc.cpp
 index c2628d79..8c6747af 100644
 --- a/client/tracy_rpmalloc.cpp
@@ -90,6 +105,20 @@ index c2628d79..8c6747af 100644
  #  endif
  #endif
  #include <errno.h>
+@@ -1776,8 +1780,13 @@ rpmalloc_initialize_config(const rpmalloc_config_t* config) {
+ 				CloseHandle(token);
+ 			}
+ 		}
++#else
++#if defined (__SWITCH__)
++		// devkitPro declares sysconf but doesn't implement it
++		_memory_page_size = 0x10000; // 64KiB
+ #else
+ 		_memory_page_size = (size_t)sysconf(_SC_PAGESIZE);
++#endif
+ 		_memory_map_granularity = _memory_page_size;
+ 		if (config && config->enable_huge_pages) {
+ #if defined(__linux__)
 @@ -2048,6 +2052,8 @@ _memory_map_os(size_t size, size_t* offset) {
  		assert(!"Failed to map virtual memory block");
  		return 0;

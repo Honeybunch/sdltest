@@ -217,12 +217,7 @@ else()
 endif()
 #set_property(TARGET sdltest PROPERTY INTERPROCEDURAL_OPTIMIZATION True)
 
-set(SDL_LibNames "SDL2::SDL2main;SDL2::SDL2_image")
-if(SWITCH)
-  set(SDL_LibNames "SDL2::SDL2main")
-endif()
-
-set(library_list "${SDL_LibNames};volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;Tracy::TracyClient")
+set(library_list "SDL2::SDL2main;SDL2::SDL2_image;volk::volk;volk::volk_headers;imgui::imgui;mimalloc;mimalloc-static;KTX::ktx;Tracy::TracyClient")
 
 target_link_libraries(sdltest PRIVATE ${library_list})
 
@@ -244,11 +239,6 @@ if(STATIC)
   set_property(TARGET sdltest PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 else()
   target_link_libraries(sdltest PRIVATE SDL2::SDL2)
-endif()
-
-if(SWITCH)
-  # Not linking correctly for some reason
-  # target_link_libraries(sdltest PRIVATE SDL2::SDL2_image)
 endif()
 
 target_compile_features(sdltest PRIVATE c_std_11)
