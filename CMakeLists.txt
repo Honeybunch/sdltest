@@ -195,7 +195,8 @@ if(WIN32)
 elseif(ANDROID)
   add_library(sdltest SHARED ${source})
 elseif(SWITCH)
-  add_executable(sdltest ${source})
+  file(GLOB_RECURSE switch_source CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/switch/src/*.c")
+  add_executable(sdltest ${source} ${switch_source})
 elseif(UNIX)
   if(APPLE)
     if(IOS)
@@ -332,6 +333,32 @@ if(ANDROID)
   add_subdirectory(android)
 elseif(IOS)
   # TODO: custom iOS build steps
+elseif(SWITCH)
+  set(APP_AUTHOR "Honeybunch")
+  set(APP_TITLEID "")
+
+  if(WIN32)
+    set(nro ${DEVKITPRO}/tools/bin/elf2nro.exe)
+    set(nacptool ${DEVKITPRO}/tools/bin/nacptool.exe)
+  else()
+    set(nro ${DEVKITPRO}/tools/bin/elf2nro)
+    set(nacptool ${DEVKITPRO}/tools/bin/nacptool)
+  endif()
+
+  set(NACPFLAGS "--titleid=${APP_TITLEID}")
+
+  set(nacp_out ${CMAKE_CFG_INTDIR}/sdltest.nacp)
+  set(nacp_out_str "\"${nacp_out}\"")
+  set(nro_out ${CMAKE_CFG_INTDIR}/sdltest.nro)
+  add_custom_command(
+  OUTPUT ${nro_out}
+    COMMAND ${nacptool} --create ${CMAKE_PROJECT_NAME} ${APP_AUTHOR} ${CMAKE_PROJECT_VERSION} ${nacp_out_str} ${NACPFLAGS}
+    COMMAND ${nro} $<TARGET_FILE:sdltest> ${nro_out} --nacp=${nacp_out}
+    COMMAND ${CMAKE_COMMAND} -E rm -rf ${nacp_out}
+    DEPENDS $<TARGET_FILE:sdltest>
+  )
+
+  add_custom_target(package DEPENDS ${nro_out})
 else()
   # CPack Packaging
   set(CPACK_PACKAGE_NAME ${CMAKE_PROJECT_NAME})

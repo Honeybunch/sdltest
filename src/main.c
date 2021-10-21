@@ -116,10 +116,6 @@ static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
   return ret;
 }
 
-#ifdef __SWITCH__
-#define SDL_main main
-#endif
-
 int32_t SDL_main(int32_t argc, char *argv[]) {
   static const float qtr_pi = 0.7853981625f;
 
