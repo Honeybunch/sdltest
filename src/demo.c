@@ -23,6 +23,8 @@
 
 #ifdef __ANDROID__
 #define ASSET_PREFIX
+#elif __SWITCH__
+#define ASSET_PREFIX "romfs:/"
 #else
 #define ASSET_PREFIX "./assets/"
 #endif
