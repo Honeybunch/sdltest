@@ -4,7 +4,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __SWITCH__
+#define mi_heap_t int
+#else
 typedef struct mi_heap_s mi_heap_t;
+#endif
 
 typedef void *alloc_fn(void *user_data, size_t size);
 typedef void *realloc_fn(void *user_data, void *original, size_t size);
@@ -47,5 +51,5 @@ typedef struct standard_allocator {
   const char *name;
 } standard_allocator;
 
-standard_allocator create_standard_allocator(const char* name);
+standard_allocator create_standard_allocator(const char *name);
 void destroy_standard_allocator(standard_allocator a);

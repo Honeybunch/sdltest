@@ -3,7 +3,23 @@
 #include <assert.h>
 #include <string.h>
 
+#ifdef __SWITCH__
+#include <malloc.h>
+#define mi_heap_t int
+
+#define mi_heap_new(...) 0
+#define mi_heap_destroy(...) 0
+#define mi_heap_delete(...) 0
+
+#define mi_heap_calloc(heap, count, size) calloc(count, size);
+#define mi_heap_recalloc(heap, ptr, count, size) realloc(ptr, size)
+#define mi_heap_recalloc_aligned(heap, ptr, count, size, alignment)            \
+  realloc(ptr, size)
+
+#define mi_free(ptr) free(ptr)
+#else
 #include <mimalloc.h>
+#endif
 
 #include "profiling.h"
 
@@ -48,7 +64,7 @@ void arena_free(void *user_data, void *ptr) {
 
 arena_allocator create_arena_allocator(size_t max_size) {
   mi_heap_t *heap = mi_heap_new();
-  assert(heap);
+  // assert(heap); switch doesn't like this
   void *data = mi_heap_calloc(heap, 1, max_size);
   TracyCAllocN(data, max_size, "Arena");
   assert(data);

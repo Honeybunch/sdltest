@@ -6,7 +6,6 @@
 #include <assert.h>
 #include <cimgui.h>
 #include <float.h>
-#include <mimalloc.h>
 #include <stddef.h>
 
 #include <volk.h>

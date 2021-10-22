@@ -345,11 +345,14 @@ elseif(SWITCH)
     set(nacptool ${DEVKITPRO}/tools/bin/nacptool)
   endif()
 
-  set(NACPFLAGS "--titleid=${APP_TITLEID}")
+  if(APP_TITLEID)
+    set(NACPFLAGS "--titleid=${APP_TITLEID}")
+  endif()
 
   set(nacp_out ${CMAKE_CFG_INTDIR}/sdltest.nacp)
   set(nacp_out_str "\"${nacp_out}\"")
   set(nro_out ${CMAKE_CFG_INTDIR}/sdltest.nro)
+
   add_custom_command(
   OUTPUT ${nro_out}
     COMMAND ${nacptool} --create ${CMAKE_PROJECT_NAME} ${APP_AUTHOR} ${CMAKE_PROJECT_VERSION} ${nacp_out_str} ${NACPFLAGS}

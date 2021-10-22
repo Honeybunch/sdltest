@@ -2,7 +2,18 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_vulkan.h>
 #include <assert.h>
+
+#ifdef __SWITCH__
+#define mi_heap_t int
+#define mi_heap_new() 0
+#define mi_heap_delete(...)
+
+#define mi_heap_malloc_aligned(heap, size, alignment) malloc(size)
+#define mi_heap_realloc_aligned(heap, ptr, size, alignment) realloc(ptr, size)
+#define mi_free(ptr) free(ptr)
+#else
 #include <mimalloc.h>
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -117,6 +128,7 @@ static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
 }
 
 int32_t SDL_main(int32_t argc, char *argv[]) {
+  SDL_Log("%s", "Entered SDL_main");
   static const float qtr_pi = 0.7853981625f;
 
   {
@@ -126,18 +138,25 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   }
 
   // Create Temporary Arena Allocator
+  SDL_Log("%s", "Creating Arena Allocator");
   static const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
   arena_allocator arena = create_arena_allocator(arena_alloc_size);
 
   mi_heap_t *vk_heap = mi_heap_new();
+  SDL_Log("%s", "Creating Vulkan Allocator");
   VkAllocationCallbacks vk_alloc = create_vulkan_allocator(vk_heap);
+  SDL_Log("%s", "Creating Standard Allocator");
   standard_allocator std_alloc = create_standard_allocator("std_alloc");
 
   const VkAllocationCallbacks *vk_alloc_ptr = &vk_alloc;
 
-  assert(igDebugCheckVersionAndDataLayout(
-      igGetVersion(), sizeof(ImGuiIO), sizeof(ImGuiStyle), sizeof(ImVec2),
-      sizeof(ImVec4), sizeof(ImDrawVert), sizeof(ImDrawIdx)));
+  if (!igDebugCheckVersionAndDataLayout(
+          igGetVersion(), sizeof(ImGuiIO), sizeof(ImGuiStyle), sizeof(ImVec2),
+          sizeof(ImVec4), sizeof(ImDrawVert), sizeof(ImDrawIdx))) {
+    SDL_Log("%s", "Failed to validate imgui data");
+    SDL_TriggerBreakpoint();
+    return -1;
+  }
 
   editor_camera_controller controller = {0};
   controller.move_speed = 10.0f;
@@ -155,16 +174,31 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .far = 100.0f,
   };
 
+  SDL_Log("%s", "Initializing Volk");
   VkResult err = volkInitialize();
-  assert(err == VK_SUCCESS);
+  if (err != VK_SUCCESS) {
+    SDL_Log("%s", "Failed to initialize volk");
+    SDL_TriggerBreakpoint();
+    return (int32_t)err;
+  }
 
   {
     int32_t res = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
-    assert(res == 0);
+    if (res != 0) {
+      const char *msg = SDL_GetError();
+      SDL_Log("Failed to initialize SDL with error: %s", msg);
+      SDL_TriggerBreakpoint();
+      return -1;
+    }
 
     int32_t flags = IMG_INIT_PNG;
     res = IMG_Init(flags);
-    assert(res & IMG_INIT_PNG);
+    if (res & IMG_INIT_PNG == 0) {
+      const char *msg = IMG_GetError();
+      SDL_Log("Failed to initialize SDL_Image with error: %s", msg);
+      SDL_TriggerBreakpoint();
+      return -1;
+    }
 
     SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
   }
@@ -173,9 +207,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       "SDL Test", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WIDTH, HEIGHT,
       SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
   if (window == NULL) {
-    char msg[500] = {0};
-    SDL_GetErrorMsg(msg, 500);
-    assert(0);
+    const char *msg = SDL_GetError();
+    SDL_Log("Failed to open window with error: %s", msg);
+    SDL_Quit();
+    SDL_TriggerBreakpoint();
+    return -1;
   }
 
   // Create vulkan instance

@@ -72,7 +72,8 @@
         "allocator.h": "c",
         "volk.h": "c",
         "sdl_rwops.h": "c",
-        "vkdbg.h": "c"
+        "vkdbg.h": "c",
+        "malloc.h": "c"
     },
     "cmake.configureOnOpen": false
 }
