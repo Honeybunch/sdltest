@@ -35,7 +35,7 @@ jobs:
         uses: seanmiddleditch/gha-setup-ninja@master
         
       - name: Setup Dependencies
-        run: install_deps.bat
+        run: cmd /c install_deps.bat
         
       - name: Configure CMake
         run: cmake -Bbuild/x64/windows -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=x64-windows
