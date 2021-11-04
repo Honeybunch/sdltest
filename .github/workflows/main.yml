@@ -62,3 +62,53 @@ jobs:
 
       - name: Build x64 Windows Release Static
         run: cmake --build build/x64/windows-static --config Release
+  
+  build-android-arm64-on-windows-x64:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Set up JDK 1.8
+        uses: actions/setup-java@v1
+        with:
+          java-version: 1.8
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v2
+
+      - name: Setup Android NDK
+      - uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r22
+
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v1.9
+        with:
+          cmake-version: '3.19.x'
+
+      - name: Setup ninja
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Setup Dependencies
+        run: cmd /c install_android_deps.bat
+
+      - name: Configure CMake arm64 Android
+        run: cmake -Bbuild/arm64/android -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=arm64-android -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="%GITHUB_WORKSPACE%/vcpkg/scripts/toolchains/android.cmake"
+
+      - name: Build arm64 Android Debug
+        run: cmake --build build/arm64/android --config Debug
+
+      - name: Build arm64 Android RelWithDebInfo
+        run: cmake --build build/arm64/android --config RelWithDebInfo
+
+      - name: Build arm64 Android Release
+        run: cmake --build build/arm64/android --config Release
+
+      - name: Install arm64 Android Release
+        run: cmake --build build/arm64/android --config Release --target install
+
+      - name: Package arm64 Android Relase
+        run: cmake --build build/arm64/android --config Release --target package
