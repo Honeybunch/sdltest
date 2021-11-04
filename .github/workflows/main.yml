@@ -96,7 +96,7 @@ jobs:
         run: cmd /c install_android_deps.bat
 
       - name: Configure CMake arm64 Android
-        run: cmake -Bbuild/arm64/android -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=arm64-android -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="%GITHUB_WORKSPACE%/vcpkg/scripts/toolchains/android.cmake"
+        run: cmake -Bbuild/arm64/android -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=arm64-android -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/toolchains/android.cmake"
 
       - name: Build arm64 Android Debug
         run: cmake --build build/arm64/android --config Debug
