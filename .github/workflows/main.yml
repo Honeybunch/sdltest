@@ -78,12 +78,16 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
+        
       - name: Install Android NDK
         run: &$env:ANDROID_HOME/tools/bin/sdkmanager.bat --install "ndk;22.0.7026061"
+        
       - name: Install Android Build Tools
         run: &$env:ANDROID_HOME/tools/bin/sdkmanager.bat --install build-tools;29.0.3
+        
       - name: Install Android Platform Tools
         run: &$env:ANDROID_HOME/tools/bin/sdkmanager.bat --install platform-tools
+        
       - name: Install Android 29
         run: &$env:ANDROID_HOME/tools/bin/sdkmanager.bat --install platforms;android-29
 
