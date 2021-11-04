@@ -84,6 +84,15 @@ jobs:
         with:
           ndk-version: r22
 
+      - name: Install Android Build Tools
+        run: $env:ANDROID_HOME/tools/bin/sdkmanager.bat --install build-tools;31.0.0
+
+      - name: Install Android Platform Tools
+        run: $env:ANDROID_HOME/tools/bin/sdkmanager.bat --install platform-tools
+
+      - name: Install Android 29
+        run: $env:ANDROID_HOME/tools/bin/sdkmanager.bat --install platforms;android-29
+
       - name: Setup cmake
         uses: jwlawson/actions-setup-cmake@v1.9
         with:
