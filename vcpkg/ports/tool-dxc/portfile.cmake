@@ -13,3 +13,6 @@ vcpkg_copy_tools(
     SEARCH_DIR ${dxc_path}
     DESTINATION ${CURRENT_PACKAGES_DIR}/tools/dxc/
 )
+
+file(COPY ${dxc_path}/dxcompiler.dll DESTINATION ${CURRENT_PACKAGES_DIR}/tools/dxc/)
+file(COPY ${dxc_path}/dxil.dll DESTINATION ${CURRENT_PACKAGES_DIR}/tools/dxc/)
