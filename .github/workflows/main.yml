@@ -39,8 +39,26 @@ jobs:
       - name: Setup Dependencies
         run: cmd /c install_deps.bat
 
-      - name: Configure CMake
+      - name: Configure CMake x64 Windows
         run: cmake -Bbuild/x64/windows -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=x64-windows
 
-      - name: Build Debug
+      - name: Build x64 Windows Debug
         run: cmake --build build/x64/windows --config Debug
+
+      - name: Build x64 Windows RelWithDebInfo
+        run: cmake --build build/x64/windows --config RelWithDebInfo
+
+      - name: Build x64 Windows Release
+        run: cmake --build build/x64/windows --config Release
+
+      - name: Configure CMake x64 Windows Static
+        run: cmake -Bbuild/x64/windows-static -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=x64-windows-static
+
+      - name: Build x64 Windows Debug Static
+        run: cmake --build build/x64/windows-static --config Debug
+
+      - name: Build x64 Windows RelWithDebInfo Static
+        run: cmake --build build/x64/windows-static --config RelWithDebInfo
+
+      - name: Build x64 Windows Release Static
+        run: cmake --build build/x64/windows-static --config Release
