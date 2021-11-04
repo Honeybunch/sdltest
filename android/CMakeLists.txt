@@ -7,11 +7,13 @@ file(REAL_PATH "${JAVA_HOME}/../" JAVA_HOME)
 
 set(ANDROID_VERSION 29)
 
-set(dx_path ${CMAKE_ANDROID_NDK}/../../build-tools/29.0.3/dx.bat)
-set(aapt_path ${CMAKE_ANDROID_NDK}/../../build-tools/29.0.3/aapt.exe)
-set(zipalign_path ${CMAKE_ANDROID_NDK}/../../build-tools/29.0.3/zipalign.exe)
-set(apksigner_path ${CMAKE_ANDROID_NDK}/../../build-tools/29.0.3/apksigner.bat)
-set(android_path ${CMAKE_ANDROID_NDK}/../../platforms/android-${ANDROID_VERSION}/android.jar)
+file(TO_CMAKE_PATH $ENV{ANDROID_HOME} ANDROID_HOME)
+
+set(dx_path ${ANDROID_HOME}/build-tools/29.0.3/dx.bat)
+set(aapt_path ${ANDROID_HOME}/build-tools/29.0.3/aapt.exe)
+set(zipalign_path ${ANDROID_HOME}/build-tools/29.0.3/zipalign.exe)
+set(apksigner_path ${ANDROID_HOME}/build-tools/29.0.3/apksigner.bat)
+set(android_path ${ANDROID_HOME}/platforms/android-${ANDROID_VERSION}/android.jar)
 
 set(android_main ${CMAKE_CURRENT_LIST_DIR}/src/main)
 set(resource_folder ${android_main}/res)
@@ -31,7 +33,7 @@ add_jar(SDLTest ${sdltest_java} INCLUDE_JARS ${android_path} SDL)
 set(sdl_build_path ${CMAKE_CURRENT_BINARY_DIR}/../$<CONFIG>)
 set(cfg_expr $<$<CONFIG:Debug>:$<LOWER_CASE:$<CONFIG>>>)
 # hidapi relies on c++ 
-set(libcppshared_path $ENV{ANDROID_NDK_HOME}/sources/cxx-stl/llvm-libc++/libs/${arch}/libc++_shared.so)
+set(libcppshared_path ${CMAKE_ANDROID_NDK}/sources/cxx-stl/llvm-libc++/libs/${arch}/libc++_shared.so)
 add_custom_target(copy_so ALL
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libhidapi.so ${sdl_build_path}
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_LIST_DIR}/../vcpkg/installed/arm64-android/${cfg_expr}/lib/libktx.so ${sdl_build_path}
@@ -44,7 +46,7 @@ add_custom_target(copy_so ALL
     COMMAND ${CMAKE_COMMAND} -E copy ${libcppshared_path} ${sdl_build_path})
 # Bring along the validation layers
 if(NOT FINAL)
-    file(GLOB vk_validation_layers "$ENV{ANDROID_NDK_HOME}/sources/third_party/vulkan/src/build-android/jniLibs/${arch}/*.so")
+    file(GLOB vk_validation_layers "${CMAKE_ANDROID_NDK}/sources/third_party/vulkan/src/build-android/jniLibs/${arch}/*.so")
     foreach(layer ${vk_validation_layers})
         get_filename_component(layer_name ${layer} NAME_WE)
         list(APPEND layer_names ${layer_name})
