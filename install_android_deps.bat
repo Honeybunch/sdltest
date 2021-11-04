@@ -2,35 +2,14 @@
 
 cd ./vcpkg
 
-REM For now, get DXC from Vulkan SDK, which is still kind of required
 REM Install Windows Host Tools
-REM call vcpkg install tool-dxc:x64-windows
+call vcpkg install tool-dxc:x64-windows ktx[vulkan,tools]:x64-windows
 
 REM Install arm64 Android Deps
-call vcpkg install cgltf:arm64-android
-call vcpkg install imgui:arm64-android
-call vcpkg install vulkan:arm64-android
-call vcpkg install vulkan-headers:arm64-android
-call vcpkg install ktx[vulkan]:arm64-android
-call vcpkg install mimalloc:arm64-android
-call vcpkg install sdl2[vulkan]:arm64-android
-call vcpkg install sdl2-image:arm64-android
-call vcpkg install volk:arm64-android
-call vcpkg install vulkan-memory-allocator:arm64-android
-call vcpkg install tracy:arm64-android
+call vcpkg install cgltf:arm64-android imgui:arm64-android vulkan:arm64-android vulkan-headers:arm64-android ktx[vulkan]:arm64-android mimalloc:arm64-android sdl2[vulkan]:arm64-android sdl2-image:arm64-android volk:arm64-android vulkan-memory-allocator:arm64-android tracy:arm64-android
 
 REM Install x64 Android Deps
-call vcpkg install cgltf:x64-android
-call vcpkg install imgui:x64-android
-call vcpkg install vulkan:x64-android
-call vcpkg install vulkan-headers:x64-android
-call vcpkg install ktx[vulkan]:x64-android
-call vcpkg install mimalloc:x64-android
-call vcpkg install sdl2[vulkan]:x64-android
-call vcpkg install sdl2-image:x64-android
-call vcpkg install volk:x64-android
-call vcpkg install vulkan-memory-allocator:x64-android
-call vcpkg install tracy:x64-android
+REM call vcpkg install cgltf:x64-android imgui:x64-android vulkan:x64-android vulkan-headers:x64-android ktx[vulkan]:x64-android mimalloc:x64-android sdl2[vulkan]:x64-android sdl2-image:x64-android volk:x64-android vulkan-memory-allocator:x64-android tracy:x64-android
 
 REM Return to starting directory
 cd %~dp0
