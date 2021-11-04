@@ -80,19 +80,15 @@ jobs:
         uses: android-actions/setup-android@v2
         
       - name: Install Android NDK
-        run: '%ANDROID_HOME%/tools/bin/sdkmanager.bat --install "ndk;22.0.7026061"'
+        run: '%ANDROID_HOME%/cmdline-tools/3.0/bin/sdkmanager.bat --install "ndk;22.0.7026061"'
         shell: cmd
       
       - name: Install Android Build Tools
-        run: '%ANDROID_HOME%/tools/bin/sdkmanager.bat --install build-tools;29.0.3'
-        shell: cmd
-        
-      - name: Install Android Platform Tools
-        run: '%ANDROID_HOME%/tools/bin/sdkmanager.bat --install platform-tools'
+        run: '%ANDROID_HOME%/cmdline-tools/3.0/bin/sdkmanager.bat --install build-tools;29.0.3'
         shell: cmd
         
       - name: Install Android 29
-        run: '%ANDROID_HOME%/tools/bin/sdkmanager.bat --install platforms;android-29'
+        run: '%ANDROID_HOME%/cmdline-tools/3.0/bin/sdkmanager.bat --install platforms;android-29'
         shell: cmd
 
       - name: Setup cmake
