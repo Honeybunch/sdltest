@@ -193,7 +193,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 
     int32_t flags = IMG_INIT_PNG;
     res = IMG_Init(flags);
-    if (res & IMG_INIT_PNG == 0) {
+    if ((res & IMG_INIT_PNG) == 0) {
       const char *msg = IMG_GetError();
       SDL_Log("Failed to initialize SDL_Image with error: %s", msg);
       SDL_TriggerBreakpoint();
