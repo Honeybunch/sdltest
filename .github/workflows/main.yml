@@ -127,7 +127,7 @@ jobs:
         env: 
           ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
-      - name: Package arm64 Android Relase
+      - name: Package arm64 Android Release
         run: cmake --build build/arm64/android --config Release --target package
         env: 
           ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858

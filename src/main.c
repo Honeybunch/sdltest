@@ -27,6 +27,7 @@
 
 #include "demo.h"
 #include "profiling.h"
+#include "settings.h"
 #include "shadercommon.h"
 #include "simd.h"
 
@@ -157,6 +158,13 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     SDL_TriggerBreakpoint();
     return -1;
   }
+
+  // Setup settings
+  // TODO: Save and load to disk
+  TBSettings settings = {
+      .display_mode = {WIDTH, HEIGHT, 60.0f},
+      .resolution_scale = 1.0f,
+  };
 
   editor_camera_controller controller = {0};
   controller.move_speed = 10.0f;
@@ -317,17 +325,59 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .sun_dir = {0, -1, 0},
   };
 
-  CommonCameraData camera_data = {
-      0,
-  };
+  CommonCameraData camera_data = {0};
+
+  // Query SDL for available display modes
+  int32_t display_count = SDL_GetNumVideoDisplays();
+  if (display_count < 1) {
+    const char *msg = SDL_GetError();
+    SDL_Log("Failed to enumerate displays with error: %s", msg);
+    SDL_TriggerBreakpoint();
+    return -1;
+  }
+
+  SDL_DisplayMode **modes_per_display =
+      hb_alloc_nm_tp(std_alloc.alloc, display_count, SDL_DisplayMode *);
+  char const **display_names =
+      hb_alloc_nm_tp(std_alloc.alloc, display_count, const char *);
+
+  char ***mode_names = hb_alloc_nm_tp(std_alloc.alloc, display_count, char **);
+
+  for (int32_t i = 0; i < display_count; ++i) {
+    int32_t display_mode_count = SDL_GetNumDisplayModes(i);
+
+    modes_per_display[i] =
+        hb_alloc_nm_tp(std_alloc.alloc, display_mode_count, SDL_DisplayMode);
+    mode_names[i] = hb_alloc_nm_tp(std_alloc.alloc, display_mode_count, char *);
+    for (int32_t ii = 0; ii < display_mode_count; ++ii) {
+      SDL_DisplayMode mode = {0};
+      if (SDL_GetDisplayMode(i, ii, &mode) != 0) {
+        const char *msg = SDL_GetError();
+        SDL_Log("Failed to get display mode with error: %s", msg);
+        SDL_TriggerBreakpoint();
+        return -1;
+      }
+
+      modes_per_display[i][ii] = mode;
+
+      // Create name for display mode name
+      static const uint32_t max_name_size = 512;
+      mode_names[i][ii] = hb_alloc(std_alloc.alloc, max_name_size);
+      SDL_snprintf(mode_names[i][ii], max_name_size, "%dx%d @%dHz", mode.w,
+                   mode.h, mode.refresh_rate);
+    }
+
+    display_names[i] = SDL_GetDisplayName(i);
+  }
 
   // Main loop
   bool running = true;
 
   bool showImGui = true;
   bool showSkyWindow = true;
+  bool showSettingsWindow = true;
   bool showDemoWindow = false;
-  bool showMetricsWindow = true;
+  bool showMetricsWindow = false;
 
   uint64_t time = 0;
   uint64_t start_time = SDL_GetPerformanceCounter();
@@ -413,6 +463,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           showSkyWindow = !showSkyWindow;
           igEndMenu();
         }
+        if (igBeginMenu("Settings", true)) {
+          showSettingsWindow = !showSettingsWindow;
+          igEndMenu();
+        }
         if (igBeginMenu("Metrics", true)) {
           showMetricsWindow = !showMetricsWindow;
           igEndMenu();
@@ -431,10 +485,119 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         }
         igSliderFloat("Cirrus", &sky_data.cirrus, 0.0f, 1.0f, "%.3f", 0);
         igSliderFloat("Cumulus", &sky_data.cumulus, 0.0f, 1.0f, "%.3f", 0);
+        igEnd();
+      }
+
+      if (showSettingsWindow &&
+          igBegin("Toybox Settings", &showSettingsWindow, 0)) {
+
         igLabelText("Frame Time (ms)", "%f", delta_time_ms);
         igLabelText("Framerate (fps)", "%f", (1000.0f / delta_time_ms));
-        igLabelText("Resolution", "%d x %d", d.swap_info.width,
-                    d.swap_info.height);
+
+        // WindowMode Combo Box
+        {
+          static int32_t window_sel = -1;
+          if (window_sel == -1) {
+            // Get current window mode selection
+            for (uint32_t i = 0; i < TBWindowMode_Count; ++i) {
+              if (settings.windowing_mode == TBWindowModes[i]) {
+                window_sel = i;
+                break;
+              }
+            }
+          }
+          if (igCombo_Str_arr("Window Mode", &window_sel, TBWindowModeNames,
+                              TBWindowMode_Count, 0)) {
+            settings.windowing_mode = TBWindowModes[window_sel];
+          }
+        }
+
+        // Display Mode only matters for exclusive fullscreen
+        if (settings.windowing_mode == TBWindowMode_Fullscreen) {
+          static bool display_changed = false;
+          if (display_changed == true) {
+            display_changed = false;
+          }
+          // Display Combo Box
+          if (igCombo_Str_arr("Display", &settings.display_index, display_names,
+                              display_count, 0)) {
+            // TODO: Display has changed!
+            display_changed = true;
+          }
+
+          // DisplayMode Combo Box
+          {
+            int32_t mode_count = SDL_GetNumDisplayModes(settings.display_index);
+            static int32_t mode_sel = -1;
+            if (mode_sel == -1) {
+              // Get the current display mode
+              for (uint32_t i = 0; i < mode_count; ++i) {
+                SDL_DisplayMode *display_mode =
+                    &modes_per_display[settings.display_index][i];
+                if (display_mode->w == settings.display_mode.width &&
+                    display_mode->h == settings.display_mode.height &&
+                    display_mode->refresh_rate ==
+                        settings.display_mode.refresh_rate) {
+                  mode_sel = i;
+                  break;
+                }
+              }
+            }
+            if (display_changed || mode_sel == -1) {
+              mode_sel = 0;
+            }
+
+            if (igCombo_Str_arr(
+                    "Display Mode", &mode_sel,
+                    (const char *const *)mode_names[settings.display_index],
+                    mode_count, 0)) {
+              // TODO: Display Mode changed
+            }
+          }
+        }
+
+        // Adaptive Resolution Slider
+        if (igSliderFloat("Resolution Scale", &settings.resolution_scale, 0.2f,
+                          2.0f, "%.4f", 0)) {
+          // TODO: Resolution Scale has changed
+        }
+
+        // Vsync Combo Box
+        {
+          static int32_t vsync_sel = -1;
+          if (vsync_sel == -1) {
+            // Get current vsync selection
+            for (uint32_t i = 0; i < TBVsync_Count; ++i) {
+              if (settings.vsync_mode == TBVsyncModes[i]) {
+                vsync_sel = i;
+                break;
+              }
+            }
+          }
+          if (igCombo_Str_arr("Vsync", &vsync_sel, TBVsyncModeNames,
+                              TBVsync_Count, 0)) {
+            settings.vsync_mode = TBVsyncModes[vsync_sel];
+          }
+        }
+
+        // MSAA Combo Box
+        {
+          static int32_t msaa_sel = -1;
+          if (msaa_sel == -1) {
+            // Get current msaa selection
+            for (uint32_t i = 0; i < TBMSAAOptionCount; ++i) {
+              if (settings.msaa == TBMSAAOptions[i]) {
+                msaa_sel = i;
+                break;
+              }
+            }
+          }
+          if (igCombo_Str_arr("MSAA", &msaa_sel, TBMSAAOptionNames,
+                              TBMSAAOptionCount, 0)) {
+            settings.msaa = TBMSAAOptions[msaa_sel];
+          }
+        }
+
         igEnd();
       }
 
@@ -549,6 +712,18 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     TracyCZoneEnd(trcy_ctx);
     TracyCFrameMarkEnd("Frame");
   }
+
+  // Cleanup display modes
+  for (int32_t i = 0; i < display_count; ++i) {
+    int32_t mode_count = SDL_GetNumDisplayModes(i);
+    hb_free(std_alloc.alloc, modes_per_display[i]);
+    for (int32_t ii = 0; ii < mode_count; ++ii) {
+      hb_free(std_alloc.alloc, mode_names[i][ii]);
+    }
+    hb_free(std_alloc.alloc, mode_names[i]);
+  }
+  hb_free(std_alloc.alloc, modes_per_display);
+  hb_free(std_alloc.alloc, display_names);
 
   SDL_DestroyWindow(window);
   window = NULL;
