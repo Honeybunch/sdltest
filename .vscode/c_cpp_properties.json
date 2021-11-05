@@ -28,7 +28,7 @@
                 "_UNICODE"
             ],
             "windowsSdkVersion": "10.0.19041.0",
-            "compilerPath": "C:\\Users\\Arsine\\scoop\\shims\\clang.exe",
+            "compilerPath": "clang.exe",
             "cStandard": "c17",
             "cppStandard": "c++17",
             "intelliSenseMode": "clang-x64",
@@ -52,6 +52,24 @@
             "cppStandard": "c++17",
             "intelliSenseMode": "gcc-x64",
             "compileCommands": "${workspaceFolder}/build/arm64/switch/compile_commands.json"
+        },
+        {
+            "name": "Android arm64",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "DEBUG"
+            ],
+            "compilerPath": "${env:ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-arm64",
+            "compilerArgs": [
+                "--target=aarch64-none-linux-android29",
+                "--sysroot=${env:ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/windows-x86_64/sysroot"
+            ],
+            "compileCommands": "${workspaceFolder}/build/arm64/android/compile_commands.json"
         }
     ],
     "version": 4

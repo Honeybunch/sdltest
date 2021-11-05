@@ -12,6 +12,7 @@ vcpkg_from_github(
     PATCHES
         0001-Use-vcpkg-zstd.patch
         0002-Switch-Hack.patch
+        0003-x64-Android-No-SSE42.patch
 )
 
 if(VCPKG_TARGET_IS_WINDOWS)
