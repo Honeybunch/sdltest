@@ -80,7 +80,7 @@ jobs:
         uses: android-actions/setup-android@v2
         
       - name: Install Android NDK
-        run: '%ANDROID_HOME%/cmdline-tools/3.0/bin/sdkmanager.bat --install "ndk;22.0.7026061"'
+        run: '%ANDROID_HOME%/cmdline-tools/3.0/bin/sdkmanager.bat --install "ndk;23.0.7599858"'
         shell: cmd
       
       - name: Install Android Build Tools
@@ -105,59 +105,59 @@ jobs:
       - name: Configure CMake arm64 Android
         run: cmake -Bbuild/arm64/android -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=arm64-android -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/toolchains/android.cmake"
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Build arm64 Android Debug
         run: cmake --build build/arm64/android --config Debug
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Build arm64 Android RelWithDebInfo
         run: cmake --build build/arm64/android --config RelWithDebInfo
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Build arm64 Android Release
         run: cmake --build build/arm64/android --config Release
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Install arm64 Android Release
         run: cmake --build build/arm64/android --config Release --target install
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Package arm64 Android Relase
         run: cmake --build build/arm64/android --config Release --target package
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Configure CMake x64 Android
         run: cmake -Bbuild/x64/android -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=x64-android -DANDROID_PLATFORM=android-29 -DANDROID_ABI=arm64-v8a -DVCPKG_CHAINLOAD_TOOLCHAIN_FILE="$env:GITHUB_WORKSPACE/vcpkg/scripts/toolchains/android.cmake"
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Build x64 Android Debug
         run: cmake --build build/x64/android --config Debug
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Build x64 Android RelWithDebInfo
         run: cmake --build build/x64/android --config RelWithDebInfo
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Build x64 Android Release
         run: cmake --build build/x64/android --config Release
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Install x64 Android Release
         run: cmake --build build/x64/android --config Release --target install
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
 
       - name: Package x64 Android Relase
         run: cmake --build build/x64/android --config Release --target package
         env: 
-          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/22.0.7026061
+          ANDROID_NDK_HOME: ${{env.ANDROID_HOME}}/ndk/23.0.7599858
