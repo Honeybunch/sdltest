@@ -86,7 +86,9 @@ jobs:
         uses: seanmiddleditch/gha-setup-ninja@master
 
       - name: Setup Dependencies
-        run: ./install_deps_linux.sh
+        run: |
+          chmod +x ./install_deps_linux.sh
+          ./install_deps_linux.sh
 
       - name: Configure CMake x64 Linux
         run: cmake -Bbuild/x64/linux -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=x64-linux
