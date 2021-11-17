@@ -62,14 +62,14 @@ void arena_free(void *user_data, void *ptr) {
   (void)ptr;
 }
 
-arena_allocator create_arena_allocator(size_t max_size) {
+void create_arena_allocator(arena_allocator* a, size_t max_size) {
   mi_heap_t *heap = mi_heap_new();
   // assert(heap); switch doesn't like this
   void *data = mi_heap_calloc(heap, 1, max_size);
   TracyCAllocN(data, max_size, "Arena");
   assert(data);
 
-  arena_allocator a = {
+  (*a)= (arena_allocator){
       .max_size = max_size,
       .heap = heap,
       .data = data,
@@ -79,10 +79,9 @@ arena_allocator create_arena_allocator(size_t max_size) {
               .realloc = arena_realloc,
               .realloc_aligned = arena_realloc_aligned,
               .free = arena_free,
-              .user_data = &a,
+              .user_data = a,
           },
   };
-  return a;
 }
 
 void reset_arena(arena_allocator a, bool allow_grow) {
@@ -154,8 +153,8 @@ void standard_free(void *user_data, void *ptr) {
   TracyCZoneEnd(ctx);
 }
 
-standard_allocator create_standard_allocator(const char *name) {
-  standard_allocator a = {
+void create_standard_allocator(standard_allocator* a, const char *name) {
+  (*a) = (standard_allocator){
       .heap = mi_heap_new(),
       .alloc =
           {
@@ -163,12 +162,12 @@ standard_allocator create_standard_allocator(const char *name) {
               .realloc = standard_realloc,
               .realloc_aligned = standard_realloc_aligned,
               .free = standard_free,
-              .user_data = &a,
+              .user_data = a,
           },
       .name = name,
   };
-  return a;
 }
+
 void destroy_standard_allocator(standard_allocator a) {
   mi_heap_delete(a.heap);
 }

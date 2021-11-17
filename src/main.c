@@ -141,13 +141,15 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Create Temporary Arena Allocator
   SDL_Log("%s", "Creating Arena Allocator");
   static const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
-  arena_allocator arena = create_arena_allocator(arena_alloc_size);
+  arena_allocator arena = {0};
+  create_arena_allocator(&arena, arena_alloc_size);
 
   mi_heap_t *vk_heap = mi_heap_new();
   SDL_Log("%s", "Creating Vulkan Allocator");
   VkAllocationCallbacks vk_alloc = create_vulkan_allocator(vk_heap);
   SDL_Log("%s", "Creating Standard Allocator");
-  standard_allocator std_alloc = create_standard_allocator("std_alloc");
+  standard_allocator std_alloc = {0};
+  create_standard_allocator(&std_alloc, "std_alloc");
 
   const VkAllocationCallbacks *vk_alloc_ptr = &vk_alloc;
 
