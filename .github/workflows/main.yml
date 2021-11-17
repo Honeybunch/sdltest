@@ -68,8 +68,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-          with:
-            lfs: true
+        with:
+          lfs: true
 
       - name: Setup Vulkan SDK
         uses: humbletim/setup-vulkan-sdk@v1.0.3
