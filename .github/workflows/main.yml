@@ -63,6 +63,43 @@ jobs:
       - name: Build x64 Windows Release Static
         run: cmake --build build/x64/windows-static --config Release
   
+  build-linux-x64:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - uses: actions/checkout@v2
+          with:
+            lfs: true
+
+      - name: Setup Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.0.3
+
+      - name: Setup cmake
+        uses: jwlawson/actions-setup-cmake@v1.9
+        with:
+          cmake-version: '3.19.x'
+
+      - name: Setup clang
+        uses: egor-tensin/setup-clang@v1
+
+      - name: Setup ninja
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Setup Dependencies
+        run: ./install_deps_linux.sh
+
+      - name: Configure CMake x64 Linux
+        run: cmake -Bbuild/x64/linux -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=x64-linux
+
+      - name: Build x64 Linux Debug
+        run: cmake --build build/x64/linux --config Debug
+
+      - name: Build x64 Linux RelWithDebInfo
+        run: cmake --build build/x64/linux --config RelWithDebInfo
+
+      - name: Build x64 Linux Release
+        run: cmake --build build/x64/linux --config Release
+
   build-android-arm64-x64-on-windows-x64:
     runs-on: windows-latest
 
