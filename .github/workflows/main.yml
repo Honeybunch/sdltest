@@ -36,6 +36,10 @@ jobs:
       - name: Setup ninja
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      - name: Setup vcpkg
+        run: cmd /c bootstrap-vcpkg.bat
+        working-directory: ./vcpkg
+
       - name: Setup Dependencies
         run: cmd /c install_deps.bat
 
@@ -84,6 +88,10 @@ jobs:
 
       - name: Setup ninja
         uses: seanmiddleditch/gha-setup-ninja@master
+        
+      - name: Setup vcpkg
+        run: ./bootstrap-vcpkg.sh
+        working-directory: ./vcpkg
 
       - name: Setup Dependencies
         run: |
@@ -137,6 +145,10 @@ jobs:
 
       - name: Setup ninja
         uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Setup vcpkg
+        run: cmd /c bootstrap-vcpkg.bat
+        working-directory: ./vcpkg
 
       - name: Setup Dependencies
         run: cmd /c install_android_deps.bat
