@@ -90,7 +90,9 @@ jobs:
         uses: seanmiddleditch/gha-setup-ninja@master
         
       - name: Setup vcpkg
-        run: ./bootstrap-vcpkg.sh
+        run: |
+          chmod +x ./bootstrap-vcpkg.sh
+          ./bootstrap-vcpkg.sh
         working-directory: ./vcpkg
 
       - name: Setup Dependencies
