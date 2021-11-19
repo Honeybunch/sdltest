@@ -19,7 +19,7 @@
 #include <stdint.h>
 #include <volk.h>
 
-#include <vk_mem_alloc.h>
+#include "vk_mem_alloc.h"
 
 #include "allocator.h"
 #include "camera.h"
@@ -129,6 +129,8 @@ static VkAllocationCallbacks create_vulkan_allocator(mi_heap_t *heap) {
 }
 
 int32_t SDL_main(int32_t argc, char *argv[]) {
+  (void)argc;
+  (void)argv;
   SDL_Log("%s", "Entered SDL_main");
   static const float qtr_pi = 0.7853981625f;
 
@@ -136,6 +138,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
     const char *app_info = HB_APP_INFO_STR;
     size_t app_info_len = strlen(app_info);
     TracyCAppInfo(app_info, app_info_len);
+    (void)app_info_len;
   }
 
   // Create Temporary Arena Allocator
@@ -533,12 +536,12 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
             static int32_t mode_sel = -1;
             if (mode_sel == -1) {
               // Get the current display mode
-              for (uint32_t i = 0; i < mode_count; ++i) {
+              for (int32_t i = 0; i < mode_count; ++i) {
                 SDL_DisplayMode *display_mode =
                     &modes_per_display[settings.display_index][i];
-                if (display_mode->w == settings.display_mode.width &&
-                    display_mode->h == settings.display_mode.height &&
-                    display_mode->refresh_rate ==
+                if ((uint32_t)display_mode->w == settings.display_mode.width &&
+                    (uint32_t)display_mode->h == settings.display_mode.height &&
+                    (uint32_t)display_mode->refresh_rate ==
                         settings.display_mode.refresh_rate) {
                   mode_sel = i;
                   break;
@@ -640,7 +643,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       camera_data.view_pos = main_cam.transform.position;
 
       VmaAllocator vma_alloc = d.vma_alloc;
-      VkBuffer camera_host = d.camera_const_buffer.host.buffer;
       VmaAllocation camera_host_alloc = d.camera_const_buffer.host.alloc;
 
       uint8_t *data = NULL;
@@ -667,7 +669,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       };
 
       VmaAllocator vma_alloc = d.vma_alloc;
-      VkBuffer light_host = d.light_const_buffer.host.buffer;
       VmaAllocation light_host_alloc = d.light_const_buffer.host.alloc;
 
       uint8_t *data = NULL;
@@ -690,7 +691,6 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       TracyCZoneN(trcy_sky_ctx, "Update Sky", true);
 
       VmaAllocator vma_alloc = d.vma_alloc;
-      VkBuffer sky_host = d.sky_const_buffer.host.buffer;
       VmaAllocation sky_host_alloc = d.sky_const_buffer.host.alloc;
 
       uint8_t *data = NULL;

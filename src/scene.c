@@ -106,6 +106,7 @@ uint32_t parse_node(scene *s, cgltf_data *data, cgltf_node *node,
     for (uint32_t i = 0; i < node->children_count; ++i) {
       cgltf_node *child = node->children[i];
       uint32_t child_idx = parse_node(s, data, child, entity_id);
+      (void)child_idx;
 
       // For some reason this causes a heap corruption
       // transform->children[i] = &s->transforms[child_idx];
@@ -143,6 +144,7 @@ cgltf_result sdl_read_gltf(const struct cgltf_memory_options *memory_options,
                            const char *path, cgltf_size *size, void **data) {
   SDL_RWops *file = (SDL_RWops *)file_options->user_data;
   cgltf_size file_size = SDL_RWsize(file);
+  (void)path;
 
   void *mem = memory_options->alloc(memory_options->user_data, file_size);
   if (mem == NULL) {
@@ -304,8 +306,8 @@ int32_t scene_append_gltf(scene *s, const char *filename) {
     // TODO: Determine a good way to do texture de-duplication
     for (uint32_t i = old_mesh_count; i < new_mesh_count; ++i) {
       cgltf_mesh *mesh = &data->meshes[i - old_mesh_count];
-      if (create_gpumesh_cgltf(device, vma_alloc, tmp_alloc, mesh,
-                               &s->meshes[i]) != 0) {
+      if (create_gpumesh_cgltf(vma_alloc, tmp_alloc, mesh, &s->meshes[i]) !=
+          0) {
         SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                      "Failed to to create gpumesh");
         SDL_TriggerBreakpoint();
@@ -408,15 +410,12 @@ void destroy_scene2(scene *s) {
   const DemoAllocContext *alloc_ctx = &s->alloc_ctx;
   VkDevice device = alloc_ctx->device;
   allocator std_alloc = alloc_ctx->std_alloc;
-  allocator tmp_alloc = alloc_ctx->tmp_alloc;
   VmaAllocator vma_alloc = alloc_ctx->vma_alloc;
   const VkAllocationCallbacks *vk_alloc = alloc_ctx->vk_alloc;
-  VmaPool up_pool = alloc_ctx->up_pool;
-  VmaPool tex_pool = alloc_ctx->tex_pool;
 
   // Clean up GPU memory
   for (uint32_t i = 0; i < s->mesh_count; i++) {
-    destroy_gpumesh(device, vma_alloc, &s->meshes[i]);
+    destroy_gpumesh(vma_alloc, &s->meshes[i]);
   }
 
   for (uint32_t i = 0; i < s->texture_count; i++) {
@@ -506,7 +505,7 @@ int32_t load_scene(VkDevice device, allocator tmp_alloc, allocator std_alloc,
   s->mesh_count = mesh_count;
   for (uint32_t i = 0; i < mesh_count; ++i) {
     cgltf_mesh *mesh = &data->meshes[i];
-    create_gpumesh_cgltf(device, vma_alloc, tmp_alloc, mesh, &s->meshes[i]);
+    create_gpumesh_cgltf(vma_alloc, tmp_alloc, mesh, &s->meshes[i]);
   }
 
   // Parse Textures
@@ -542,7 +541,7 @@ int32_t load_scene(VkDevice device, allocator tmp_alloc, allocator std_alloc,
 void destroy_scene(VkDevice device, allocator std_alloc, VmaAllocator vma_alloc,
                    const VkAllocationCallbacks *vk_alloc, scene *s) {
   for (uint32_t i = 0; i < s->mesh_count; i++) {
-    destroy_gpumesh(device, vma_alloc, &s->meshes[i]);
+    destroy_gpumesh(vma_alloc, &s->meshes[i]);
   }
 
   for (uint32_t i = 0; i < s->texture_count; i++) {

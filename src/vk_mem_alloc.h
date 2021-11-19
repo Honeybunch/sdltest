@@ -1,3 +1,6 @@
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wnullability-extension"
+
 //clang-format off
 
 //
@@ -2527,8 +2530,8 @@ static void *vma_aligned_alloc(size_t alignment, size_t size) {
   // pointers. (At least under 11.4) Therefore, for now disable this specific
   // exception until a proper solution is found.
   //#if defined(__APPLE__) && (defined(MAC_OS_X_VERSION_10_16) ||
-  //defined(__IPHONE_14_0)) #if MAC_OS_X_VERSION_MAX_ALLOWED >=
-  //MAC_OS_X_VERSION_10_16 || __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
+  // defined(__IPHONE_14_0)) #if MAC_OS_X_VERSION_MAX_ALLOWED >=
+  // MAC_OS_X_VERSION_10_16 || __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_14_0
   //    // For C++14, usr/include/malloc/_malloc.h declares aligned_alloc())
   //    only
   //    // with the MacOSX11.0 SDK in Xcode 12 (which is what adds
@@ -6252,7 +6255,7 @@ public:
 
   VmaCurrentBudgetData m_Budget;
   VMA_ATOMIC_UINT32
-      m_DeviceMemoryCount; // Total number of VkDeviceMemory objects.
+  m_DeviceMemoryCount; // Total number of VkDeviceMemory objects.
 
   VmaAllocator_T(const VmaAllocatorCreateInfo *pCreateInfo);
   VkResult Init(const VmaAllocatorCreateInfo *pCreateInfo);
@@ -6413,7 +6416,7 @@ private:
   VkPhysicalDevice m_PhysicalDevice;
   VMA_ATOMIC_UINT32 m_CurrentFrameIndex;
   VMA_ATOMIC_UINT32
-      m_GpuDefragmentationMemoryTypeBits; // UINT32_MAX means uninitialized.
+  m_GpuDefragmentationMemoryTypeBits; // UINT32_MAX means uninitialized.
 #if VMA_EXTERNAL_MEMORY
   VkExternalMemoryHandleTypeFlagsKHR
       m_TypeExternalMemoryHandleTypes[VK_MAX_MEMORY_TYPES];
@@ -18686,3 +18689,4 @@ included into this repository.
 */
 
 //clang-format on
+#pragma clang diagnostic pop

@@ -112,7 +112,6 @@ void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
     transform_to_matrix(&mat, &cam->transform);
 
     float3 right = f4tof3(mat.row0);
-    float3 up = f4tof3(mat.row1);
     float3 forward = f4tof3(mat.row2);
 
     float3 velocity = {0};

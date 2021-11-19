@@ -107,13 +107,11 @@ void destroy_gpuconstbuffer(VkDevice device, VmaAllocator allocator,
                             const VkAllocationCallbacks *vk_alloc,
                             gpuconstbuffer cb);
 
-int32_t create_gpumesh(VkDevice device, VmaAllocator allocator,
-                       const cpumesh *src_mesh, gpumesh *dst_mesh);
-int32_t create_gpumesh_cgltf(VkDevice device, VmaAllocator vma_alloc,
-                             allocator tmp_alloc, const cgltf_mesh *src_mesh,
-                             gpumesh *dst_mesh);
-void destroy_gpumesh(VkDevice device, VmaAllocator allocator,
-                     const gpumesh *mesh);
+int32_t create_gpumesh(VmaAllocator allocator, const cpumesh *src_mesh,
+                       gpumesh *dst_mesh);
+int32_t create_gpumesh_cgltf(VmaAllocator vma_alloc, allocator tmp_alloc,
+                             const cgltf_mesh *src_mesh, gpumesh *dst_mesh);
+void destroy_gpumesh(VmaAllocator allocator, const gpumesh *mesh);
 
 int32_t create_gpuimage(VmaAllocator vma_alloc,
                         const VkImageCreateInfo *img_create_info,

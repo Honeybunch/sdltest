@@ -35,7 +35,7 @@
 
 
 #ifdef _MSC_VER
-typedef unsigned __int64 ImU64;
+typedef uint64_t ImU64;
 #else
 //typedef unsigned long long ImU64;
 #endif

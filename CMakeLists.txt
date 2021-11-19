@@ -244,6 +244,12 @@ endif()
 
 target_compile_features(sdltest PRIVATE c_std_11)
 
+# Turn on Warnings
+target_compile_options(sdltest PRIVATE
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
+)
+
 set(assets_dest "assets")
 if(ANDROID)
   set(assets_dest "$<CONFIG>/assets")

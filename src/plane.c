@@ -66,7 +66,6 @@ void create_plane(uint32_t subdiv, cpumesh *plane) {
     // Ensure a clean number of triangles and indices
     assert(index_count % 3 == 0);
     assert(index_count % dimension == 0);
-    uint32_t triangle_count = index_count / 3;
 
     uint32_t idx = 0;
     uint32_t row = 0;

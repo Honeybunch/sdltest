@@ -8,6 +8,9 @@
 
 #include "profiling.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-braces"
+
 float3 f4tof3(float4 f) { return (float3){f[0], f[1], f[2]}; }
 float4 f3tof4(float3 f, float w) { return (float4){f[0], f[1], f[2], w}; }
 
@@ -277,3 +280,5 @@ void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
       (float4){0, 0, -1, 0},
   };
 }
+
+#pragma clang diagnostic pop

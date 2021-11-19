@@ -10,7 +10,7 @@
 
 #include <volk.h>
 
-#include <vk_mem_alloc.h>
+#include "vk_mem_alloc.h"
 
 #include "cpuresources.h"
 #include "hosek.h"
@@ -35,6 +35,8 @@ static void vma_alloc_fn(VmaAllocator allocator, uint32_t memoryType,
                          void *pUserData) {
   (void)allocator;
   (void)memoryType;
+  (void)memory;
+  (void)size;
   (void)pUserData;
   TracyCAllocN((void *)memory, size, "VMA");
 }
@@ -43,6 +45,7 @@ static void vma_free_fn(VmaAllocator allocator, uint32_t memoryType,
                         void *pUserData) {
   (void)allocator;
   (void)memoryType;
+  (void)memory;
   (void)size;
   (void)pUserData;
   TracyCFreeN((void *)memory, "VMA");
@@ -262,7 +265,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
 
 static void demo_imgui_update(demo *d) {
   ImGuiIO *io = d->ig_io;
-  ImVec2 mouse_pos_prev = io->MousePos;
+  // ImVec2 mouse_pos_prev = io->MousePos;
   io->MousePos = (ImVec2){-FLT_MAX, -FLT_MAX};
 
   // Update mouse buttons
@@ -277,7 +280,7 @@ static void demo_imgui_update(demo *d) {
   io->MouseDown[2] = (mouse_buttons & SDL_BUTTON(SDL_BUTTON_MIDDLE)) != 0;
   // bd->MousePressed[0] = bd->MousePressed[1] = bd->MousePressed[2] = false;
 
-  SDL_Window *mouse_window = NULL;
+  // SDL_Window *mouse_window = NULL;
 
   // Obtain focused and hovered window. We forward mouse input when focused or
   // when hovered (and no other window is capturing)
@@ -666,6 +669,7 @@ static bool demo_init_framebuffers(demo *d) {
 }
 
 static bool demo_init_imgui(demo *d, SDL_Window *window) {
+  (void)window;
   ImGuiContext *ctx = igCreateContext(NULL);
   ImGuiIO *io = igGetIO();
 
@@ -935,6 +939,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     VmaDeviceMemoryCallbacks vma_callbacks = {
         vma_alloc_fn,
         vma_free_fn,
+        NULL,
     };
 
     VmaAllocatorCreateInfo create_info = {0};
@@ -1146,7 +1151,13 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   VkDescriptorSetLayout gltf_object_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[1] = {
-        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT},
+        {
+            0,
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            1,
+            VK_SHADER_STAGE_VERTEX_BIT,
+            NULL,
+        },
     };
 
     VkDescriptorSetLayoutCreateInfo create_info = {0};
@@ -1164,8 +1175,20 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   VkDescriptorSetLayout gltf_view_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[2] = {
-        {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {
+            0,
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            NULL,
+        },
+        {
+            1,
+            VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            1,
+            VK_SHADER_STAGE_FRAGMENT_BIT,
+            NULL,
+        },
     };
 
     VkDescriptorSetLayoutCreateInfo create_info = {0};
@@ -1184,9 +1207,12 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   VkDescriptorSetLayout gltf_material_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[4] = {
-        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-        {1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
-        {2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
+        {1, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
+        {2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
         {3, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
          &sampler},
     };
@@ -1240,11 +1266,11 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   {
     VkDescriptorSetLayoutBinding bindings[3] = {
         {1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1,
-         VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-        {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1,
-         VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+         VK_SHADER_STAGE_RAYGEN_BIT_KHR, NULL},
+        {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+         NULL},
         {3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1,
-         VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+         VK_SHADER_STAGE_RAYGEN_BIT_KHR, NULL},
     };
 
     VkDescriptorSetLayoutCreateInfo create_info = {0};
@@ -1272,7 +1298,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   VkDescriptorSetLayout skydome_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[1] = {
-        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
     };
 
     VkDescriptorSetLayoutCreateInfo create_info = {0};
@@ -1291,7 +1318,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   VkDescriptorSetLayout hosek_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[1] = {
-        {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
     };
 
     VkDescriptorSetLayoutCreateInfo create_info = {0};
@@ -1337,9 +1365,9 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   assert(err == VK_SUCCESS);
 
   // HACK: Get this function here...
-  PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR =
-      (PFN_vkCreateRayTracingPipelinesKHR)vkGetDeviceProcAddr(
-          device, "vkCreateRayTracingPipelinesKHR");
+  // PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelinesKHR =
+  //    (PFN_vkCreateRayTracingPipelinesKHR)vkGetDeviceProcAddr(
+  //        device, "vkCreateRayTracingPipelinesKHR");
 
   // Create GLTF Ray Tracing Pipeline
   // gpupipeline *gltf_rt_pipeline = NULL;
@@ -1353,7 +1381,8 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   VkDescriptorSetLayout imgui_set_layout = VK_NULL_HANDLE;
   {
     VkDescriptorSetLayoutBinding bindings[2] = {
-        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT},
+        {0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
+         NULL},
         {1, VK_DESCRIPTOR_TYPE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT,
          &sampler},
     };
@@ -1444,7 +1473,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   {
     cpumesh *skydome_cpu = create_skydome(&tmp_alloc);
 
-    err = create_gpumesh(device, vma_alloc, skydome_cpu, &skydome);
+    err = create_gpumesh(vma_alloc, skydome_cpu, &skydome);
     assert(err == VK_SUCCESS);
   }
 
@@ -1492,14 +1521,14 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
       return false;
     }
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Floor.glb")) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Floor.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                    "Failed to append floor to main scene");
       SDL_TriggerBreakpoint();
       return false;
     }
 
-    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/duck.glb")) {
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/duck.glb") != 0) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
                    "Failed to append duck to main scene");
       SDL_TriggerBreakpoint();
@@ -1599,7 +1628,6 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   {
     TracyCZoneN(hosek_ctx, "Update Hosek Data", true);
 
-    VkBuffer hosek_host = d->hosek_const_buffer.host.buffer;
     VmaAllocation hosek_host_alloc = d->hosek_const_buffer.host.alloc;
 
     uint8_t *data = NULL;
@@ -1956,7 +1984,7 @@ void demo_destroy(demo *d) {
     vkDestroyFramebuffer(device, d->ui_pass_framebuffers[i], vk_alloc);
     vkDestroyCommandPool(device, d->command_pools[i], vk_alloc);
 
-    destroy_gpumesh(device, vma_alloc, &d->imgui_gpu[i]);
+    destroy_gpumesh(vma_alloc, &d->imgui_gpu[i]);
   }
 
   destroy_gpuimage(vma_alloc, &d->depth_buffers);
@@ -1971,7 +1999,7 @@ void demo_destroy(demo *d) {
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->object_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->camera_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->light_const_buffer);
-  destroy_gpumesh(device, vma_alloc, &d->skydome_gpu);
+  destroy_gpumesh(vma_alloc, &d->skydome_gpu);
   destroy_texture(device, vma_alloc, vk_alloc, &d->imgui_atlas);
 
   vkDestroyFence(device, d->screenshot_fence, vk_alloc);
@@ -2086,7 +2114,7 @@ void demo_process_event(demo *d, const SDL_Event *e) {
   }
   case SDL_KEYDOWN:
   case SDL_KEYUP: {
-    int32_t key = e->key.keysym.scancode;
+    uint64_t key = e->key.keysym.scancode;
     assert(key >= 0 && key < sizeof(io->KeysDown));
     io->KeysDown[key] = (e->type == SDL_KEYDOWN);
     // io->KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);
@@ -2432,6 +2460,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
       TracyCVkNamedZone(gpu_gfx_ctx, frame_scope, graphics_buffer, "Render", 1,
                         true);
+      (void)gpu_gfx_ctx;
 
       // Transition Swapchain Image
       {
@@ -2540,7 +2569,6 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                                (const void *)&sky_consts);
 
             uint32_t idx_count = d->skydome_gpu.idx_count;
-            uint32_t vert_count = d->skydome_gpu.vtx_count;
 
             vkCmdBindPipeline(graphics_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                               d->skydome_pipeline);
@@ -2559,7 +2587,6 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
 
             size_t idx_size =
                 idx_count * sizeof(uint16_t) >> d->skydome_gpu.idx_type;
-            size_t pos_size = sizeof(float3) * vert_count;
 
             VkBuffer buffers[1] = {b};
             VkDeviceSize offsets[1] = {idx_size};
@@ -2613,8 +2640,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
               if (imgui_size > 0) {
 
                 if (imgui_size > d->imgui_mesh_data_size[frame_idx]) {
-                  destroy_gpumesh(device, d->vma_alloc,
-                                  &d->imgui_gpu[frame_idx]);
+                  destroy_gpumesh(d->vma_alloc, &d->imgui_gpu[frame_idx]);
 
                   d->imgui_mesh_data =
                       hb_realloc(d->std_alloc, d->imgui_mesh_data, imgui_size);
@@ -2659,7 +2685,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                                        .vertex_count = draw_data->TotalVtxCount,
                                        .vertices = vtx_dst};
 
-                  create_gpumesh(device, d->vma_alloc, &imgui_cpu,
+                  create_gpumesh(d->vma_alloc, &imgui_cpu,
                                  &d->imgui_gpu[frame_idx]);
                 } else {
                   // Map existing gpu mesh and copy data
@@ -2931,7 +2957,6 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
 
   VkDevice device = d->device;
   uint32_t frame_idx = d->frame_idx;
-  VkFence prev_frame_fence = d->fences[frame_idx];
   VmaAllocator vma_alloc = d->vma_alloc;
   gpuimage screenshot_image = d->screenshot_image;
   VkImage swap_image = d->swapchain_images[frame_idx];

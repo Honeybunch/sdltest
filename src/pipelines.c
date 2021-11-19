@@ -858,8 +858,7 @@ uint32_t create_gltf_rt_pipeline(
     VkDevice device, const VkAllocationCallbacks *vk_alloc, allocator tmp_alloc,
     allocator std_alloc, VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
-    VkRenderPass pass, uint32_t w, uint32_t h, VkPipelineLayout layout,
-    gpupipeline **pipe) {
+    VkPipelineLayout layout, gpupipeline **pipe) {
   VkResult err = VK_SUCCESS;
 
   // Load shaders and setup groups
@@ -963,7 +962,6 @@ uint32_t create_gltf_rt_pipeline(
   create_info.maxPipelineRayRecursionDepth = 1;
   create_info.layout = layout;
 
-  VkPipeline pipeline = VK_NULL_HANDLE;
   err = (VkResult)create_rt_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
                                      cache, vkCreateRayTracingPipelines, 1,
                                      &create_info, pipe);
