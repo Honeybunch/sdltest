@@ -20,6 +20,10 @@ typedef void free_fn(void *user_data, void *ptr);
 #define hb_alloc_tp(a, T) (T *)(a).alloc((a).user_data, sizeof(T))
 #define hb_alloc_nm_tp(a, n, T) (T *)(a).alloc((a).user_data, n * sizeof(T))
 #define hb_realloc(a, orig, size) (a).realloc((a).user_data, (orig), (size))
+#define hb_realloc_tp(a, orig, T)                                              \
+  (T *)(a).realloc((a).user_data, (orig), sizeof(T))
+#define hb_realloc_nm_tp(a, orig, n, T)                                        \
+  (T *)(a).realloc((a).user_data, (orig), (n) * sizeof(T))
 #define hb_realloc_aligned(a, orig, size, align)                               \
   (a).realloc_aligned((a).user_data, (orig), (size), (align))
 #define hb_free(a, ptr) a.free(a.user_data, (ptr))
@@ -41,7 +45,7 @@ typedef struct arena_allocator {
   bool grow;
 } arena_allocator;
 
-void create_arena_allocator(arena_allocator* a, size_t max_size);
+void create_arena_allocator(arena_allocator *a, size_t max_size);
 void reset_arena(arena_allocator a, bool allow_grow);
 void destroy_arena_allocator(arena_allocator a);
 
@@ -51,5 +55,5 @@ typedef struct standard_allocator {
   const char *name;
 } standard_allocator;
 
-void create_standard_allocator(standard_allocator* a, const char *name);
+void create_standard_allocator(standard_allocator *a, const char *name);
 void destroy_standard_allocator(standard_allocator a);

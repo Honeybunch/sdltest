@@ -135,6 +135,7 @@ typedef struct demo {
 
   scene *duck_scene;
   scene *floor_scene;
+  scene *main_scene;
 
   gpuimage screenshot_image;
   VkFence screenshot_fence;

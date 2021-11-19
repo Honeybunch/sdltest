@@ -2,6 +2,7 @@
 #include "cpuresources.h"
 #include "gpuresources.h"
 
+#include <SDL2/SDL_assert.h>
 #include <SDL2/SDL_log.h>
 #include <SDL2/SDL_rwops.h>
 
@@ -170,6 +171,267 @@ void sdl_release_gltf(const struct cgltf_memory_options *memory_options,
   }
 }
 
+int32_t create_scene(DemoAllocContext alloc_ctx, scene *out_scene) {
+  (*out_scene) = (scene){.alloc_ctx = alloc_ctx};
+  return 0;
+}
+
+int32_t scene_append_gltf(scene *s, const char *filename) {
+  const DemoAllocContext *alloc_ctx = &s->alloc_ctx;
+  VkDevice device = alloc_ctx->device;
+  allocator std_alloc = alloc_ctx->std_alloc;
+  allocator tmp_alloc = alloc_ctx->tmp_alloc;
+  VmaAllocator vma_alloc = alloc_ctx->vma_alloc;
+  const VkAllocationCallbacks *vk_alloc = alloc_ctx->vk_alloc;
+  VmaPool up_pool = alloc_ctx->up_pool;
+  VmaPool tex_pool = alloc_ctx->tex_pool;
+
+  // Load a GLTF/GLB file off disk
+  cgltf_data *data = NULL;
+  {
+    // We really only want to handle glbs; gltfs should be pre-packed
+    SDL_RWops *gltf_file = SDL_RWFromFile(filename, "rb");
+
+    if (gltf_file == NULL) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", SDL_GetError());
+      assert(0);
+      return -1;
+    }
+
+    cgltf_options options = {.type = cgltf_file_type_glb,
+                             .memory =
+                                 {
+                                     .user_data = std_alloc.user_data,
+                                     .alloc = std_alloc.alloc,
+                                     .free = std_alloc.free,
+                                 },
+                             .file = {
+                                 .read = sdl_read_gltf,
+                                 .release = sdl_release_gltf,
+                                 .user_data = gltf_file,
+                             }};
+
+    // Parse file loaded via SDL
+    cgltf_result res = cgltf_parse_file(&options, filename, &data);
+    if (res != cgltf_result_success) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to parse gltf");
+      SDL_TriggerBreakpoint();
+      return -1;
+    }
+
+    res = cgltf_load_buffers(&options, data, filename);
+    if (res != cgltf_result_success) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to load gltf buffers");
+      SDL_TriggerBreakpoint();
+      return -2;
+    }
+
+    // TODO: Only do this on non-final builds
+    res = cgltf_validate(data);
+    if (res != cgltf_result_success) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to load validate gltf");
+      SDL_TriggerBreakpoint();
+      return -3;
+    }
+  }
+
+  // Collect some pre-append counts so that we can do math later
+  uint32_t old_tex_count = s->texture_count;
+  uint32_t old_mat_count = s->material_count;
+  uint32_t old_mesh_count = s->mesh_count;
+  uint32_t old_node_count = s->entity_count;
+
+  // Append textures to scene
+  {
+    uint32_t new_tex_count = old_tex_count + (uint32_t)data->textures_count;
+
+    s->textures =
+        hb_realloc_nm_tp(std_alloc, s->textures, new_tex_count, gputexture);
+    if (s->textures == NULL) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to allocate textures for scene");
+      SDL_TriggerBreakpoint();
+      return -4;
+    }
+
+    // TODO: Determine a good way to do texture de-duplication
+    for (uint32_t i = old_tex_count; i < new_tex_count; ++i) {
+      cgltf_texture *tex = &data->textures[i - old_tex_count];
+      if (create_gputexture_cgltf(device, vma_alloc, vk_alloc, tex, data->bin,
+                                  up_pool, tex_pool, &s->textures[i]) != 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                     "Failed to to create gputexture");
+        SDL_TriggerBreakpoint();
+        return -5;
+      }
+    }
+
+    s->texture_count = new_tex_count;
+  }
+
+  // Append materials to scene
+  {
+    uint32_t new_material_count =
+        old_mat_count + (uint32_t)data->textures_count;
+
+    s->materials = hb_realloc_nm_tp(std_alloc, s->materials, new_material_count,
+                                    gpumaterial);
+    if (s->materials == NULL) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to allocate textures for scene");
+      SDL_TriggerBreakpoint();
+      return -4;
+    }
+
+    // TODO: Actually load materials
+
+    // s->material_count = new_material_count;
+  }
+
+  // Append meshes to scene
+  {
+    uint32_t new_mesh_count = old_mesh_count + (uint32_t)data->meshes_count;
+
+    s->meshes = hb_realloc_nm_tp(std_alloc, s->meshes, new_mesh_count, gpumesh);
+    if (s->meshes == NULL) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to allocate meshes for scene");
+      SDL_TriggerBreakpoint();
+      return -4;
+    }
+
+    // TODO: Determine a good way to do texture de-duplication
+    for (uint32_t i = old_mesh_count; i < new_mesh_count; ++i) {
+      cgltf_mesh *mesh = &data->meshes[i - old_mesh_count];
+      if (create_gpumesh_cgltf(device, vma_alloc, tmp_alloc, mesh,
+                               &s->meshes[i]) != 0) {
+        SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                     "Failed to to create gpumesh");
+        SDL_TriggerBreakpoint();
+        return -5;
+      }
+    }
+
+    s->mesh_count = new_mesh_count;
+  }
+
+  // Append nodes to scene
+  {
+    uint32_t new_node_count = old_node_count + (uint32_t)data->nodes_count;
+
+    // Alloc entity component rows
+    s->components =
+        hb_realloc_nm_tp(std_alloc, s->components, new_node_count, uint64_t);
+    s->static_mesh_indices = hb_realloc_nm_tp(std_alloc, s->static_mesh_indices,
+                                              new_node_count, uint32_t);
+    s->transforms_2 = hb_realloc_nm_tp(std_alloc, s->transforms_2,
+                                       new_node_count, SceneTransform2);
+
+    for (uint32_t i = old_node_count; i < new_node_count; ++i) {
+      cgltf_node *node = &data->nodes[i - old_node_count];
+
+      // For now, all nodes have transforms
+      {
+        // Assign a transform component
+        s->components[i] |= COMPONENT_TYPE_TRANSFORM;
+
+        {
+          s->transforms_2[i].t.rotation[0] = node->rotation[0];
+          s->transforms_2[i].t.rotation[1] = node->rotation[1];
+          s->transforms_2[i].t.rotation[2] = node->rotation[2];
+        }
+        {
+          s->transforms_2[i].t.scale[0] = node->scale[0];
+          s->transforms_2[i].t.scale[1] = node->scale[1];
+          s->transforms_2[i].t.scale[2] = node->scale[2];
+        }
+        {
+          s->transforms_2[i].t.position[0] = node->translation[0];
+          s->transforms_2[i].t.position[1] = node->translation[1];
+          s->transforms_2[i].t.position[2] = node->translation[2];
+        }
+
+        // Appending a gltf to an existing scene means there should be no
+        // references between scenes. We should be safe to a just create
+        // children.
+        s->transforms_2[i].child_count = node->children_count;
+
+        if (node->children_count >= MAX_CHILD_COUNT) {
+          SDL_LogError(
+              SDL_LOG_CATEGORY_ERROR,
+              "Node has number of children that exceeds max child count of: %d",
+              MAX_CHILD_COUNT);
+          SDL_TriggerBreakpoint();
+          return -6;
+        }
+
+        // Go through all of the gltf node's children
+        // We want to find the index of the child, relative to the gltf node
+        // From there we can determine the index of the child relative to the
+        // scene node
+        for (uint32_t ii = 0; ii < node->children_count; ++ii) {
+          for (uint32_t iii = 0; iii < data->nodes_count; ++iii) {
+            if (&data->nodes[iii] == node->children[ii]) {
+              s->transforms_2[i].children[ii] = old_node_count + iii;
+              break;
+            }
+          }
+        }
+      }
+
+      // Does this node have an associated mesh?
+      if (node->mesh) {
+        // Assign a static mesh component
+        s->components[i] |= COMPONENT_TYPE_STATIC_MESH;
+
+        // Find the index of the mesh that matches what this node wants
+        for (uint32_t ii = 0; ii < data->meshes_count; ++ii) {
+          if (node->mesh == &data->meshes[ii]) {
+            s->static_mesh_indices[i] = old_mesh_count + ii;
+            break;
+          }
+        }
+      }
+
+      // TODO: Lights, cameras, (action!)
+    }
+
+    s->entity_count = new_node_count;
+  }
+
+  cgltf_free(data);
+  return 0;
+}
+
+void destroy_scene2(scene *s) {
+  const DemoAllocContext *alloc_ctx = &s->alloc_ctx;
+  VkDevice device = alloc_ctx->device;
+  allocator std_alloc = alloc_ctx->std_alloc;
+  allocator tmp_alloc = alloc_ctx->tmp_alloc;
+  VmaAllocator vma_alloc = alloc_ctx->vma_alloc;
+  const VkAllocationCallbacks *vk_alloc = alloc_ctx->vk_alloc;
+  VmaPool up_pool = alloc_ctx->up_pool;
+  VmaPool tex_pool = alloc_ctx->tex_pool;
+
+  // Clean up GPU memory
+  for (uint32_t i = 0; i < s->mesh_count; i++) {
+    destroy_gpumesh(device, vma_alloc, &s->meshes[i]);
+  }
+
+  for (uint32_t i = 0; i < s->texture_count; i++) {
+    destroy_texture(device, vma_alloc, vk_alloc, &s->textures[i]);
+  }
+
+  // Clean up CPU-side arrays
+  hb_free(std_alloc, s->materials);
+  hb_free(std_alloc, s->meshes);
+  hb_free(std_alloc, s->textures);
+  hb_free(std_alloc, s->components);
+  hb_free(std_alloc, s->static_mesh_indices);
+  hb_free(std_alloc, s->transforms_2);
+}
+
 int32_t load_scene(VkDevice device, allocator tmp_alloc, allocator std_alloc,
                    const VkAllocationCallbacks *vk_alloc,
                    VmaAllocator vma_alloc, VmaPool up_pool, VmaPool tex_pool,
@@ -180,6 +442,7 @@ int32_t load_scene(VkDevice device, allocator tmp_alloc, allocator std_alloc,
   if (gltf_file == NULL) {
     SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", SDL_GetError());
     assert(0);
+    return -1;
   }
 
   cgltf_options options = {.type = cgltf_file_type_glb,

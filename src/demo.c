@@ -186,8 +186,8 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     uint64_t components = s->components[i];
-    scene_transform *scene_transform = &s->transforms[i];
-    scene_static_mesh *static_mesh = &s->static_meshes[i];
+    SceneTransform2 *scene_transform = &s->transforms_2[i];
+    uint32_t static_mesh_idx = s->static_mesh_indices[i];
 
     if (components & COMPONENT_TYPE_STATIC_MESH) {
       transform *t = &scene_transform->t;
@@ -236,7 +236,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
                               1, &view_set, 0, NULL);
 
-      const gpumesh *mesh = static_mesh->mesh;
+      const gpumesh *mesh = &s->meshes[static_mesh_idx];
       uint32_t idx_count = mesh->idx_count;
       uint32_t vtx_count = mesh->vtx_count;
       VkBuffer buffer = mesh->gpu.buffer;
@@ -1468,15 +1468,44 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   gpuconstbuffer light_const_buffer = create_gpuconstbuffer(
       device, vma_alloc, vk_alloc, sizeof(CommonLightData));
 
-  // Load scene
-  scene *duck_scene = NULL;
-  load_scene(device, tmp_alloc, std_alloc, vk_alloc, vma_alloc, upload_mem_pool,
-             texture_mem_pool, ASSET_PREFIX "scenes/duck.glb", &duck_scene);
+  // Composite main scene
+  scene *main_scene = NULL;
+  {
+    main_scene = hb_alloc_tp(std_alloc, scene);
+    if (!main_scene) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to alloc main scene");
+      SDL_TriggerBreakpoint();
+      return false;
+    }
+    DemoAllocContext ctx = {
+        .device = device,
+        .std_alloc = std_alloc,
+        .tmp_alloc = tmp_alloc,
+        .vk_alloc = vk_alloc,
+        .vma_alloc = vma_alloc,
+        .up_pool = upload_mem_pool,
+        .tex_pool = texture_mem_pool,
+    };
+    if (create_scene(ctx, main_scene) != 0) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to load main scene");
+      SDL_TriggerBreakpoint();
+      return false;
+    }
 
-  // Load Floor
-  scene *floor_scene = NULL;
-  load_scene(device, tmp_alloc, std_alloc, vk_alloc, vma_alloc, upload_mem_pool,
-             texture_mem_pool, ASSET_PREFIX "scenes/Floor.glb", &floor_scene);
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/Floor.glb")) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to append floor to main scene");
+      SDL_TriggerBreakpoint();
+      return false;
+    }
+
+    if (scene_append_gltf(main_scene, ASSET_PREFIX "scenes/duck.glb")) {
+      SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s",
+                   "Failed to append duck to main scene");
+      SDL_TriggerBreakpoint();
+      return false;
+    }
+  }
 
   // Create resources for screenshots
   gpuimage screenshot_image = {0};
@@ -1561,8 +1590,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   d->upload_mem_pool = upload_mem_pool;
   d->texture_mem_pool = texture_mem_pool;
   d->skydome_gpu = skydome;
-  d->duck_scene = duck_scene;
-  d->floor_scene = floor_scene;
+  d->main_scene = main_scene;
   d->screenshot_image = screenshot_image;
   d->screenshot_fence = screenshot_fence;
   d->frame_idx = 0;
@@ -1591,8 +1619,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   }
 
   demo_upload_mesh(d, &d->skydome_gpu);
-  demo_upload_scene(d, d->duck_scene);
-  demo_upload_scene(d, d->floor_scene);
+  demo_upload_scene(d, d->main_scene);
 
   // Create Semaphores
   {
@@ -1760,7 +1787,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
     VkDescriptorImageInfo imgui_info = {
         NULL, d->imgui_atlas.view, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorImageInfo material_info = {
-        NULL, d->floor_scene->textures[0].view,
+        NULL, d->main_scene->textures[0].view,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
     VkDescriptorBufferInfo object_info = {object_const_buffer.gpu.buffer, 0,
                                           object_const_buffer.size};
@@ -1936,8 +1963,9 @@ void demo_destroy(demo *d) {
 
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
-  destroy_scene(device, d->std_alloc, vma_alloc, vk_alloc, d->floor_scene);
-  destroy_scene(device, d->std_alloc, vma_alloc, vk_alloc, d->duck_scene);
+  destroy_scene2(d->main_scene);
+  hb_free(d->std_alloc, d->main_scene);
+
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->hosek_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->sky_const_buffer);
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->object_const_buffer);
@@ -2487,7 +2515,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
             TracyCVkNamedZone(gpu_gfx_ctx, scene_scope, graphics_buffer,
                               "Draw Scene", 3, true);
 
-            demo_render_scene(d->floor_scene, graphics_buffer, pipe_layout,
+            demo_render_scene(d->main_scene, graphics_buffer, pipe_layout,
                               d->gltf_view_descriptor_sets[frame_idx],
                               d->gltf_object_descriptor_sets[frame_idx],
                               d->gltf_material_descriptor_sets[frame_idx], vp,
