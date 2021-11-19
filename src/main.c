@@ -383,6 +383,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   bool showSettingsWindow = true;
   bool showDemoWindow = false;
   bool showMetricsWindow = false;
+  bool showSceneWindow = true;
 
   uint64_t time = 0;
   uint64_t start_time = SDL_GetPerformanceCounter();
@@ -478,6 +479,10 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
         }
         if (igBeginMenu("Demo", true)) {
           showDemoWindow = !showDemoWindow;
+          igEndMenu();
+        }
+        if (igBeginMenu("Scene", true)) {
+          showSceneWindow = !showSceneWindow;
           igEndMenu();
         }
         igEndMainMenuBar();
@@ -611,6 +616,56 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       }
       if (showMetricsWindow) {
         igShowMetricsWindow(&showMetricsWindow);
+      }
+
+      if (showSceneWindow && igBegin("Scene Explorer", &showSceneWindow, 0)) {
+
+        if (igTreeNode_StrStr("Entities", "Entity Count: %d",
+                              d.main_scene->entity_count)) {
+          for (uint32_t i = 0; i < d.main_scene->entity_count; ++i) {
+            uint64_t components = d.main_scene->components[i];
+            if (components & COMPONENT_TYPE_TRANSFORM) {
+              SceneTransform2 *transform = &d.main_scene->transforms_2[i];
+              igPushID_Ptr(transform);
+              if (igTreeNode_StrStr("Transform", "%s", "Transform")) {
+                float3 *position = &transform->t.position;
+                // float3 *rotation = &transform->t.rotation;
+                // float3 *scale = &transform->t.scale;
+
+                float x = (*position)[0];
+                float y = (*position)[1];
+                float z = (*position)[2];
+
+                igText("%s", "Position");
+                igSliderFloat("X", &x, -100.0f, 100.0f, "%.3f", 0);
+                if (x != (*position)[0]) {
+                  (*position)[0] = x;
+                }
+                if (igSliderFloat("Y", &y, -100.0f, 100.0f, "%.3f", 0)) {
+                  (*position)[1] = y;
+                }
+                if (igSliderFloat("Z", &z, -100.0f, 100.0f, "%.3f", 0)) {
+                  (*position)[2] = z;
+                }
+
+                igTreePop();
+              }
+              igPopID();
+            }
+
+            if (components & COMPONENT_TYPE_STATIC_MESH) {
+              igText("Static Mesh: %d", d.main_scene->static_mesh_indices[i]);
+            }
+
+            igSeparator();
+          }
+          igTreePop();
+        }
+        igText("Mesh Count: %d", d.main_scene->mesh_count);
+        igText("Texture Count: %d", d.main_scene->texture_count);
+        igText("Material Count: %d", d.main_scene->material_count);
+
+        igEnd();
       }
 
       TracyCZoneEnd(ctx);
