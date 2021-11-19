@@ -81,6 +81,7 @@ void create_arena_allocator(arena_allocator *a, size_t max_size) {
               .free = arena_free,
               .user_data = a,
           },
+      .grow = false,
   };
 }
 

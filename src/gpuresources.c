@@ -545,7 +545,14 @@ gputexture load_ktx2_texture(VkDevice device, VmaAllocator vma_alloc,
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wincompatible-pointer-types"
 #endif
+#ifdef __GNUC__
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wincompatible-pointer-types"
+#endif
     ktxTexture_IterateLevels(ktx, ktx2_optimal_tiling_callback, &cb_data);
+#ifdef __GNUC__
+#pragma GCC diagnostic pop
+#endif
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif

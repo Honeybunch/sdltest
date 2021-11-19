@@ -245,9 +245,12 @@ endif()
 target_compile_features(sdltest PRIVATE c_std_11)
 
 # Turn on Warnings
+# On Clang, enable warnings as errors
+# Don't do this on GCC as there are some warnings (in generated shader headers)
+# that we can't ignore
 target_compile_options(sdltest PRIVATE
   $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
-  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic $<$<NOT:$<CXX_COMPILER_ID:GNU>>:-Werror>> 
 )
 
 set(assets_dest "assets")

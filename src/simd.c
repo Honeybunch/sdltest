@@ -8,8 +8,20 @@
 
 #include "profiling.h"
 
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-braces"
+#endif
+
+#ifdef __clang__
+#define unroll_loop_3 _Pragma("clang loop unroll_count(3)")
+#define unroll_loop_4 _Pragma("clang loop unroll_count(4)")
+#endif
+
+#ifdef __GNUC__
+#define unroll_loop_3 _Pragma("GCC unroll 3")
+#define unroll_loop_4 _Pragma("GCC unroll 4")
+#endif
 
 float3 f4tof3(float4 f) { return (float3){f[0], f[1], f[2]}; }
 float4 f3tof4(float3 f, float w) { return (float4){f[0], f[1], f[2], w}; }
@@ -89,8 +101,7 @@ void mf44_identity(float4x4 *m) {
 
 void mulf33(float3x3 *m, float3 v) {
   assert(m);
-#pragma clang loop unroll_count(3)
-  for (uint32_t i = 0; i < 3; ++i) {
+  unroll_loop_3 for (uint32_t i = 0; i < 3; ++i) {
     float s = v[i];
     m->row0[i] *= s;
     m->row1[i] *= s;
@@ -100,8 +111,7 @@ void mulf33(float3x3 *m, float3 v) {
 
 void mulf34(float3x4 *m, float4 v) {
   assert(m);
-#pragma clang loop unroll_count(4)
-  for (uint32_t i = 0; i < 4; ++i) {
+  unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
     float s = v[i];
     m->row0[i] *= s;
     m->row1[i] *= s;
@@ -111,8 +121,7 @@ void mulf34(float3x4 *m, float4 v) {
 
 void mulf44(float4x4 *m, float4 v) {
   assert(m);
-#pragma clang loop unroll_count(4)
-  for (uint32_t i = 0; i < 4; ++i) {
+  unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
     float s = v[i];
     m->row0[i] *= s;
     m->row1[i] *= s;
@@ -125,13 +134,10 @@ void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o) {
   assert(x);
   assert(y);
   assert(o);
-#pragma clang loop unroll_count(3)
-  for (uint32_t i = 0; i < 3; ++i) {
-#pragma clang loop unroll_count(4)
-    for (uint32_t ii = 0; ii < 4; ++ii) {
+  unroll_loop_3 for (uint32_t i = 0; i < 3; ++i) {
+    unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
       float s = 0.0f;
-#pragma clang loop unroll_count(3)
-      for (uint32_t iii = 0; iii < 3; ++iii) {
+      unroll_loop_3 for (uint32_t iii = 0; iii < 3; ++iii) {
         s += x->rows[i][iii] * y->rows[iii][ii];
       }
       if (ii == 3) {
@@ -148,13 +154,10 @@ void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
   assert(x);
   assert(y);
   assert(o);
-#pragma clang loop unroll_count(4)
-  for (uint32_t i = 0; i < 4; ++i) {
-#pragma clang loop unroll_count(4)
-    for (uint32_t ii = 0; ii < 4; ++ii) {
+  unroll_loop_4 for (uint32_t i = 0; i < 4; ++i) {
+    unroll_loop_4 for (uint32_t ii = 0; ii < 4; ++ii) {
       float s = 0.0f;
-#pragma clang loop unroll_count(4)
-      for (uint32_t iii = 0; iii < 4; ++iii) {
+      unroll_loop_4 for (uint32_t iii = 0; iii < 4; ++iii) {
         s += x->rows[i][iii] * y->rows[iii][ii];
       }
       o->rows[i][ii] = s;
@@ -281,4 +284,6 @@ void perspective(float4x4 *m, float fovy, float aspect, float zn, float zf) {
   };
 }
 
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif

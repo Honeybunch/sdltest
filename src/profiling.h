@@ -59,10 +59,10 @@ void TracyCVkCollect(TracyCGPUContext *ctx, VkCommandBuffer cmd_buf);
 #define TracyCGPUContext int
 
 #define TracyCVkContextExt(...) 0
-#define TracyCVkContext(...) 0
+#define TracyCVkContext(...)
 #define TracyCVkContextDestroy(...)
 #define TracyCVkContextName(...)
-#define TracyCVkNamedZone(...) 0
+#define TracyCVkNamedZone(...)
 #define TracyCVkZoneEnd(...)
 #define TracyCVkCollect(...)
 

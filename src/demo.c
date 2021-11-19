@@ -2115,7 +2115,7 @@ void demo_process_event(demo *d, const SDL_Event *e) {
   case SDL_KEYDOWN:
   case SDL_KEYUP: {
     uint64_t key = e->key.keysym.scancode;
-    assert(key >= 0 && key < sizeof(io->KeysDown));
+    assert(key < sizeof(io->KeysDown));
     io->KeysDown[key] = (e->type == SDL_KEYDOWN);
     // io->KeyShift = ((SDL_GetModState() & KMOD_SHIFT) != 0);
     // io->KeyCtrl = ((SDL_GetModState() & KMOD_CTRL) != 0);

@@ -1,5 +1,7 @@
+#ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnullability-extension"
+#endif
 
 //clang-format off
 
@@ -18689,4 +18691,6 @@ included into this repository.
 */
 
 //clang-format on
+#ifdef __clang__
 #pragma clang diagnostic pop
+#endif
