@@ -2,8 +2,8 @@
 
 #include <stddef.h>
 
-typedef struct cpumesh cpumesh;
+typedef struct CPUMesh CPUMesh;
 
 // Assumes space for entire cube has been allocated
 size_t cube_alloc_size();
-void create_cube(cpumesh *cube);
+void create_cube(CPUMesh *cube);

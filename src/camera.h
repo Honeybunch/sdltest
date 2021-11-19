@@ -2,15 +2,15 @@
 
 #include <simd.h>
 
-typedef struct camera {
-  transform transform;
+typedef struct Camera {
+  Transform transform;
   float aspect;
   float fov;
   float near;
   float far;
-} camera;
+} Camera;
 
-enum editor_camera_state_flags {
+enum EditorCameraStateFlags {
   EDITOR_CAMERA_NONE = 0x000,
 
   EDITOR_CAMERA_MOVING_FORWARD = 0x001,
@@ -32,20 +32,20 @@ enum editor_camera_state_flags {
                           EDITOR_CAMERA_LOOKING_RIGHT |
                           EDITOR_CAMERA_LOOKING_UP | EDITOR_CAMERA_LOOKING_DOWN,
 };
-typedef uint32_t editor_camera_state;
+typedef uint32_t EditorCameraState;
 
-typedef struct editor_camera_controller {
+typedef struct EditorCameraController {
   float move_speed;
   float look_speed;
-  editor_camera_state state;
-} editor_camera_controller;
+  EditorCameraState state;
+} EditorCameraController;
 
 typedef union SDL_Event SDL_Event;
 
-void camera_projection(const camera *c, float4x4 *p);
-void camera_view(const camera *c, float4x4 *v);
-void camera_sky_view(const camera *c, float4x4 *v);
-void camera_view_projection(const camera *c, float4x4 *vp);
+void camera_projection(const Camera *c, float4x4 *p);
+void camera_view(const Camera *c, float4x4 *v);
+void camera_sky_view(const Camera *c, float4x4 *v);
+void camera_view_projection(const Camera *c, float4x4 *vp);
 
 void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
-                           editor_camera_controller *editor, camera *cam);
+                           EditorCameraController *editor, Camera *cam);

@@ -24,7 +24,7 @@
 typedef union SDL_Event SDL_Event;
 typedef struct SDL_Window SDL_Window;
 
-typedef struct swapchain_info {
+typedef struct SwapchainInfo {
   bool valid;
   uint32_t image_count;
   VkFormat format;
@@ -32,11 +32,11 @@ typedef struct swapchain_info {
   VkPresentModeKHR present_mode;
   uint32_t width;
   uint32_t height;
-} swapchain_info;
+} SwapchainInfo;
 
-typedef struct demo {
-  allocator std_alloc;
-  allocator tmp_alloc;
+typedef struct Demo {
+  Allocator std_alloc;
+  Allocator tmp_alloc;
 
   SDL_Window *window;
 
@@ -61,7 +61,7 @@ typedef struct demo {
   VkQueue present_queue;
   VkQueue graphics_queue;
 
-  swapchain_info swap_info;
+  SwapchainInfo swap_info;
   VkSwapchainKHR swapchain;
 
   VkRenderPass render_pass;
@@ -75,22 +75,22 @@ typedef struct demo {
   VkDescriptorSetLayout hosek_layout;
   VkPipelineLayout skydome_pipe_layout;
   VkPipeline skydome_pipeline;
-  gpuconstbuffer sky_const_buffer;
-  gpuconstbuffer hosek_const_buffer;
+  GPUConstBuffer sky_const_buffer;
+  GPUConstBuffer hosek_const_buffer;
 
-  gpuconstbuffer object_const_buffer;
-  gpuconstbuffer camera_const_buffer;
-  gpuconstbuffer light_const_buffer;
+  GPUConstBuffer object_const_buffer;
+  GPUConstBuffer camera_const_buffer;
+  GPUConstBuffer light_const_buffer;
 
   VkDescriptorSetLayout gltf_material_set_layout;
   VkDescriptorSetLayout gltf_object_set_layout;
   VkDescriptorSetLayout gltf_view_set_layout;
   VkPipelineLayout gltf_pipe_layout;
-  gpupipeline *gltf_pipeline;
+  GPUPipeline *gltf_pipeline;
 
   VkDescriptorSetLayout gltf_rt_layout;
   VkPipelineLayout gltf_rt_pipe_layout;
-  gpupipeline *gltf_rt_pipeline;
+  GPUPipeline *gltf_rt_pipeline;
 
   VkDescriptorSetLayout imgui_layout;
   VkPipelineLayout imgui_pipe_layout;
@@ -101,7 +101,7 @@ typedef struct demo {
   VkFramebuffer main_pass_framebuffers[FRAME_LATENCY];
   VkFramebuffer ui_pass_framebuffers[FRAME_LATENCY];
 
-  gpuimage depth_buffers; // Implemented as an image array; one image for each
+  GPUImage depth_buffers; // Implemented as an image array; one image for each
                           // latency frame
   VkImageView depth_buffer_views[FRAME_LATENCY];
 
@@ -126,18 +126,18 @@ typedef struct demo {
   VmaPool upload_mem_pool;
   VmaPool texture_mem_pool;
 
-  gpumesh skydome_gpu;
+  GPUMesh skydome_gpu;
 
   size_t imgui_mesh_data_size[FRAME_LATENCY];
   uint8_t *imgui_mesh_data;
-  gpumesh imgui_gpu[FRAME_LATENCY];
-  gputexture imgui_atlas;
+  GPUMesh imgui_gpu[FRAME_LATENCY];
+  GPUTexture imgui_atlas;
 
-  scene *duck_scene;
-  scene *floor_scene;
-  scene *main_scene;
+  Scene *duck_scene;
+  Scene *floor_scene;
+  Scene *main_scene;
 
-  gpuimage screenshot_image;
+  GPUImage screenshot_image;
   VkFence screenshot_fence;
 
   VkDescriptorPool descriptor_pools[FRAME_LATENCY];
@@ -149,30 +149,30 @@ typedef struct demo {
   VkDescriptorSet imgui_descriptor_sets[FRAME_LATENCY];
 
   uint32_t const_buffer_upload_count;
-  gpuconstbuffer const_buffer_upload_queue[CONST_BUFFER_UPLOAD_QUEUE_SIZE];
+  GPUConstBuffer const_buffer_upload_queue[CONST_BUFFER_UPLOAD_QUEUE_SIZE];
 
   uint32_t mesh_upload_count;
-  gpumesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
+  GPUMesh mesh_upload_queue[MESH_UPLOAD_QUEUE_SIZE];
 
   uint32_t texture_upload_count;
-  gputexture texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE];
+  GPUTexture texture_upload_queue[TEXTURE_UPLOAD_QUEUE_SIZE];
 
   ImGuiContext *ig_ctx;
   ImGuiIO *ig_io;
-} demo;
+} Demo;
 
-bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
-               allocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
-               demo *d);
-void demo_destroy(demo *d);
+bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
+               Allocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
+               Demo *d);
+void demo_destroy(Demo *d);
 
-void demo_upload_const_buffer(demo *d, const gpuconstbuffer *buffer);
-void demo_upload_mesh(demo *d, const gpumesh *mesh);
-void demo_upload_texture(demo *d, const gputexture *tex);
-void demo_upload_scene(demo *d, const scene *s);
+void demo_upload_const_buffer(Demo *d, const GPUConstBuffer *buffer);
+void demo_upload_mesh(Demo *d, const GPUMesh *mesh);
+void demo_upload_texture(Demo *d, const GPUTexture *tex);
+void demo_upload_scene(Demo *d, const Scene *s);
 
-void demo_process_event(demo *d, const SDL_Event *e);
-void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp);
+void demo_process_event(Demo *d, const SDL_Event *e);
+void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp);
 
-bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
+bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
                      uint32_t *screenshot_size);

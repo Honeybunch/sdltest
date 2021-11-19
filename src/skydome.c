@@ -366,12 +366,12 @@ static const size_t skydome_index_count =
 static const size_t skydome_vertex_count =
     sizeof(skydome_positions) / sizeof(float3);
 
-cpumesh *create_skydome(allocator *a) {
-  size_t size = sizeof(cpumesh) + skydome_geom_size + skydome_index_size;
-  cpumesh *skydome = (cpumesh *)a->alloc(a->user_data, size);
+CPUMesh *create_skydome(Allocator *a) {
+  size_t size = sizeof(CPUMesh) + skydome_geom_size + skydome_index_size;
+  CPUMesh *skydome = (CPUMesh *)a->alloc(a->user_data, size);
   assert(skydome);
 
-  size_t offset = sizeof(cpumesh);
+  size_t offset = sizeof(CPUMesh);
   skydome->indices = (uint16_t *)((uint8_t *)skydome + offset);
   offset += skydome_index_size;
   skydome->vertices = ((uint8_t *)skydome) + offset;

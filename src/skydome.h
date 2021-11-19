@@ -2,7 +2,7 @@
 
 #include "simd.h"
 
-typedef struct cpumesh cpumesh;
-typedef struct allocator allocator;
+typedef struct CPUMesh CPUMesh;
+typedef struct Allocator Allocator;
 
-cpumesh *create_skydome(allocator *a);
+CPUMesh *create_skydome(Allocator *a);

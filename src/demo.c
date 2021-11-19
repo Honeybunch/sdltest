@@ -101,7 +101,7 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   return device;
 }
 
-static VkPhysicalDevice select_gpu(VkInstance instance, allocator tmp_alloc) {
+static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
   TracyCZoneN(ctx, "select_gpu", true);
 
   uint32_t gpu_count = 0;
@@ -180,20 +180,20 @@ pick_surface_format(VkSurfaceFormatKHR *surface_formats,
   return surface_formats[0];
 }
 
-static void demo_render_scene(scene *s, VkCommandBuffer cmd,
+static void demo_render_scene(Scene *s, VkCommandBuffer cmd,
                               VkPipelineLayout layout, VkDescriptorSet view_set,
                               VkDescriptorSet object_set,
                               VkDescriptorSet material_set, const float4x4 *vp,
-                              demo *d) {
+                              Demo *d) {
   TracyCZoneN(ctx, "demo_render_scene", true);
   TracyCZoneColor(ctx, TracyCategoryColorRendering);
   for (uint32_t i = 0; i < s->entity_count; ++i) {
     uint64_t components = s->components[i];
-    SceneTransform2 *scene_transform = &s->transforms_2[i];
-    uint32_t static_mesh_idx = s->static_mesh_indices[i];
+    SceneTransform *scene_transform = &s->transforms[i];
+    uint32_t static_mesh_idx = s->static_meshes[i];
 
     if (components & COMPONENT_TYPE_STATIC_MESH) {
-      transform *t = &scene_transform->t;
+      Transform *t = &scene_transform->t;
 
       // Hack to fuck with the scale of the object
       // t->scale = (float3){0.01f, -0.01f, 0.01f};
@@ -239,7 +239,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
       vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 2,
                               1, &view_set, 0, NULL);
 
-      const gpumesh *mesh = &s->meshes[static_mesh_idx];
+      const GPUMesh *mesh = &s->meshes[static_mesh_idx];
       uint32_t idx_count = mesh->idx_count;
       uint32_t vtx_count = mesh->vtx_count;
       VkBuffer buffer = mesh->gpu.buffer;
@@ -263,7 +263,7 @@ static void demo_render_scene(scene *s, VkCommandBuffer cmd,
   TracyCZoneEnd(ctx);
 }
 
-static void demo_imgui_update(demo *d) {
+static void demo_imgui_update(Demo *d) {
   ImGuiIO *io = d->ig_io;
   // ImVec2 mouse_pos_prev = io->MousePos;
   io->MousePos = (ImVec2){-FLT_MAX, -FLT_MAX};
@@ -337,12 +337,12 @@ static void demo_imgui_update(demo *d) {
   { io->MousePos = (ImVec2){(float)mouse_x_local, (float)mouse_y_local}; }
 }
 
-static swapchain_info init_swapchain(SDL_Window *window, VkDevice device,
+static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
                                      VkPhysicalDevice gpu, VkSurfaceKHR surface,
                                      VkSwapchainKHR *swapchain,
                                      const VkAllocationCallbacks *vk_alloc,
-                                     allocator tmp_alloc) {
-  swapchain_info swap_info = {0};
+                                     Allocator tmp_alloc) {
+  SwapchainInfo swap_info = {0};
 
   int32_t width = 0;
   int32_t height = 0;
@@ -462,7 +462,7 @@ static swapchain_info init_swapchain(SDL_Window *window, VkDevice device,
   err = vkCreateSwapchainKHR(device, &create_info, vk_alloc, swapchain);
   assert(err == VK_SUCCESS);
 
-  swap_info = (swapchain_info){
+  swap_info = (SwapchainInfo){
       .valid = true,
       .format = surface_format.format,
       .color_space = surface_format.colorSpace,
@@ -477,7 +477,7 @@ static swapchain_info init_swapchain(SDL_Window *window, VkDevice device,
   return swap_info;
 }
 
-static bool demo_init_image_views(demo *d) {
+static bool demo_init_image_views(Demo *d) {
   VkResult err = VK_SUCCESS;
   // Get Swapchain Images
   {
@@ -605,7 +605,7 @@ static bool demo_init_image_views(demo *d) {
   return true;
 }
 
-static bool demo_init_framebuffers(demo *d) {
+static bool demo_init_framebuffers(Demo *d) {
   VkResult err = VK_SUCCESS;
 
   // Cleanup previous framebuffers
@@ -668,7 +668,7 @@ static bool demo_init_framebuffers(demo *d) {
   return true;
 }
 
-static bool demo_init_imgui(demo *d, SDL_Window *window) {
+static bool demo_init_imgui(Demo *d, SDL_Window *window) {
   (void)window;
   ImGuiContext *ctx = igCreateContext(NULL);
   ImGuiIO *io = igGetIO();
@@ -682,22 +682,22 @@ static bool demo_init_imgui(demo *d, SDL_Window *window) {
   size_t size = tex_w * tex_h * bytes_pp;
 
   // Create and upload imgui atlas texture
-  gputexture imgui_atlas = {0};
+  GPUTexture imgui_atlas = {0};
   {
     // Describe cpu-side texture
-    texture_mip mip = {
+    TextureMip mip = {
         .width = tex_w,
         .height = tex_h,
         .depth = 1,
         .data = pixels,
     };
-    texture_layer layer = {
+    TextureLayer layer = {
         .width = tex_w,
         .height = tex_h,
         .depth = 1,
         .mips = &mip,
     };
-    cputexture cpu_atlas = {
+    CPUTexture cpu_atlas = {
         .data = pixels,
         .data_size = size,
         .layer_count = 1,
@@ -759,9 +759,9 @@ static bool demo_init_imgui(demo *d, SDL_Window *window) {
   return true;
 }
 
-bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
-               allocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
-               demo *d) {
+bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
+               Allocator tmp_alloc, const VkAllocationCallbacks *vk_alloc,
+               Demo *d) {
   TracyCZoneN(ctx, "demo_init", true);
   VkResult err = VK_SUCCESS;
 
@@ -966,7 +966,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
 
   // Create Swapchain
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-  swapchain_info swap_info = init_swapchain(window, device, gpu, surface,
+  SwapchainInfo swap_info = init_swapchain(window, device, gpu, surface,
                                             &swapchain, vk_alloc, tmp_alloc);
 
   // Create Render Pass
@@ -1254,7 +1254,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   }
 
   // Create GLTF Pipeline
-  gpupipeline *gltf_pipeline = NULL;
+  GPUPipeline *gltf_pipeline = NULL;
   err = create_gltf_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
                              pipeline_cache, render_pass, width, height,
                              gltf_pipe_layout, &gltf_pipeline);
@@ -1469,38 +1469,38 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   }
 
   // Create Skydome Mesh
-  gpumesh skydome = {0};
+  GPUMesh skydome = {0};
   {
-    cpumesh *skydome_cpu = create_skydome(&tmp_alloc);
+    CPUMesh *skydome_cpu = create_skydome(&tmp_alloc);
 
     err = create_gpumesh(vma_alloc, skydome_cpu, &skydome);
     assert(err == VK_SUCCESS);
   }
 
   // Create Uniform buffer for sky data
-  gpuconstbuffer sky_const_buffer =
+  GPUConstBuffer sky_const_buffer =
       create_gpuconstbuffer(device, vma_alloc, vk_alloc, sizeof(SkyData));
 
   // Create Storage buffer for hosek data
-  gpuconstbuffer hosek_const_buffer = create_gpustoragebuffer(
+  GPUConstBuffer hosek_const_buffer = create_gpustoragebuffer(
       device, vma_alloc, vk_alloc, sizeof(SkyHosekData));
 
   // Create Uniform buffer for object data
-  gpuconstbuffer object_const_buffer = create_gpuconstbuffer(
+  GPUConstBuffer object_const_buffer = create_gpuconstbuffer(
       device, vma_alloc, vk_alloc, sizeof(CommonObjectData));
 
   // Create Uniform buffer for camera data
-  gpuconstbuffer camera_const_buffer = create_gpuconstbuffer(
+  GPUConstBuffer camera_const_buffer = create_gpuconstbuffer(
       device, vma_alloc, vk_alloc, sizeof(CommonCameraData));
 
   // Create Uniform buffer for light data
-  gpuconstbuffer light_const_buffer = create_gpuconstbuffer(
+  GPUConstBuffer light_const_buffer = create_gpuconstbuffer(
       device, vma_alloc, vk_alloc, sizeof(CommonLightData));
 
   // Composite main scene
-  scene *main_scene = NULL;
+  Scene *main_scene = NULL;
   {
-    main_scene = hb_alloc_tp(std_alloc, scene);
+    main_scene = hb_alloc_tp(std_alloc, Scene);
     if (!main_scene) {
       SDL_LogError(SDL_LOG_CATEGORY_ERROR, "%s", "Failed to alloc main scene");
       SDL_TriggerBreakpoint();
@@ -1537,7 +1537,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   }
 
   // Create resources for screenshots
-  gpuimage screenshot_image = {0};
+  GPUImage screenshot_image = {0};
   {
     VkImageCreateInfo image_info = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -1939,7 +1939,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, allocator std_alloc,
   return true;
 }
 
-void demo_destroy(demo *d) {
+void demo_destroy(Demo *d) {
   TracyCZoneN(ctx, "demo_destroy", true);
 
   VkDevice device = d->device;
@@ -1991,7 +1991,7 @@ void demo_destroy(demo *d) {
 
   hb_free(d->std_alloc, d->imgui_mesh_data);
 
-  destroy_scene2(d->main_scene);
+  destroy_scene(d->main_scene);
   hb_free(d->std_alloc, d->main_scene);
 
   destroy_gpuconstbuffer(device, vma_alloc, vk_alloc, d->hosek_const_buffer);
@@ -2038,35 +2038,35 @@ void demo_destroy(demo *d) {
                       NULL); // Surface is created by SDL
   vmaDestroyAllocator(vma_alloc);
   vkDestroyDevice(device, vk_alloc);
-  *d = (demo){0};
+  *d = (Demo){0};
 
   igDestroyContext(d->ig_ctx);
 
   TracyCZoneEnd(ctx);
 }
 
-void demo_upload_const_buffer(demo *d, const gpuconstbuffer *buffer) {
+void demo_upload_const_buffer(Demo *d, const GPUConstBuffer *buffer) {
   uint32_t buffer_idx = d->const_buffer_upload_count;
   assert(d->const_buffer_upload_count + 1 < CONST_BUFFER_UPLOAD_QUEUE_SIZE);
   d->const_buffer_upload_queue[buffer_idx] = *buffer;
   d->const_buffer_upload_count++;
 }
 
-void demo_upload_mesh(demo *d, const gpumesh *mesh) {
+void demo_upload_mesh(Demo *d, const GPUMesh *mesh) {
   uint32_t mesh_idx = d->mesh_upload_count;
   assert(d->mesh_upload_count + 1 < MESH_UPLOAD_QUEUE_SIZE);
   d->mesh_upload_queue[mesh_idx] = *mesh;
   d->mesh_upload_count++;
 }
 
-void demo_upload_texture(demo *d, const gputexture *tex) {
+void demo_upload_texture(Demo *d, const GPUTexture *tex) {
   uint32_t tex_idx = d->texture_upload_count;
   assert(d->texture_upload_count + 1 < TEXTURE_UPLOAD_QUEUE_SIZE);
   d->texture_upload_queue[tex_idx] = *tex;
   d->texture_upload_count++;
 }
 
-void demo_upload_scene(demo *d, const scene *s) {
+void demo_upload_scene(Demo *d, const Scene *s) {
   for (uint32_t i = 0; i < s->mesh_count; ++i) {
     demo_upload_mesh(d, &s->meshes[i]);
   }
@@ -2076,7 +2076,7 @@ void demo_upload_scene(demo *d, const scene *s) {
   }
 }
 
-void demo_process_event(demo *d, const SDL_Event *e) {
+void demo_process_event(Demo *d, const SDL_Event *e) {
   TracyCZoneN(ctx, "demo_process_event", true);
   TracyCZoneColor(ctx, TracyCategoryColorInput);
   ImGuiIO *io = d->ig_io;
@@ -2140,7 +2140,7 @@ void demo_process_event(demo *d, const SDL_Event *e) {
   TracyCZoneEnd(ctx);
 }
 
-void demo_resize(demo *d) {
+void demo_resize(Demo *d) {
   TracyCZoneN(ctx, "demo_resize", true);
   VkResult err = vkDeviceWaitIdle(d->device);
   (void)err;
@@ -2159,7 +2159,7 @@ void demo_resize(demo *d) {
   TracyCZoneEnd(ctx);
 }
 
-void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
+void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
   TracyCZoneN(demo_render_frame_event, "demo_render_frame", true);
 
   VkResult err = VK_SUCCESS;
@@ -2262,7 +2262,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                           (float4){0.1, 0.4, 0.1, 1.0});
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->const_buffer_upload_count; ++i) {
-            gpuconstbuffer constbuffer = d->const_buffer_upload_queue[i];
+            GPUConstBuffer constbuffer = d->const_buffer_upload_queue[i];
             region = (VkBufferCopy){0, 0, constbuffer.size};
             vkCmdCopyBuffer(upload_buffer, constbuffer.host.buffer,
                             constbuffer.gpu.buffer, 1, &region);
@@ -2277,7 +2277,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                           (float4){0.1, 0.4, 0.1, 1.0});
           VkBufferCopy region = {0};
           for (uint32_t i = 0; i < d->mesh_upload_count; ++i) {
-            gpumesh mesh = d->mesh_upload_queue[i];
+            GPUMesh mesh = d->mesh_upload_queue[i];
             region = (VkBufferCopy){0, 0, mesh.size};
             vkCmdCopyBuffer(upload_buffer, mesh.host.buffer, mesh.gpu.buffer, 1,
                             &region);
@@ -2298,7 +2298,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
           barrier.subresourceRange.baseArrayLayer = 0;
 
           for (uint32_t i = 0; i < d->texture_upload_count; ++i) {
-            gputexture tex = d->texture_upload_queue[i];
+            GPUTexture tex = d->texture_upload_queue[i];
 
             VkImage image = tex.device.image;
             uint32_t img_width = tex.width;
@@ -2678,7 +2678,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 assert(test_size + align_padding == imgui_size);
 
                 if (realloc) {
-                  cpumesh imgui_cpu = {.geom_size = vtx_size,
+                  CPUMesh imgui_cpu = {.geom_size = vtx_size,
                                        .index_count = draw_data->TotalIdxCount,
                                        .index_size = idx_size,
                                        .indices = (uint16_t *)idx_dst,
@@ -2781,7 +2781,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                                    sizeof(ImGuiPushConstants),
                                    (const void *)&push_constants);
 
-                gpumesh *imgui_mesh = &d->imgui_gpu[frame_idx];
+                GPUMesh *imgui_mesh = &d->imgui_gpu[frame_idx];
 
                 uint32_t idx_offset = 0;
                 uint32_t vtx_offset = 0;
@@ -2950,7 +2950,7 @@ void demo_render_frame(demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
   TracyCZoneEnd(demo_render_frame_event);
 }
 
-bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
+bool demo_screenshot(Demo *d, Allocator std_alloc, uint8_t **screenshot_bytes,
                      uint32_t *screenshot_size) {
   TracyCZoneN(ctx, "demo_screenshot", true);
   VkResult err = VK_SUCCESS;
@@ -2958,7 +2958,7 @@ bool demo_screenshot(demo *d, allocator std_alloc, uint8_t **screenshot_bytes,
   VkDevice device = d->device;
   uint32_t frame_idx = d->frame_idx;
   VmaAllocator vma_alloc = d->vma_alloc;
-  gpuimage screenshot_image = d->screenshot_image;
+  GPUImage screenshot_image = d->screenshot_image;
   VkImage swap_image = d->swapchain_images[frame_idx];
   VkFence swap_fence = d->fences[frame_idx];
 

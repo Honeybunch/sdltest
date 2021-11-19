@@ -73,7 +73,10 @@
         "volk.h": "c",
         "sdl_rwops.h": "c",
         "vkdbg.h": "c",
-        "malloc.h": "c"
+        "malloc.h": "c",
+        "forward_list": "c",
+        "compare": "cpp",
+        "xlocinfo": "cpp"
     },
     "cmake.configureOnOpen": false
 }

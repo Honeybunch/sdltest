@@ -144,14 +144,14 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   // Create Temporary Arena Allocator
   SDL_Log("%s", "Creating Arena Allocator");
   static const size_t arena_alloc_size = 1024 * 1024 * 512; // 512 MB
-  arena_allocator arena = {0};
+  ArenaAllocator arena = {0};
   create_arena_allocator(&arena, arena_alloc_size);
 
   mi_heap_t *vk_heap = mi_heap_new();
   SDL_Log("%s", "Creating Vulkan Allocator");
   VkAllocationCallbacks vk_alloc = create_vulkan_allocator(vk_heap);
   SDL_Log("%s", "Creating Standard Allocator");
-  standard_allocator std_alloc = {0};
+  StandardAllocator std_alloc = {0};
   create_standard_allocator(&std_alloc, "std_alloc");
 
   const VkAllocationCallbacks *vk_alloc_ptr = &vk_alloc;
@@ -171,11 +171,11 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
       .resolution_scale = 1.0f,
   };
 
-  editor_camera_controller controller = {0};
+  EditorCameraController controller = {0};
   controller.move_speed = 10.0f;
   controller.look_speed = 1.0f;
 
-  camera main_cam = {
+  Camera main_cam = {
       .transform =
           {
               .position = {0, -1, 10},
@@ -319,7 +319,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
 #endif
 #endif
 
-  demo d = {0};
+  Demo d = {0};
   bool success = demo_init(window, instance, std_alloc.alloc, arena.alloc,
                            vk_alloc_ptr, &d);
   assert(success);
@@ -625,7 +625,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
           for (uint32_t i = 0; i < d.main_scene->entity_count; ++i) {
             uint64_t components = d.main_scene->components[i];
             if (components & COMPONENT_TYPE_TRANSFORM) {
-              SceneTransform2 *transform = &d.main_scene->transforms_2[i];
+              SceneTransform *transform = &d.main_scene->transforms[i];
               igPushID_Ptr(transform);
               if (igTreeNode_StrStr("Transform", "%s", "Transform")) {
                 float3 *position = &transform->t.position;
@@ -654,7 +654,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
             }
 
             if (components & COMPONENT_TYPE_STATIC_MESH) {
-              igText("Static Mesh: %d", d.main_scene->static_mesh_indices[i]);
+              igText("Static Mesh: %d", d.main_scene->static_meshes[i]);
             }
 
             igSeparator();

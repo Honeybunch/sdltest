@@ -5,11 +5,11 @@
 
 #include <assert.h>
 
-submaterialselection phong_blinn_submaterial_select(materialoptionflags options,
+SubMaterialSelection phong_blinn_submaterial_select(materialoptionflags options,
                                                     const void *material) {
-  const phongblinnmaterial *mat = (const phongblinnmaterial *)material;
+  const PhongBlinnMaterial *mat = (const PhongBlinnMaterial *)material;
 
-  submaterialselection selection = {0};
+  SubMaterialSelection selection = {0};
 
   if (options == MATOPT_None) {
     selection.submaterial_idx = 2;
@@ -33,9 +33,9 @@ submaterialselection phong_blinn_submaterial_select(materialoptionflags options,
   return selection;
 }
 
-phongblinnmaterial
-phong_blinn_material_init(const phongblinnmaterialdesc *desc) {
-  phongblinnmaterial mat = {
+PhongBlinnMaterial
+phong_blinn_material_init(const PhongBlinnMaterialDesc *desc) {
+  PhongBlinnMaterial mat = {
       .mat =
           {
               .submaterial_count = phong_blinn_submaterial_count,

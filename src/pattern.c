@@ -27,26 +27,26 @@ void write_pattern(uint32_t width, uint32_t height, uint32_t *bitmap) {
   }
 }
 
-void alloc_pattern(allocator alloc, uint32_t width, uint32_t height,
-                   cputexture **out) {
+void alloc_pattern(Allocator alloc, uint32_t width, uint32_t height,
+                   CPUTexture **out) {
   assert(out);
   uint64_t data_size = width * height * sizeof(uint32_t);
 
-  cputexture *tex =
-      hb_alloc(alloc, data_size + sizeof(cputexture) + sizeof(texture_layer) +
-                          sizeof(texture_mip));
+  CPUTexture *tex =
+      hb_alloc(alloc, data_size + sizeof(CPUTexture) + sizeof(TextureLayer) +
+                          sizeof(TextureMip));
   assert(tex);
 
-  uint64_t offset = sizeof(cputexture);
+  uint64_t offset = sizeof(CPUTexture);
 
   tex->layer_count = 1;
   tex->mip_count = 1;
-  tex->layers = (const texture_layer *)(((uint8_t *)tex) + offset);
-  offset += sizeof(texture_layer) * tex->layer_count;
+  tex->layers = (const TextureLayer *)(((uint8_t *)tex) + offset);
+  offset += sizeof(TextureLayer) * tex->layer_count;
 
-  texture_layer *layer = (texture_layer *)&tex->layers[0];
-  layer->mips = (const texture_mip *)(((uint8_t *)tex) + offset);
-  offset += sizeof(texture_mip) * tex->mip_count;
+  TextureLayer *layer = (TextureLayer *)&tex->layers[0];
+  layer->mips = (const TextureMip *)(((uint8_t *)tex) + offset);
+  offset += sizeof(TextureMip) * tex->mip_count;
 
   tex->data_size = data_size;
   tex->data = (((uint8_t *)tex) + offset);
@@ -54,16 +54,16 @@ void alloc_pattern(allocator alloc, uint32_t width, uint32_t height,
   (*out) = tex;
 }
 
-void create_pattern(uint32_t width, uint32_t height, cputexture *out) {
+void create_pattern(uint32_t width, uint32_t height, CPUTexture *out) {
   assert(out);
 
   // Setup subresource
-  texture_layer *layer = (texture_layer *)&out->layers[0];
+  TextureLayer *layer = (TextureLayer *)&out->layers[0];
   layer->width = width;
   layer->height = height;
   layer->depth = 1;
 
-  texture_mip *mip = (texture_mip *)&layer->mips[0];
+  TextureMip *mip = (TextureMip *)&layer->mips[0];
   mip->width = width;
   mip->height = height;
   mip->depth = 1;

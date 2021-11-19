@@ -2,10 +2,10 @@
 
 #include "simd.h"
 
-typedef struct gputexture gputexture;
-typedef struct gpupipeline gpupipeline;
-typedef struct gpupass gpupass;
-typedef struct gpuconstbuffer gpuconstbuffer;
+typedef struct GPUTexture GPUTexture;
+typedef struct GPUPipeline GPUPipeline;
+typedef struct GPUPass GPUPass;
+typedef struct GPUConstBuffer GPUConstBuffer;
 
 typedef struct VkDescriptorSet_T *VkDescriptorSet;
 
@@ -21,70 +21,70 @@ typedef enum materialoptionflags {
 
 typedef void (*updatedescriptor_fn)(VkDescriptorSet, void *);
 
-typedef struct submaterial {
+typedef struct SubMaterial {
   uint32_t pass_count;
-  gpupass *passes[MAX_PASS_PIPELINES];
-  gpuconstbuffer *material_data[MAX_PASS_PIPELINES];
-  gpupipeline *pipelines[MAX_PASS_PIPELINES];
+  GPUPass *passes[MAX_PASS_PIPELINES];
+  GPUConstBuffer *material_data[MAX_PASS_PIPELINES];
+  GPUPipeline *pipelines[MAX_PASS_PIPELINES];
   updatedescriptor_fn update_descriptor_fns[MAX_PASS_PIPELINES];
-} submaterial;
+} SubMaterial;
 
-typedef struct submaterialselection {
+typedef struct SubMaterialSelection {
   int32_t submaterial_idx;
   uint32_t pipeline_perm_flags;
-} submaterialselection;
+} SubMaterialSelection;
 
-typedef submaterialselection (*submaterialselect_fn)(materialoptionflags,
+typedef SubMaterialSelection (*submaterialselect_fn)(materialoptionflags,
                                                      const void *);
 
-typedef struct material {
+typedef struct Material {
   uint32_t submaterial_count;
-  submaterial submaterials[MAX_SUBMATERIALS];
+  SubMaterial submaterials[MAX_SUBMATERIALS];
 
   materialoptionflags options;
   submaterialselect_fn submaterial_select;
-} material;
+} Material;
 
-typedef struct unlitmaterial {
+typedef struct UnlitMaterial {
   float4 albedo;
-  gputexture *albedo_map;
+  GPUTexture *albedo_map;
 
-  gputexture *normal_map;
-  material mat;
-} unlitmaterial;
+  GPUTexture *normal_map;
+  Material mat;
+} UnlitMaterial;
 
-typedef struct phongblinnmaterial {
+typedef struct PhongBlinnMaterial {
   float4 albedo;
-  gputexture *albedo_map;
+  GPUTexture *albedo_map;
 
-  gputexture *normal_map;
+  GPUTexture *normal_map;
 
-  material mat;
-} phongblinnmaterial;
+  Material mat;
+} PhongBlinnMaterial;
 
 static const uint32_t phong_blinn_submaterial_count = 3;
-typedef struct phongblinnmaterialdesc {
-  gpupass *shadowcast;
-  gpupass *zprepassalpha;
-  gpupass *zprepassopaque;
-  gpupass *coloralpha;
-  gpupass *coloropaque;
-} phongblinnmaterialdesc;
+typedef struct PhongBlinnMaterialDesc {
+  GPUPass *shadowcast;
+  GPUPass *zprepassalpha;
+  GPUPass *zprepassopaque;
+  GPUPass *coloralpha;
+  GPUPass *coloropaque;
+} PhongBlinnMaterialDesc;
 
-phongblinnmaterial
-phong_blinn_material_init(const phongblinnmaterialdesc *desc);
+PhongBlinnMaterial
+phong_blinn_material_init(const PhongBlinnMaterialDesc *desc);
 
-typedef struct metalroughmaterial {
+typedef struct MetalRoughMaterial {
   float4 albedo;
-  gputexture *albedo_map;
+  GPUTexture *albedo_map;
 
-  gputexture *normal_map;
+  GPUTexture *normal_map;
 
   float metallic;
-  gputexture *metallic_map;
+  GPUTexture *metallic_map;
 
   float roughness;
-  gputexture *roughness_map;
+  GPUTexture *roughness_map;
 
-  material mat;
-} metalroughmaterial;
+  Material mat;
+} MetalRoughMaterial;

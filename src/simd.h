@@ -52,11 +52,11 @@ typedef struct float3x3 {
   };
 } float3x3;
 
-typedef struct transform {
+typedef struct Transform {
   float3 position;
   float3 scale;
   float3 rotation;
-} transform;
+} Transform;
 
 float3 f4tof3(float4 f);
 float4 f3tof4(float3 f, float w);
@@ -81,11 +81,11 @@ void mulf44(float4x4 *m, float4 v);
 void mulmf34(const float3x4 *x, const float3x4 *y, float3x4 *o);
 void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o);
 
-void translate(transform *t, float3 p);
-void scale(transform *t, float3 s);
-void rotate(transform *t, float3 r);
+void translate(Transform *t, float3 p);
+void scale(Transform *t, float3 s);
+void rotate(Transform *t, float3 r);
 
-void transform_to_matrix(float4x4 *m, const transform *t);
+void transform_to_matrix(float4x4 *m, const Transform *t);
 
 void look_forward(float4x4 *m, float3 pos, float3 forward, float3 up);
 void look_at(float4x4 *m, float3 pos, float3 target, float3 up);

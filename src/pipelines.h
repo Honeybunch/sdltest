@@ -7,7 +7,7 @@
 
 #include "allocator.h"
 
-typedef struct gpupipeline gpupipeline;
+typedef struct GPUPipeline GPUPipeline;
 
 uint32_t create_fractal_pipeline(VkDevice device,
                                  const VkAllocationCallbacks *vk_alloc,
@@ -55,13 +55,13 @@ enum GLTF_PERMUTATIONS {
 
 uint32_t create_gltf_pipeline(VkDevice device,
                               const VkAllocationCallbacks *vk_alloc,
-                              allocator tmp_alloc, allocator std_alloc,
+                              Allocator tmp_alloc, Allocator std_alloc,
                               VkPipelineCache cache, VkRenderPass pass,
                               uint32_t w, uint32_t h, VkPipelineLayout layout,
-                              gpupipeline **pipe);
+                              GPUPipeline **pipe);
 
 uint32_t create_gltf_rt_pipeline(
-    VkDevice device, const VkAllocationCallbacks *vk_alloc, allocator tmp_alloc,
-    allocator std_alloc, VkPipelineCache cache,
+    VkDevice device, const VkAllocationCallbacks *vk_alloc, Allocator tmp_alloc,
+    Allocator std_alloc, VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
-    VkPipelineLayout layout, gpupipeline **pipe);
+    VkPipelineLayout layout, GPUPipeline **pipe);

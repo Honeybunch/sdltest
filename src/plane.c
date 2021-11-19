@@ -36,9 +36,9 @@ size_t plane_alloc_size(uint32_t subdiv) {
   size_t index_size = aligned(index_count * sizeof(uint16_t));
   size_t vertex_size = aligned(vertex_count * PLANE_VERTEX_STRIDE);
 
-  return sizeof(cpumesh) + index_size + vertex_size;
+  return sizeof(CPUMesh) + index_size + vertex_size;
 }
-void create_plane(uint32_t subdiv, cpumesh *plane) {
+void create_plane(uint32_t subdiv, CPUMesh *plane) {
   uint32_t index_count = 0;
   uint32_t vertex_count = 0;
   calc_subdiv(subdiv, &index_count, &vertex_count);
@@ -48,7 +48,7 @@ void create_plane(uint32_t subdiv, cpumesh *plane) {
   size_t index_size = aligned(index_count * sizeof(uint16_t));
   size_t geom_size = aligned(vertex_count * PLANE_VERTEX_STRIDE);
 
-  size_t offset = sizeof(cpumesh);
+  size_t offset = sizeof(CPUMesh);
   plane->indices = (uint16_t *)(((uint8_t *)plane) + offset);
   offset += index_size;
   plane->vertices = (((uint8_t *)plane) + offset);

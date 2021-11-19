@@ -28,32 +28,32 @@ typedef void free_fn(void *user_data, void *ptr);
   (a).realloc_aligned((a).user_data, (orig), (size), (align))
 #define hb_free(a, ptr) a.free(a.user_data, (ptr))
 
-typedef struct allocator {
+typedef struct Allocator {
   void *user_data;
   alloc_fn *alloc;
   realloc_fn *realloc;
   realloc_aligned_fn *realloc_aligned;
   free_fn *free;
-} allocator;
+} Allocator;
 
-typedef struct arena_allocator {
+typedef struct ArenaAllocator {
   mi_heap_t *heap;
   size_t size;
   size_t max_size;
   uint8_t *data;
-  allocator alloc;
+  Allocator alloc;
   bool grow;
-} arena_allocator;
+} ArenaAllocator;
 
-void create_arena_allocator(arena_allocator *a, size_t max_size);
-void reset_arena(arena_allocator a, bool allow_grow);
-void destroy_arena_allocator(arena_allocator a);
+void create_arena_allocator(ArenaAllocator *a, size_t max_size);
+void reset_arena(ArenaAllocator a, bool allow_grow);
+void destroy_arena_allocator(ArenaAllocator a);
 
-typedef struct standard_allocator {
+typedef struct StandardAllocator {
   mi_heap_t *heap;
-  allocator alloc;
+  Allocator alloc;
   const char *name;
-} standard_allocator;
+} StandardAllocator;
 
-void create_standard_allocator(standard_allocator *a, const char *name);
-void destroy_standard_allocator(standard_allocator a);
+void create_standard_allocator(StandardAllocator *a, const char *name);
+void destroy_standard_allocator(StandardAllocator a);

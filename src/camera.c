@@ -6,11 +6,11 @@
 
 #include <stdbool.h>
 
-void camera_projection(const camera *c, float4x4 *p) {
+void camera_projection(const Camera *c, float4x4 *p) {
   perspective(p, c->fov, c->aspect, c->near, c->far);
 }
 
-void camera_view(const camera *c, float4x4 *v) {
+void camera_view(const Camera *c, float4x4 *v) {
   float4x4 model_matrix = {0};
   transform_to_matrix(&model_matrix, &c->transform);
 
@@ -19,7 +19,7 @@ void camera_view(const camera *c, float4x4 *v) {
   look_forward(v, c->transform.position, forward, (float3){0, 1, 0});
 }
 
-void camera_sky_view(const camera *c, float4x4 *v) {
+void camera_sky_view(const Camera *c, float4x4 *v) {
   float4x4 model_matrix = {0};
   transform_to_matrix(&model_matrix, &c->transform);
 
@@ -28,7 +28,7 @@ void camera_sky_view(const camera *c, float4x4 *v) {
   look_forward(v, (float3){0, 0, 0}, forward, (float3){0, 1, 0});
 }
 
-void camera_view_projection(const camera *c, float4x4 *vp) {
+void camera_view_projection(const Camera *c, float4x4 *vp) {
   float4x4 view = {0};
   camera_view(c, &view);
 
@@ -39,12 +39,12 @@ void camera_view_projection(const camera *c, float4x4 *vp) {
 }
 
 void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
-                           editor_camera_controller *editor, camera *cam) {
+                           EditorCameraController *editor, Camera *cam) {
   TracyCZoneN(ctx, "editor_camera_control", true);
 
   uint32_t event_type = event->type;
 
-  editor_camera_state state = editor->state;
+  EditorCameraState state = editor->state;
 
   // Must always clear out some state
   state &= ~EDITOR_CAMERA_LOOKING;
@@ -57,7 +57,7 @@ void editor_camera_control(float delta_time_seconds, const SDL_Event *event,
   switch (event_type) {
   case SDL_KEYDOWN:
   case SDL_KEYUP: {
-    editor_camera_state edit_state = 0;
+    EditorCameraState edit_state = 0;
     const SDL_Keysym *keysym = &event->key.keysym;
     SDL_Scancode scancode = keysym->scancode;
 

@@ -166,20 +166,20 @@ void mulmf44(const float4x4 *x, const float4x4 *y, float4x4 *o) {
   TracyCZoneEnd(ctx);
 }
 
-void translate(transform *t, float3 p) {
+void translate(Transform *t, float3 p) {
   assert(t);
   t->position += p;
 }
-void scale(transform *t, float3 s) {
+void scale(Transform *t, float3 s) {
   assert(t);
   t->scale += s;
 }
-void rotate(transform *t, float3 r) {
+void rotate(Transform *t, float3 r) {
   assert(t);
   t->rotation += r;
 }
 
-void transform_to_matrix(float4x4 *m, const transform *t) {
+void transform_to_matrix(float4x4 *m, const Transform *t) {
   TracyCZoneN(ctx, "transform_to_matrix", true);
   TracyCZoneColor(ctx, TracyCategoryColorMath);
   assert(m);

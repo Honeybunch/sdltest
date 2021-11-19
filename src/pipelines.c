@@ -713,10 +713,10 @@ uint32_t create_imgui_pipeline(VkDevice device,
 
 uint32_t create_gltf_pipeline(VkDevice device,
                               const VkAllocationCallbacks *vk_alloc,
-                              allocator tmp_alloc, allocator std_alloc,
+                              Allocator tmp_alloc, Allocator std_alloc,
                               VkPipelineCache cache, VkRenderPass pass,
                               uint32_t w, uint32_t h, VkPipelineLayout layout,
-                              gpupipeline **pipe) {
+                              GPUPipeline **pipe) {
   VkResult err = VK_SUCCESS;
 
   VkVertexInputBindingDescription vert_bindings[3] = {
@@ -839,7 +839,7 @@ uint32_t create_gltf_pipeline(VkDevice device,
   // Calculate number of permuatations
   uint32_t perm_count = 1 << GLTF_PERM_FLAG_COUNT;
 
-  gpupipeline *p = NULL;
+  GPUPipeline *p = NULL;
 
   err = (VkResult)create_gfx_pipeline(device, vk_alloc, tmp_alloc, std_alloc,
                                       cache, perm_count, &create_info_base, &p);
@@ -855,10 +855,10 @@ uint32_t create_gltf_pipeline(VkDevice device,
 }
 
 uint32_t create_gltf_rt_pipeline(
-    VkDevice device, const VkAllocationCallbacks *vk_alloc, allocator tmp_alloc,
-    allocator std_alloc, VkPipelineCache cache,
+    VkDevice device, const VkAllocationCallbacks *vk_alloc, Allocator tmp_alloc,
+    Allocator std_alloc, VkPipelineCache cache,
     PFN_vkCreateRayTracingPipelinesKHR vkCreateRayTracingPipelines,
-    VkPipelineLayout layout, gpupipeline **pipe) {
+    VkPipelineLayout layout, GPUPipeline **pipe) {
   VkResult err = VK_SUCCESS;
 
   // Load shaders and setup groups

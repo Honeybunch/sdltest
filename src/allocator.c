@@ -26,7 +26,7 @@
 void *arena_alloc(void *user_data, size_t size) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  arena_allocator *arena = (arena_allocator *)user_data;
+  ArenaAllocator *arena = (ArenaAllocator *)user_data;
   size_t cur_size = arena->size;
   if (cur_size + size >= arena->max_size) {
     arena->grow = true; // Signal that on the next reset we need to actually do
@@ -62,19 +62,19 @@ void arena_free(void *user_data, void *ptr) {
   (void)ptr;
 }
 
-void create_arena_allocator(arena_allocator *a, size_t max_size) {
+void create_arena_allocator(ArenaAllocator *a, size_t max_size) {
   mi_heap_t *heap = mi_heap_new();
   // assert(heap); switch doesn't like this
   void *data = mi_heap_calloc(heap, 1, max_size);
   TracyCAllocN(data, max_size, "Arena");
   assert(data);
 
-  (*a) = (arena_allocator){
+  (*a) = (ArenaAllocator){
       .max_size = max_size,
       .heap = heap,
       .data = data,
       .alloc =
-          (allocator){
+          (Allocator){
               .alloc = arena_alloc,
               .realloc = arena_realloc,
               .realloc_aligned = arena_realloc_aligned,
@@ -85,7 +85,7 @@ void create_arena_allocator(arena_allocator *a, size_t max_size) {
   };
 }
 
-void reset_arena(arena_allocator a, bool allow_grow) {
+void reset_arena(ArenaAllocator a, bool allow_grow) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
   if (allow_grow) {
@@ -105,7 +105,7 @@ void reset_arena(arena_allocator a, bool allow_grow) {
   TracyCZoneEnd(ctx);
 }
 
-void destroy_arena_allocator(arena_allocator a) {
+void destroy_arena_allocator(ArenaAllocator a) {
   TracyCFreeN(a.data, "Arena");
   mi_free(a.data);
   mi_heap_destroy(a.heap);
@@ -114,7 +114,7 @@ void destroy_arena_allocator(arena_allocator a) {
 void *standard_alloc(void *user_data, size_t size) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  standard_allocator *alloc = (standard_allocator *)user_data;
+  StandardAllocator *alloc = (StandardAllocator *)user_data;
   void *ptr = mi_heap_calloc(alloc->heap, 1, size);
   TracyCAllocN(ptr, size, alloc->name);
   TracyCZoneEnd(ctx);
@@ -124,7 +124,7 @@ void *standard_alloc(void *user_data, size_t size) {
 void *standard_realloc(void *user_data, void *original, size_t size) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  standard_allocator *alloc = (standard_allocator *)user_data;
+  StandardAllocator *alloc = (StandardAllocator *)user_data;
   TracyCFreeN(original, alloc->name);
   void *ptr = mi_heap_recalloc(alloc->heap, original, 1, size);
   TracyCAllocN(ptr, size, alloc->name);
@@ -136,7 +136,7 @@ void *standard_realloc_aligned(void *user_data, void *original, size_t size,
                                size_t alignment) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  standard_allocator *alloc = (standard_allocator *)user_data;
+  StandardAllocator *alloc = (StandardAllocator *)user_data;
   TracyCFreeN(original, alloc->name);
   void *ptr =
       mi_heap_recalloc_aligned(alloc->heap, original, 1, size, alignment);
@@ -148,15 +148,15 @@ void *standard_realloc_aligned(void *user_data, void *original, size_t size,
 void standard_free(void *user_data, void *ptr) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  standard_allocator *alloc = (standard_allocator *)user_data;
+  StandardAllocator *alloc = (StandardAllocator *)user_data;
   (void)alloc;
   TracyCFreeN(ptr, alloc->name);
   mi_free(ptr);
   TracyCZoneEnd(ctx);
 }
 
-void create_standard_allocator(standard_allocator *a, const char *name) {
-  (*a) = (standard_allocator){
+void create_standard_allocator(StandardAllocator *a, const char *name) {
+  (*a) = (StandardAllocator){
       .heap = mi_heap_new(),
       .alloc =
           {
@@ -170,6 +170,6 @@ void create_standard_allocator(standard_allocator *a, const char *name) {
   };
 }
 
-void destroy_standard_allocator(standard_allocator a) {
+void destroy_standard_allocator(StandardAllocator a) {
   mi_heap_delete(a.heap);
 }
