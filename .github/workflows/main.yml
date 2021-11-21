@@ -36,6 +36,10 @@ jobs:
       - name: Setup ninja
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      - name: Setup vcpkg
+        run: cmd /c bootstrap-vcpkg.bat
+        working-directory: ./vcpkg
+
       - name: Setup Dependencies
         run: cmd /c install_deps.bat
 
@@ -68,8 +72,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-          with:
-            lfs: true
+        with:
+          lfs: true
 
       - name: Setup Vulkan SDK
         uses: humbletim/setup-vulkan-sdk@v1.0.3
@@ -84,9 +88,17 @@ jobs:
 
       - name: Setup ninja
         uses: seanmiddleditch/gha-setup-ninja@master
+        
+      - name: Setup vcpkg
+        run: |
+          chmod +x ./bootstrap-vcpkg.sh
+          ./bootstrap-vcpkg.sh
+        working-directory: ./vcpkg
 
       - name: Setup Dependencies
-        run: ./install_deps_linux.sh
+        run: |
+          chmod +x ./install_deps_linux.sh
+          ./install_deps_linux.sh
 
       - name: Configure CMake x64 Linux
         run: cmake -Bbuild/x64/linux -G"Ninja Multi-Config" -DVCPKG_TARGET_TRIPLET=x64-linux
@@ -135,6 +147,10 @@ jobs:
 
       - name: Setup ninja
         uses: seanmiddleditch/gha-setup-ninja@master
+
+      - name: Setup vcpkg
+        run: cmd /c bootstrap-vcpkg.bat
+        working-directory: ./vcpkg
 
       - name: Setup Dependencies
         run: cmd /c install_android_deps.bat
