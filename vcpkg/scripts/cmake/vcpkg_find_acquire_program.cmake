@@ -38,6 +38,7 @@ The current list of programs includes:
 * SWIG
 * YASM
 * DXC
+* GLTFPACK
 
 Note that msys2 has a dedicated helper function: [`vcpkg_acquire_msys`](vcpkg_acquire_msys.md).
 
@@ -471,6 +472,16 @@ function(vcpkg_find_acquire_program VAR)
       set(URL "https://github.com/microsoft/DirectXShaderCompiler/releases/download/v${DXC_VERSION}/dxc_2021_07_01.zip")
       set(ARCHIVE "dxc_2021_07_01.zip")
       set(HASH d0132c341f104cec073858bb099e6659dc0b0d8f8ec9fa3193d8eea62e02ffd97201b2bc88f50d3c58e941b12cda33f411546966c842e35465d53a5d90424b25)
+      set(NOSYSTEMENVPATH 1) # Don't try to find dxc from the VS install
+    endif()
+    #TODO: More host platforms
+  elseif(VAR MATCHES "GLTFPACK")
+    set(PROGNAME gltfpack)
+    if(CMAKE_HOST_WIN32)
+      set(PATHS ${DOWNLOADS}/tools/gltfpack)
+      set(URL "https://github.com/zeux/meshoptimizer/releases/download/v0.17/gltfpack-windows.zip")
+      set(ARCHIVE "gltfpack-windows.zip")
+      set(HASH f8bbbaa93d5a8b2fa76d97114a83c05c1c34785ccafdf9487410c0cce5fc441dc372fc9a6875cfa06f6cd087b68a59529cd5aa037da02176fe4428346df1eb75)
       set(NOSYSTEMENVPATH 1) # Don't try to find dxc from the VS install
     endif()
     #TODO: More host platforms
