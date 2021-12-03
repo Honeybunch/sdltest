@@ -5,3 +5,11 @@
 set(VCPKG_POLICY_EMPTY_PACKAGE enabled)
 vcpkg_find_acquire_program(GLTFPACK)
 message(STATUS "Using gltfpack: ${GLTFPACK}")
+
+get_filename_component(gltfpack_path ${GLTFPACK} DIRECTORY)
+
+vcpkg_copy_tools(
+    TOOL_NAMES gltfpack
+    SEARCH_DIR ${gltfpack_path}
+    DESTINATION ${CURRENT_PACKAGES_DIR}/tools/gltfpack/
+)

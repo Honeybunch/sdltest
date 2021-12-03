@@ -114,6 +114,9 @@ find_program(DXC dxc
 find_program(TOKTX toktx 
   PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg/installed/${host_triple}/tools/ktx
   REQUIRED)
+find_program(GLTFPACK gltfpack
+  PATHS ${CMAKE_CURRENT_LIST_DIR}/vcpkg/installed/${host_triple}/tools/gltfpack
+  REQUIRED)
 
 # Compile Shaders
 set(shader_includes
