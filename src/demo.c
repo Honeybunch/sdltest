@@ -4,7 +4,6 @@
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_vulkan.h>
 #include <assert.h>
-#include <cimgui.h>
 #include <float.h>
 #include <stddef.h>
 
@@ -338,10 +337,10 @@ static void demo_imgui_update(Demo *d) {
 }
 
 static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
-                                     VkPhysicalDevice gpu, VkSurfaceKHR surface,
-                                     VkSwapchainKHR *swapchain,
-                                     const VkAllocationCallbacks *vk_alloc,
-                                     Allocator tmp_alloc) {
+                                    VkPhysicalDevice gpu, VkSurfaceKHR surface,
+                                    VkSwapchainKHR *swapchain,
+                                    const VkAllocationCallbacks *vk_alloc,
+                                    Allocator tmp_alloc) {
   SwapchainInfo swap_info = {0};
 
   int32_t width = 0;
@@ -967,7 +966,7 @@ bool demo_init(SDL_Window *window, VkInstance instance, Allocator std_alloc,
   // Create Swapchain
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
   SwapchainInfo swap_info = init_swapchain(window, device, gpu, surface,
-                                            &swapchain, vk_alloc, tmp_alloc);
+                                           &swapchain, vk_alloc, tmp_alloc);
 
   // Create Render Pass
   VkRenderPass render_pass = VK_NULL_HANDLE;
