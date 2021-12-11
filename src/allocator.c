@@ -88,18 +88,16 @@ void create_arena_allocator(ArenaAllocator *a, size_t max_size) {
 void reset_arena(ArenaAllocator a, bool allow_grow) {
   TracyCZone(ctx, true);
   TracyCZoneColor(ctx, TracyCategoryColorMemory);
-  if (allow_grow) {
-    if (a.grow) {
-      a.max_size *= 2;
+  if (allow_grow && a.grow) {
+    a.max_size *= 2;
 
-      a.grow = false;
-      TracyCFreeN(a.data, "Arena");
-      a.data = mi_heap_recalloc(a.heap, a.data, 1, a.max_size);
-      TracyCAllocN(a.data, a.max_size, "Arena");
-    }
-  } else {
-    memset(a.data, 0, a.max_size);
+    a.grow = false;
+    TracyCFreeN(a.data, "Arena");
+    a.data = mi_heap_recalloc(a.heap, a.data, 1, a.max_size);
+    TracyCAllocN(a.data, a.max_size, "Arena");
   }
+
+  a.size = 0;
 
   assert(a.data);
   TracyCZoneEnd(ctx);
@@ -170,6 +168,4 @@ void create_standard_allocator(StandardAllocator *a, const char *name) {
   };
 }
 
-void destroy_standard_allocator(StandardAllocator a) {
-  mi_heap_delete(a.heap);
-}
+void destroy_standard_allocator(StandardAllocator a) { mi_heap_delete(a.heap); }

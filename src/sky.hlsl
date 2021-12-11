@@ -86,24 +86,26 @@ FragmentOut frag(Interpolators i) {
   float rayleigh = 3.0 / (8.0 * 3.14) * (1.0 + mu * mu);
   float3 mie = (Kr + Km * (1.0 - g * g) / (2.0 + g * g) / pow(1.0 + g * g - 2.0 * g * mu, 1.5)) / (Br + Bm);
 
-  float3 day_extinction = exp(-exp(-((i.view_pos.y + sun_dir.y * 4.0) * (exp(-i.view_pos.y * 16.0) + 0.1) / 80.0) / Br) * (exp(-i.view_pos.y * 16.0) + 0.1) * Kr / Br) * exp(-i.view_pos.y * exp(-i.view_pos.y * 8.0 ) * 4.0) * exp(-i.view_pos.y * 2.0) * 4.0;
+  float view_dir_y = max(i.view_pos.y, 0.0001);
+
+  float3 day_extinction = exp(-exp(-((view_dir_y + sun_dir.y * 4.0) * (exp(-view_dir_y * 16.0) + 0.1) / 80.0) / Br) * (exp(-view_dir_y * 16.0) + 0.1) * Kr / Br) * exp(-view_dir_y * exp(-view_dir_y * 8.0 ) * 4.0) * exp(-view_dir_y * 2.0) * 4.0;
   float3 night_extinction = float3(1.0 - exp(sun_dir.y), 1.0 - exp(sun_dir.y), 1.0 - exp(sun_dir.y)) * 0.2;
   float3 extinction = lerp(day_extinction, night_extinction, -sun_dir.y * 0.2 + 0.5);
   float3 color = rayleigh * mie * extinction;
 
   // Cirrus clouds
-  float density = smoothstep(1.0 - cirrus, 1.0, fbm(i.view_pos.xyz / i.view_pos.y * 2.0 + time * 0.05)) * 0.3;
-  color.rgb = lerp(color.rgb, extinction * 4.0, density * max(i.view_pos.y, 0.0));
+  float density = smoothstep(1.0 - cirrus, 1.0, fbm(i.view_pos.xyz / view_dir_y * 2.0 + time * 0.05)) * 0.3;
+  color.rgb = lerp(color.rgb, extinction * 4.0, density * max(view_dir_y, 0.0));
   
   // Cumulus Clouds
   for (int32_t j = 0; j < 3; j++)
   {
-    float density = smoothstep(1.0 - cumulus, 1.0, fbm((0.7 + float(j) * 0.01) * i.view_pos.xyz / i.view_pos.y + time * 0.3));
-    color.rgb = lerp(color.rgb, extinction * density * 5.0, min(density, 1.0) * max(i.view_pos.y, 0.0));
+    float density = smoothstep(1.0 - cumulus, 1.0, fbm((0.7 + float(j) * 0.01) * i.view_pos.xyz / view_dir_y + time * 0.3));
+    color.rgb = lerp(color.rgb, extinction * density * 5.0, min(density, 1.0) * max(view_dir_y, 0.0));
   }
 
   // Dithering Noise
-  color.rgb += noise(i.view_pos.y * 1000) * 0.01;
+  color.rgb += noise(view_dir_y * 1000) * 0.01;
 
   FragmentOut o;
   o.color = float4(color, 1.0);
