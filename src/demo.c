@@ -94,6 +94,7 @@ static VkDevice create_device(VkPhysicalDevice gpu,
   VkDevice device = VK_NULL_HANDLE;
   VkResult err = vkCreateDevice(gpu, &create_info, vk_alloc, &device);
   assert(err == VK_SUCCESS);
+  (void)err;
 
   TracyCZoneEnd(ctx);
 
@@ -106,6 +107,7 @@ static VkPhysicalDevice select_gpu(VkInstance instance, Allocator tmp_alloc) {
   uint32_t gpu_count = 0;
   VkResult err = vkEnumeratePhysicalDevices(instance, &gpu_count, NULL);
   assert(err == VK_SUCCESS);
+  (void)err;
 
   VkPhysicalDevice *physical_devices =
       hb_alloc_nm_tp(tmp_alloc, gpu_count, VkPhysicalDevice);
@@ -351,6 +353,7 @@ static SwapchainInfo init_swapchain(SDL_Window *window, VkDevice device,
   VkResult err =
       vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count, NULL);
   assert(err == VK_SUCCESS);
+  (void)err;
   VkSurfaceFormatKHR *surface_formats =
       hb_alloc_nm_tp(tmp_alloc, format_count, VkSurfaceFormatKHR);
   err = vkGetPhysicalDeviceSurfaceFormatsKHR(gpu, surface, &format_count,
@@ -708,6 +711,7 @@ static bool demo_init_imgui(Demo *d, SDL_Window *window) {
         d->device, d->vma_alloc, d->vk_alloc, &cpu_atlas, d->upload_mem_pool,
         d->texture_mem_pool, &imgui_atlas, false);
     assert(err == VK_SUCCESS);
+    (void)err;
 
     demo_upload_texture(d, &imgui_atlas);
   }
@@ -2675,6 +2679,7 @@ void demo_render_frame(Demo *d, const float4x4 *vp, const float4x4 *sky_vp) {
                 vtx_dst = idx_dst + idx_size + align_padding;
 
                 assert(test_size + align_padding == imgui_size);
+                (void)test_size;
 
                 if (realloc) {
                   CPUMesh imgui_cpu = {.geom_size = vtx_size,

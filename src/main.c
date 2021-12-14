@@ -323,6 +323,7 @@ int32_t SDL_main(int32_t argc, char *argv[]) {
   bool success = demo_init(window, instance, std_alloc.alloc, arena.alloc,
                            vk_alloc_ptr, &d);
   assert(success);
+  (void)success;
 
   SkyData sky_data = {
       .cirrus = 0.4,

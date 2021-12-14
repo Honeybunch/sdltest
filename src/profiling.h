@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-//#define TRACY_ENABLE
+#define TRACY_ENABLE
 #include <TracyC.h>
 
 #define TracyCategoryColorCore 0xe066ff
@@ -29,7 +29,7 @@ TracyCGPUContext *
 TracyCVkContextExt(VkPhysicalDevice gpu, VkDevice device, VkQueue queue,
                    VkCommandBuffer buffer,
                    PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT ext1,
-                   PFN_vkGetCalibratedTimestampsEXT ext2;
+                   PFN_vkGetCalibratedTimestampsEXT ext2);
 void TracyCVkContextDestroy(TracyCGPUContext *ctx);
 void TracyCVkContextName(TracyCGPUContext *ctx, const char *name, size_t len);
 

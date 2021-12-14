@@ -49,6 +49,7 @@ GPUConstBuffer create_gpushaderbuffer(VkDevice device, VmaAllocator allocator,
       create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_CPU_TO_GPU,
                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, &host_buffer);
   assert(err == VK_SUCCESS);
+  (void)err;
 
   GPUBuffer device_buffer = {0};
   err = create_gpubuffer(allocator, size, VMA_MEMORY_USAGE_GPU_ONLY,
